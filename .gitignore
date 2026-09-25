@@ -6,3 +6,6 @@ out
 .env.*.local
 .vercel
 .DS_Store
+tsconfig.tsbuildinfo
+AGENTS.md
+CLAUDE.md
