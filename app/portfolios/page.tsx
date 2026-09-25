@@ -163,22 +163,24 @@ export default function Portfolios(){
           </div>
 
           <div className="section-label">HOLDINGS</div>
-          {holdings.length>0&&<div className="row row-head" style={{gridTemplateColumns:'.8fr 1fr 1fr 1fr .8fr .6fr'}}>
+          {holdings.length>0&&<div className="row row-head" style={{gridTemplateColumns:'.7fr .7fr .9fr .8fr .8fr .7fr .6fr'}}>
             <span>Symbol</span>
             <span>Weight</span>
             <span>Added</span>
             <span>Average Cost</span>
+            <span>Current Price</span>
             <span>Return</span>
             <span></span>
           </div>}
           <div className="table">{holdings.map(h=>{
             const p=prices[h.symbol]
             const ret=p&&h.entry_price?(p.last/h.entry_price-1)*100:null
-            return <div className="row" key={h.id} style={{gridTemplateColumns:'.8fr 1fr 1fr 1fr .8fr .6fr'}}>
+            return <div className="row" key={h.id} style={{gridTemplateColumns:'.7fr .7fr .9fr .8fr .8fr .7fr .6fr'}}>
               <span><b>{h.symbol}</b></span>
               <span>{h.weight}% weight</span>
               <span>{h.added_by==='ai'?'Added by AI':'Added by you'} · {fmtDateTime(h.added_at)}</span>
               <span>{h.entry_price?`$${h.entry_price.toFixed(2)}`:'not set'}</span>
+              <span>{p?`$${p.last.toFixed(2)}`:'loading…'}</span>
               <span className={ret!=null?(ret>=0?'up':'down'):''}>{ret!=null?fmtPct(ret):'—'}</span>
               <button className="ghost" onClick={()=>removeHolding(h)}>REMOVE</button>
             </div>
