@@ -47,6 +47,8 @@ export default function Portfolios(){
   const [newName,setNewName]=useState('')
   const [newDesc,setNewDesc]=useState('')
   const [descDraft,setDescDraft]=useState('')
+  const [nameDraft,setNameDraft]=useState('')
+  const [editingName,setEditingName]=useState(false)
   const [addSymbol,setAddSymbol]=useState('')
   const [addShares,setAddShares]=useState('')
   const [addAvgCost,setAddAvgCost]=useState('')
@@ -100,7 +102,7 @@ export default function Portfolios(){
     ])
     if(hErr||lErr){setMsg(`Could not load portfolio detail: ${hErr?.message||lErr?.message}`);return}
     setHoldings((h||[]) as Holding[]);setLog((l||[]) as LogEntry[])
-    const p=portfolios.find(x=>x.id===id);setDescDraft(p?.description||'')
+    const p=portfolios.find(x=>x.id===id);setDescDraft(p?.description||'');setNameDraft(p?.name||'')
   }
   async function loadPrices(symbols:string[]){
     const entries=await Promise.all(symbols.map(async sym=>{
@@ -138,6 +140,14 @@ export default function Portfolios(){
     if(error){setMsg(`Could not save description: ${error.message}`);return}
     await addLog(selectedId,'user','description_updated',`Description changed.`,{before:prev,after:descDraft})
     await loadPortfolios();await loadPortfolio(selectedId)
+  }
+  async function saveName(){
+    if(!supabase||!selectedId||!nameDraft.trim())return
+    const prev=portfolios.find(p=>p.id===selectedId)?.name||''
+    const {error}=await supabase.from('portfolios').update({name:nameDraft.trim(),updated_at:new Date().toISOString()}).eq('id',selectedId)
+    if(error){setMsg(`Could not rename portfolio: ${error.message}`);return}
+    await addLog(selectedId,'user','name_updated',`Renamed "${prev}" to "${nameDraft.trim()}".`,{before:prev,after:nameDraft.trim()})
+    setEditingName(false);await loadPortfolios();await loadPortfolio(selectedId)
   }
   async function fetchLastPrice(symbol:string,live:boolean=true):Promise<number|null>{
     try{
@@ -386,7 +396,11 @@ export default function Portfolios(){
           {!portfolios.length&&<div className="empty">No portfolios yet. Create your first one on the left.</div>}
         </>:!selected?<div className="empty">Select or create a portfolio to see its detail.</div>:<>
           <div className="portfolio-sticky">
-            <div className="panel-title"><h2>{selected.name.toUpperCase()}</h2><span className="muted">Updated {fmtDateTime(selected.updated_at)}</span><button className="ghost" onClick={backToOverview}>← OVERVIEW</button></div>
+            <div className="panel-title">
+              {editingName?<div className="portfolio-name-edit"><input value={nameDraft} onChange={e=>setNameDraft(e.target.value)} autoFocus/><button className="ghost" onClick={saveName} disabled={!nameDraft.trim()}>SAVE</button><button className="ghost" onClick={()=>{setEditingName(false);setNameDraft(selected.name)}}>CANCEL</button></div>:<h2>{selected.name.toUpperCase()}<button className="ghost portfolio-name-btn" onClick={()=>{setNameDraft(selected.name);setEditingName(true)}} title="Rename portfolio">RENAME</button></h2>}
+              <span className="muted">Updated {fmtDateTime(selected.updated_at)}</span>
+              <button className="ghost" onClick={backToOverview}>← OVERVIEW</button>
+            </div>
             <div className="metrics" style={{gridTemplateColumns:'repeat(7,1fr)'}}>
               <div><span>Holdings</span><b>{holdings.length}</b></div>
               <div><span>Total weight</span><b>{totalWeight.toFixed(1)}%</b></div>
@@ -419,7 +433,7 @@ export default function Portfolios(){
             const dayRetDollar=p&&p.prevClose?(p.last-p.prevClose)*sh:null
             const isEditing=editingId===h.id
             return <div className="row" key={h.id} style={{gridTemplateColumns:'minmax(0,.8fr) minmax(0,.55fr) minmax(0,.55fr) minmax(0,.8fr) minmax(0,.75fr) minmax(0,.65fr) minmax(0,.85fr) minmax(0,.85fr) minmax(0,1.3fr)'}}>
-              <span style={{minWidth:0,overflow:'hidden'}}><b>{h.symbol}</b>{names[h.symbol]&&<span className="how-it-works" style={{marginTop:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'100%'}}>{names[h.symbol]}</span>}</span>
+              <span style={{minWidth:0}}><b>{h.symbol}</b>{names[h.symbol]&&<span className="how-it-works" style={{marginTop:2,whiteSpace:'normal',wordBreak:'break-word'}}>{names[h.symbol]}</span>}</span>
               <span>{isEditing?<input type="number" min={0} step="0.0001" value={editShares} onChange={e=>setEditShares(e.target.value)} placeholder="1"/>:(h.shares!=null?h.shares:'1 (default)')}</span>
               <span>{weightOf(h).toFixed(1)}%</span>
               <span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{h.added_by==='ai'?'Added by AI':'Added by you'} · {fmtDateTime(h.added_at)}</span>
