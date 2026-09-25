@@ -343,7 +343,7 @@ export default function Portfolios(){
             const m=sumMetrics(allHoldings[p.id]||[])
             const retUp=m.returnPct!=null&&m.returnPct>=0
             const dayUp=m.dayReturnPct!=null&&m.dayReturnPct>=0
-            return <div className={`portfolio-card ${m.returnPct==null?'':retUp?'card-up':'card-down'}`} key={p.id} onClick={()=>viewPortfolio(p.id)}>
+            return <div className={`portfolio-card ${m.returnPct==null?'':retUp?'card-up':'card-down'}`} key={p.id}>
               <div className="portfolio-card-glow"/>
               <div className="portfolio-card-grid"/>
               <div className="portfolio-card-head">

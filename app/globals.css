@@ -38,7 +38,7 @@
 @keyframes cardScan{0%{background-position:0 0}100%{background-position:0 60px}}
 @keyframes cardPulse{0%,100%{opacity:.55}50%{opacity:1}}
 .portfolio-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:18px;margin-top:14px}
-.portfolio-card{position:relative;overflow:hidden;cursor:pointer;padding:20px;border-radius:18px;background:linear-gradient(160deg,#0c1226ee,#070a15ee);border:1px solid #24304f;box-shadow:0 12px 40px #0006,inset 0 0 0 1px #ffffff08;transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}
+.portfolio-card{position:relative;overflow:hidden;padding:20px;border-radius:18px;background:linear-gradient(160deg,#0c1226ee,#070a15ee);border:1px solid #24304f;box-shadow:0 12px 40px #0006,inset 0 0 0 1px #ffffff08;transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}
 .portfolio-card:hover{transform:translateY(-4px) scale(1.01);border-color:#4f6bb0;box-shadow:0 22px 60px #000a,0 0 0 1px #57e8ff33,0 0 40px -8px #57e8ff55}
 .portfolio-card.card-up:hover{box-shadow:0 22px 60px #000a,0 0 0 1px #00c80533,0 0 40px -8px #00c80555}
 .portfolio-card.card-down:hover{box-shadow:0 22px 60px #000a,0 0 0 1px #ff500033,0 0 40px -8px #ff500055}
