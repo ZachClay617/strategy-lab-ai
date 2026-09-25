@@ -87,7 +87,7 @@ export async function POST(req:NextRequest){
       const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01'},body:JSON.stringify({model:'claude-sonnet-5',max_tokens:2000,messages:[{role:'user',content:prompt}]})})
       const j=await r.json()
       if(!r.ok||j?.error){console.error('Anthropic API error',r.status,JSON.stringify(j))}
-      const text=j?.content?.[0]?.text
+      const text=Array.isArray(j?.content)?j.content.find((b:any)=>b?.type==='text')?.text:undefined
       if(!text)console.error('Anthropic response had no text content',JSON.stringify(j).slice(0,2000))
       if(text){
         const parsed=JSON.parse(text.slice(text.indexOf('{'),text.lastIndexOf('}')+1))
