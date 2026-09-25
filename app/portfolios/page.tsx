@@ -338,7 +338,7 @@ export default function Portfolios(){
             <div><span>DAYS' RETURN</span><b className={overview.dayReturnPct==null?'':overview.dayReturnPct>=0?'up':'down'}>{overview.dayReturnPct==null?'—':`${fmtPct(overview.dayReturnPct)} (${fmtDollar(overview.dayReturnDollar)})`}</b></div>
           </div>
 
-          <div className="section-label">YOUR PORTFOLIOS</div>
+          <div className="section-label"><b>YOUR PORTFOLIOS</b></div>
           <div className="portfolio-cards">{portfolios.map(p=>{
             const m=sumMetrics(allHoldings[p.id]||[])
             const retUp=m.returnPct!=null&&m.returnPct>=0
@@ -440,7 +440,7 @@ export default function Portfolios(){
           <div className="section-label">A-TAMP AI RESEARCH</div>
           <p className="field-warning">Running this costs real money — it calls a paid AI model and pulls live market data on every run.</p>
           <button className="run" onClick={runResearch} disabled={researching}>{researching?'A-TAMP IS PRINTING…':'LET A-TAMP RESEARCH & REBALANCE'}</button>
-          <p className="tiny">A-Tamp (Autonomous Trading Money Printer) pulls real live/historical prices across a broad multi-sector universe of stocks, scores them against your description (with full AI reasoning when an ANTHROPIC_API_KEY is configured, otherwise a rules-based momentum/volatility screen), and proposes portfolio changes for you to apply.</p>
+          <p className="tiny">A-Tamp (Autonomous Trading Agent Money Printer) pulls real live/historical prices across a broad multi-sector universe of stocks, scores them against your description (with full AI reasoning when an ANTHROPIC_API_KEY is configured, otherwise a rules-based momentum/volatility screen), and proposes portfolio changes for you to apply.</p>
 
           {proposal&&<div className="run-detail">
             <h3>Proposed portfolio ({proposal.mode==='ai'?'AI reasoning':'heuristic screen'} · {proposal.universeSize} real candidates scanned)</h3>
