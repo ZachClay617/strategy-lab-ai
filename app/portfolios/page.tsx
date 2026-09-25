@@ -150,36 +150,15 @@ export default function Portfolios(){
       </section>
       <section className="panel">
         {!selected?<div className="empty">Select or create a portfolio to see its detail.</div>:<>
-          <div className="panel-title"><h2>{selected.name.toUpperCase()}</h2><span className="muted">Updated {fmtDateTime(selected.updated_at)}</span></div>
-          <label>Description — you can change this any time<textarea value={descDraft} onChange={e=>setDescDraft(e.target.value)}/></label>
-          <button className="ghost" onClick={saveDescription} disabled={descDraft===selected.description}>SAVE DESCRIPTION</button>
-
-          <div className="metrics" style={{marginTop:18}}>
+          <div className="panel-title portfolio-sticky-head"><h2>{selected.name.toUpperCase()}</h2><span className="muted">Updated {fmtDateTime(selected.updated_at)}</span></div>
+          <div className="metrics portfolio-sticky-metrics">
             <div><span>Holdings</span><b>{holdings.length}</b></div>
             <div><span>Total weight</span><b>{totalWeight.toFixed(1)}%</b></div>
             <div><span>Tracked return</span><b className={portfolioReturn>=0?'up':'down'}>{fmtPct(portfolioReturn)}</b></div>
             <div><span>Last AI research</span><b>{fmtDateTime(log.find(l=>l.action==='ai_rebalance')?.created_at)}</b></div>
           </div>
 
-          <button className="run" onClick={runResearch} disabled={researching}>{researching?'RESEARCHING…':'🔍 RESEARCH & REBALANCE NOW'}</button>
-          <p className="tiny">Pulls real live/historical prices across a broad multi-sector universe of stocks, scores them against your description (with full AI reasoning when an ANTHROPIC_API_KEY is configured, otherwise a rules-based momentum/volatility screen), and proposes portfolio changes for you to apply.</p>
-
-          {proposal&&<div className="run-detail">
-            <h3>Proposed portfolio ({proposal.mode==='ai'?'AI reasoning':'heuristic screen'} · {proposal.universeSize} real candidates scanned)</h3>
-            <p>{proposal.summary}</p>
-            <div className="table">{proposal.holdings.map((h:any)=><div className="row" key={h.symbol} style={{gridTemplateColumns:'.4fr 2fr'}}><span><b>{h.symbol} · {h.weight}%</b></span><span className="how-it-works">{h.rationale}</span></div>)}</div>
-            <div className="run-controls" style={{gridTemplateColumns:'1fr 1fr'}}>
-              <button className="run" onClick={applyProposal}>APPLY CHANGES</button>
-              <button className="ghost" onClick={()=>setProposal(null)}>DISCARD</button>
-            </div>
-          </div>}
-
           <div className="section-label">HOLDINGS</div>
-          <form onSubmit={addHolding} className="checks mode-pick" style={{marginBottom:10}}>
-            <label>Symbol<input value={addSymbol} onChange={e=>setAddSymbol(e.target.value.toUpperCase())} placeholder="AAPL" required/></label>
-            <label>Weight %<input type="number" min={0} max={100} value={addWeight} onChange={e=>setAddWeight(+e.target.value)}/></label>
-            <button className="run" type="submit" style={{marginTop:0}}>+ ADD</button>
-          </form>
           <div className="table">{holdings.map(h=>{
             const p=prices[h.symbol]
             const ret=p&&h.entry_price?(p.last/h.entry_price-1)*100:null
@@ -194,8 +173,33 @@ export default function Portfolios(){
           })}</div>
           {!holdings.length&&<div className="empty">No holdings yet. Add one manually or let the AI research the portfolio.</div>}
 
+          <div className="section-label">ADD A STOCK</div>
+          <form onSubmit={addHolding} className="checks mode-pick" style={{marginBottom:10}}>
+            <label>Symbol<input value={addSymbol} onChange={e=>setAddSymbol(e.target.value.toUpperCase())} placeholder="AAPL" required/></label>
+            <label>Weight %<input type="number" min={0} max={100} value={addWeight} onChange={e=>setAddWeight(+e.target.value)}/></label>
+            <button className="run" type="submit" style={{marginTop:0}}>+ ADD</button>
+          </form>
+
+          <div className="section-label">DESCRIPTION</div>
+          <label>You can change this any time<textarea value={descDraft} onChange={e=>setDescDraft(e.target.value)}/></label>
+          <button className="ghost" onClick={saveDescription} disabled={descDraft===selected.description}>SAVE DESCRIPTION</button>
+
+          <div className="section-label">AI RESEARCH</div>
+          <button className="run" onClick={runResearch} disabled={researching}>{researching?'RESEARCHING…':'🔍 RESEARCH & REBALANCE NOW'}</button>
+          <p className="tiny">Pulls real live/historical prices across a broad multi-sector universe of stocks, scores them against your description (with full AI reasoning when an ANTHROPIC_API_KEY is configured, otherwise a rules-based momentum/volatility screen), and proposes portfolio changes for you to apply.</p>
+
+          {proposal&&<div className="run-detail">
+            <h3>Proposed portfolio ({proposal.mode==='ai'?'AI reasoning':'heuristic screen'} · {proposal.universeSize} real candidates scanned)</h3>
+            <p>{proposal.summary}</p>
+            <div className="table">{proposal.holdings.map((h:any)=><div className="row" key={h.symbol} style={{gridTemplateColumns:'.4fr 2fr'}}><span><b>{h.symbol} · {h.weight}%</b></span><span className="how-it-works">{h.rationale}</span></div>)}</div>
+            <div className="run-controls" style={{gridTemplateColumns:'1fr 1fr'}}>
+              <button className="run" onClick={applyProposal}>APPLY CHANGES</button>
+              <button className="ghost" onClick={()=>setProposal(null)}>DISCARD</button>
+            </div>
+          </div>}
+
           <div className="section-label">CHANGE LOG</div>
-          <div className="test-list">{log.map(l=><div className={`test-item ${l.actor==='ai'?'pass':''}`} key={l.id}><div className="test-item-main"><b>{l.actor==='ai'?'🤖 AI':'👤 You'} · {l.action.replace(/_/g,' ')}</b><span>{l.message}</span></div><div className="test-item-stats"><span>{fmtDateTime(l.created_at)}</span></div></div>)}
+          <div className="test-list change-log-scroll">{log.map(l=><div className={`test-item ${l.actor==='ai'?'pass':''}`} key={l.id}><div className="test-item-main"><b>{l.actor==='ai'?'🤖 AI':'👤 You'} · {l.action.replace(/_/g,' ')}</b><span>{l.message}</span></div><div className="test-item-stats"><span>{fmtDateTime(l.created_at)}</span></div></div>)}
           {!log.length&&<div className="empty">No changes logged yet.</div>}</div>
         </>}
       </section>
