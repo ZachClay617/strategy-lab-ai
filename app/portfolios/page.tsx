@@ -314,7 +314,7 @@ export default function Portfolios(){
   }
   const overview=sumMetrics(Object.values(allHoldings).flat())
 
-  return <div className="shell">
+  return <div className="shell portfolios-page">
     <section className="hero"><div><div className="eyebrow">AI PORTFOLIO AUTOPILOT</div><h1>Describe it. <span>Track it.</span></h1><p className="muted">Give the AI a plain-language description of what you want a portfolio to do. It builds and maintains a real-symbol portfolio against that description, on your command, and logs every change.</p></div></section>
     {msg&&<p className="msg banner">{msg}</p>}
     <div className="grid">
@@ -366,7 +366,7 @@ export default function Portfolios(){
                 <span>Created {fmtDateTime(p.created_at)}</span>
                 <div className="portfolio-card-actions" onClick={e=>e.stopPropagation()}>
                   <button className="run" style={{marginTop:0}} onClick={()=>viewPortfolio(p.id)}>OPEN →</button>
-                  <button className="ghost" onClick={()=>researchPortfolio(p.id)}>🔍 RESEARCH</button>
+                  <button className="ghost" onClick={()=>researchPortfolio(p.id)} title="Costs real money — calls a paid AI model">🖨️ A-TAMP</button>
                 </div>
               </div>
             </div>
@@ -437,9 +437,10 @@ export default function Portfolios(){
           <label>You can change this any time<textarea value={descDraft} onChange={e=>setDescDraft(e.target.value)}/></label>
           <button className="ghost" onClick={saveDescription} disabled={descDraft===selected.description}>SAVE DESCRIPTION</button>
 
-          <div className="section-label">AI RESEARCH</div>
-          <button className="run" onClick={runResearch} disabled={researching}>{researching?'RESEARCHING…':'🔍 RESEARCH & REBALANCE NOW'}</button>
-          <p className="tiny">Pulls real live/historical prices across a broad multi-sector universe of stocks, scores them against your description (with full AI reasoning when an ANTHROPIC_API_KEY is configured, otherwise a rules-based momentum/volatility screen), and proposes portfolio changes for you to apply.</p>
+          <div className="section-label">A-TAMP AI RESEARCH</div>
+          <p className="field-warning">⚠️ Running this costs real money — it calls a paid AI model and pulls live market data on every run.</p>
+          <button className="run" onClick={runResearch} disabled={researching}>{researching?'A-TAMP IS PRINTING…':'🖨️ LET A-TAMP RESEARCH & REBALANCE'}</button>
+          <p className="tiny">A-Tamp (Autonomous Trading Money Printer) pulls real live/historical prices across a broad multi-sector universe of stocks, scores them against your description (with full AI reasoning when an ANTHROPIC_API_KEY is configured, otherwise a rules-based momentum/volatility screen), and proposes portfolio changes for you to apply.</p>
 
           {proposal&&<div className="run-detail">
             <h3>Proposed portfolio ({proposal.mode==='ai'?'AI reasoning':'heuristic screen'} · {proposal.universeSize} real candidates scanned)</h3>
