@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
 type Portfolio = { id:string; name:string; description:string; created_at:string; updated_at:string }
-type Holding = { id:string; portfolio_id:string; symbol:string; weight:number; added_by:string; added_at:string; entry_price?:number|null }
+type Holding = { id:string; portfolio_id:string; symbol:string; weight:number; added_by:string; added_at:string; entry_price?:number|null; shares?:number|null }
 type LogEntry = { id:string; created_at:string; actor:string; action:string; message:string; detail:any }
 
 function fmtDateTime(iso?:string){if(!iso)return '—';return new Date(iso).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'})}
@@ -20,7 +20,7 @@ export default function Portfolios(){
   const [newDesc,setNewDesc]=useState('')
   const [descDraft,setDescDraft]=useState('')
   const [addSymbol,setAddSymbol]=useState('')
-  const [addWeight,setAddWeight]=useState(10)
+  const [addShares,setAddShares]=useState('')
   const [addAvgCost,setAddAvgCost]=useState('')
   const [researching,setResearching]=useState(false)
   const [msg,setMsg]=useState('')
@@ -97,18 +97,20 @@ export default function Portfolios(){
   async function addHolding(e:React.FormEvent){
     e.preventDefault();if(!supabase||!selectedId||!addSymbol.trim())return
     const sym=addSymbol.trim().toUpperCase()
+    const sharesNum=Number(addShares)
+    if(!sharesNum||sharesNum<=0){setMsg('Enter the number of shares owned.');return}
     const manualCost=addAvgCost.trim()?Number(addAvgCost):null
     const entryPrice=manualCost&&manualCost>0?manualCost:await fetchLastPrice(sym)
-    const {error}=await supabase.from('portfolio_holdings').insert({portfolio_id:selectedId,symbol:sym,weight:addWeight,added_by:'user',entry_price:entryPrice})
+    const {error}=await supabase.from('portfolio_holdings').insert({portfolio_id:selectedId,symbol:sym,weight:0,shares:sharesNum,added_by:'user',entry_price:entryPrice})
     if(error){setMsg(`Could not add ${sym}: ${error.message}`);return}
-    await addLog(selectedId,'user','holding_added',`Added ${sym} at ${addWeight}% weight${manualCost?`, average cost $${manualCost.toFixed(2)}`:''}.`,{symbol:sym,weight:addWeight,entryPrice})
-    setAddSymbol('');setAddWeight(10);setAddAvgCost('');await loadPortfolio(selectedId)
+    await addLog(selectedId,'user','holding_added',`Added ${sym} · ${sharesNum} shares${manualCost?`, average cost $${manualCost.toFixed(2)}`:''}.`,{symbol:sym,shares:sharesNum,entryPrice})
+    setAddSymbol('');setAddShares('');setAddAvgCost('');await loadPortfolio(selectedId)
   }
   async function removeHolding(h:Holding){
     if(!supabase||!selectedId)return
     const {error}=await supabase.from('portfolio_holdings').delete().eq('id',h.id)
     if(error){setMsg(`Could not remove ${h.symbol}: ${error.message}`);return}
-    await addLog(selectedId,'user','holding_removed',`Removed ${h.symbol} (was ${h.weight}% weight).`,{symbol:h.symbol,weight:h.weight})
+    await addLog(selectedId,'user','holding_removed',`Removed ${h.symbol} (was ${h.shares!=null?`${h.shares} shares`:`${h.weight}% weight`}).`,{symbol:h.symbol,weight:h.weight,shares:h.shares})
     await loadPortfolio(selectedId)
   }
   async function runResearch(){
@@ -117,7 +119,7 @@ export default function Portfolios(){
     if(!portfolio?.description.trim()){setMsg('Add a description first so the AI knows what this portfolio should do.');return}
     setResearching(true);setMsg('');setProposal(null)
     try{
-      const r=await fetch('/api/portfolio-research',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({description:portfolio.description,holdings:holdings.map(h=>({symbol:h.symbol,weight:h.weight}))})})
+      const r=await fetch('/api/portfolio-research',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({description:portfolio.description,holdings:holdings.map(h=>({symbol:h.symbol,weight:weightOf(h)}))})})
       const j=await r.json()
       if(!r.ok){setMsg(j.error||'Research failed.');setResearching(false);return}
       setProposal(j)
@@ -138,18 +140,21 @@ export default function Portfolios(){
   if(!session)return <div className="shell"><p className="msg banner">Log in on the <a href="/">Research</a> page first, then come back here.</p></div>
 
   const selected=portfolios.find(p=>p.id===selectedId)
-  const totalWeight=holdings.reduce((s,h)=>s+h.weight,0)
-  const trackedWeight=holdings.reduce((s,h)=>prices[h.symbol]&&h.entry_price?s+h.weight:s,0)
+  const holdingValue=(h:Holding)=>{const p=prices[h.symbol];return h.shares!=null&&p?h.shares*p.last:null}
+  const sharesValueTotal=holdings.reduce((s,h)=>{const v=holdingValue(h);return v!=null?s+v:s},0)
+  const weightOf=(h:Holding)=>{const v=holdingValue(h);return v!=null&&sharesValueTotal>0?v/sharesValueTotal*100:h.weight}
+  const totalWeight=holdings.reduce((s,h)=>s+weightOf(h),0)
+  const trackedWeight=holdings.reduce((s,h)=>prices[h.symbol]&&h.entry_price?s+weightOf(h):s,0)
   const portfolioReturn=trackedWeight?holdings.reduce((s,h)=>{
     const p=prices[h.symbol];if(!p||!h.entry_price)return s
     const ret=(p.last/h.entry_price-1)*100
-    return s+ret*(h.weight/trackedWeight)
+    return s+ret*(weightOf(h)/trackedWeight)
   },0):null
-  const dayTrackedWeight=holdings.reduce((s,h)=>{const p=prices[h.symbol];return p&&p.prevClose?s+h.weight:s},0)
+  const dayTrackedWeight=holdings.reduce((s,h)=>{const p=prices[h.symbol];return p&&p.prevClose?s+weightOf(h):s},0)
   const dayReturn=dayTrackedWeight?holdings.reduce((s,h)=>{
     const p=prices[h.symbol];if(!p||!p.prevClose)return s
     const ret=(p.last/p.prevClose-1)*100
-    return s+ret*(h.weight/dayTrackedWeight)
+    return s+ret*(weightOf(h)/dayTrackedWeight)
   },0):null
 
   return <div className="shell">
@@ -196,7 +201,7 @@ export default function Portfolios(){
             const dayRet=p&&p.prevClose?(p.last/p.prevClose-1)*100:null
             return <div className="row" key={h.id} style={{gridTemplateColumns:'.7fr .7fr .9fr .8fr .8fr .7fr .7fr .6fr'}}>
               <span><b>{h.symbol}</b></span>
-              <span>{h.weight}% weight</span>
+              <span>{weightOf(h).toFixed(1)}% weight{h.shares!=null?` · ${h.shares} sh`:''}</span>
               <span>{h.added_by==='ai'?'Added by AI':'Added by you'} · {fmtDateTime(h.added_at)}</span>
               <span>{h.entry_price?`$${h.entry_price.toFixed(2)}`:'not set'}</span>
               <span>{p?`$${p.last.toFixed(2)}`:'loading…'}</span>
@@ -211,7 +216,7 @@ export default function Portfolios(){
           <form onSubmit={addHolding}>
             <div className="add-holding-grid" style={{marginBottom:10}}>
               <label>Symbol<input value={addSymbol} onChange={e=>setAddSymbol(e.target.value.toUpperCase())} placeholder="AAPL" required/></label>
-              <label>Weight %<input type="number" min={0} max={100} value={addWeight} onChange={e=>setAddWeight(+e.target.value)}/></label>
+              <label>Shares owned<input type="number" min={0} step="0.0001" value={addShares} onChange={e=>setAddShares(e.target.value)} placeholder="e.g. 10" required/></label>
               <label>Average cost (optional)<input type="number" min={0} step="0.01" value={addAvgCost} onChange={e=>setAddAvgCost(e.target.value)} placeholder="Live price if blank"/></label>
             </div>
             <button className="run" type="submit" style={{marginTop:0}}>+ ADD</button>
