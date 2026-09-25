@@ -150,12 +150,14 @@ export default function Portfolios(){
       </section>
       <section className="panel">
         {!selected?<div className="empty">Select or create a portfolio to see its detail.</div>:<>
-          <div className="panel-title portfolio-sticky-head"><h2>{selected.name.toUpperCase()}</h2><span className="muted">Updated {fmtDateTime(selected.updated_at)}</span></div>
-          <div className="metrics portfolio-sticky-metrics">
-            <div><span>Holdings</span><b>{holdings.length}</b></div>
-            <div><span>Total weight</span><b>{totalWeight.toFixed(1)}%</b></div>
-            <div><span>Tracked return</span><b className={portfolioReturn>=0?'up':'down'}>{fmtPct(portfolioReturn)}</b></div>
-            <div><span>Last AI research</span><b>{fmtDateTime(log.find(l=>l.action==='ai_rebalance')?.created_at)}</b></div>
+          <div className="portfolio-sticky">
+            <div className="panel-title"><h2>{selected.name.toUpperCase()}</h2><span className="muted">Updated {fmtDateTime(selected.updated_at)}</span></div>
+            <div className="metrics">
+              <div><span>Holdings</span><b>{holdings.length}</b></div>
+              <div><span>Total weight</span><b>{totalWeight.toFixed(1)}%</b></div>
+              <div><span>Tracked return</span><b className={portfolioReturn>=0?'up':'down'}>{fmtPct(portfolioReturn)}</b></div>
+              <div><span>Last AI research</span><b>{fmtDateTime(log.find(l=>l.action==='ai_rebalance')?.created_at)}</b></div>
+            </div>
           </div>
 
           <div className="section-label">HOLDINGS</div>
