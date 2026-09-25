@@ -163,6 +163,14 @@ export default function Portfolios(){
           </div>
 
           <div className="section-label">HOLDINGS</div>
+          {holdings.length>0&&<div className="row row-head" style={{gridTemplateColumns:'.8fr 1fr 1fr 1fr .8fr .6fr'}}>
+            <span>Symbol</span>
+            <span>Weight</span>
+            <span>Added</span>
+            <span>Price</span>
+            <span>Return</span>
+            <span></span>
+          </div>}
           <div className="table">{holdings.map(h=>{
             const p=prices[h.symbol]
             const ret=p&&h.entry_price?(p.last/h.entry_price-1)*100:null
