@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
 type Portfolio = { id:string; name:string; description:string; created_at:string; updated_at:string }
-type Holding = { id:string; portfolio_id:string; symbol:string; weight:number; added_by:string; added_at:string }
+type Holding = { id:string; portfolio_id:string; symbol:string; weight:number; added_by:string; added_at:string; entry_price?:number|null }
 type LogEntry = { id:string; created_at:string; actor:string; action:string; message:string; detail:any }
 
 function fmtDateTime(iso?:string){if(!iso)return '—';return new Date(iso).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'})}
@@ -77,10 +77,18 @@ export default function Portfolios(){
     await addLog(selectedId,'user','description_updated',`Description changed.`,{before:prev,after:descDraft})
     await loadPortfolios();await loadPortfolio(selectedId)
   }
+  async function fetchLastPrice(symbol:string):Promise<number|null>{
+    try{
+      const r=await fetch(`/api/market?symbol=${encodeURIComponent(symbol)}&interval=1d&rangeDays=10`)
+      const j=await r.json()
+      return Array.isArray(j)&&j.length?j[j.length-1].close:null
+    }catch{return null}
+  }
   async function addHolding(e:React.FormEvent){
     e.preventDefault();if(!supabase||!selectedId||!addSymbol.trim())return
     const sym=addSymbol.trim().toUpperCase()
-    const {error}=await supabase.from('portfolio_holdings').insert({portfolio_id:selectedId,symbol:sym,weight:addWeight,added_by:'user'})
+    const entryPrice=await fetchLastPrice(sym)
+    const {error}=await supabase.from('portfolio_holdings').insert({portfolio_id:selectedId,symbol:sym,weight:addWeight,added_by:'user',entry_price:entryPrice})
     if(error){setMsg(`Could not add ${sym}: ${error.message}`);return}
     await addLog(selectedId,'user','holding_added',`Added ${sym} at ${addWeight}% weight.`,{symbol:sym,weight:addWeight})
     setAddSymbol('');setAddWeight(10);await loadPortfolio(selectedId)
@@ -109,7 +117,7 @@ export default function Portfolios(){
     if(!supabase||!selectedId||!proposal)return
     const before=holdings.map(h=>({symbol:h.symbol,weight:h.weight}))
     await supabase.from('portfolio_holdings').delete().eq('portfolio_id',selectedId)
-    for(const h of proposal.holdings)await supabase.from('portfolio_holdings').insert({portfolio_id:selectedId,symbol:h.symbol,weight:h.weight,added_by:'ai'})
+    for(const h of proposal.holdings)await supabase.from('portfolio_holdings').insert({portfolio_id:selectedId,symbol:h.symbol,weight:h.weight,added_by:'ai',entry_price:h.entryPrice??null})
     await addLog(selectedId,'ai','ai_rebalance',proposal.summary||'AI rebalanced the portfolio.',{before,after:proposal.holdings,mode:proposal.mode,rationale:proposal.holdings.map((h:any)=>`${h.symbol}: ${h.rationale}`)})
     await supabase.from('portfolios').update({updated_at:new Date().toISOString()}).eq('id',selectedId)
     setProposal(null);await loadPortfolio(selectedId)
@@ -121,10 +129,8 @@ export default function Portfolios(){
   const selected=portfolios.find(p=>p.id===selectedId)
   const totalWeight=holdings.reduce((s,h)=>s+h.weight,0)
   const portfolioReturn=holdings.length?holdings.reduce((s,h)=>{
-    const p=prices[h.symbol];if(!p)return s
-    const addedTs=new Date(h.added_at).getTime()
-    const at=p.series.find(c=>new Date(c.date).getTime()>=addedTs)||p.series[0]
-    const ret=at?(p.last/at.close-1)*100:0
+    const p=prices[h.symbol];if(!p||!h.entry_price)return s
+    const ret=(p.last/h.entry_price-1)*100
     return s+ret*(h.weight/Math.max(totalWeight,1))
   },0):0
 
@@ -176,9 +182,7 @@ export default function Portfolios(){
           </form>
           <div className="table">{holdings.map(h=>{
             const p=prices[h.symbol]
-            const addedTs=new Date(h.added_at).getTime()
-            const at=p?.series.find(c=>new Date(c.date).getTime()>=addedTs)||p?.series[0]
-            const ret=p&&at?(p.last/at.close-1)*100:null
+            const ret=p&&h.entry_price?(p.last/h.entry_price-1)*100:null
             return <div className="row" key={h.id} style={{gridTemplateColumns:'.8fr 1fr 1fr 1fr .8fr .6fr'}}>
               <span><b>{h.symbol}</b></span>
               <span>{h.weight}% weight</span>

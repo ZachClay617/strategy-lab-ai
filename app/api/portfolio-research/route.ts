@@ -94,7 +94,7 @@ export async function POST(req:NextRequest){
         const validSymbols=new Set(marketData.map(m=>m.symbol))
         const holdings=(parsed.holdings||[]).filter((h:any)=>validSymbols.has(String(h.symbol).toUpperCase())).map((h:any)=>({symbol:String(h.symbol).toUpperCase(),weight:Number(h.weight)||0,rationale:String(h.rationale||'')}))
         const total=holdings.reduce((s:number,h:any)=>s+h.weight,0)||1
-        const normalized=holdings.map((h:any)=>({...h,weight:Math.round(h.weight/total*1000)/10}))
+        const normalized=holdings.map((h:any)=>({...h,weight:Math.round(h.weight/total*1000)/10,entryPrice:marketData.find(m=>m.symbol===h.symbol)?.lastClose}))
         if(normalized.length)return NextResponse.json({mode:'ai',holdings:normalized,summary:parsed.summary||'',dataAsOf:new Date().toISOString(),universeSize:marketData.length})
         console.error('AI returned zero valid holdings after filtering',JSON.stringify(parsed).slice(0,2000))
       }
@@ -108,7 +108,7 @@ export async function POST(req:NextRequest){
   }).sort((a,b)=>b.score-a.score)
   const picked=scored.slice(0,Math.min(10,Math.max(5,scored.length))).filter(s=>s.score>-50)
   const positiveTotal=picked.reduce((s,p)=>s+Math.max(1,p.score+50),0)
-  const holdings=picked.map(p=>({symbol:p.symbol,weight:Math.round(Math.max(1,p.score+50)/positiveTotal*1000)/10,rationale:`${p.return60d>=0?'Up':'Down'} ${Math.abs(p.return60d).toFixed(1)}% over 60 real trading days with ${p.volatility.toFixed(1)}% annualized volatility${p.tags.some(t=>keywords.has(t))?`, matches "${p.tags.find(t=>keywords.has(t))}" in your description`:''}.`}))
+  const holdings=picked.map(p=>({symbol:p.symbol,weight:Math.round(Math.max(1,p.score+50)/positiveTotal*1000)/10,entryPrice:p.lastClose,rationale:`${p.return60d>=0?'Up':'Down'} ${Math.abs(p.return60d).toFixed(1)}% over 60 real trading days with ${p.volatility.toFixed(1)}% annualized volatility${p.tags.some(t=>keywords.has(t))?`, matches "${p.tags.find(t=>keywords.has(t))}" in your description`:''}.`}))
 
   return NextResponse.json({mode:'heuristic',holdings,summary:`No AI key is configured, so this used a rules-based screen of ${marketData.length} real, live-priced candidates ranked by trailing momentum, volatility, and how well each matched your description.`,dataAsOf:new Date().toISOString(),universeSize:marketData.length})
 }
