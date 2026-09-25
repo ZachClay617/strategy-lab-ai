@@ -167,7 +167,7 @@ export default function Portfolios(){
             <span>Symbol</span>
             <span>Weight</span>
             <span>Added</span>
-            <span>Price</span>
+            <span>Average Cost</span>
             <span>Return</span>
             <span></span>
           </div>}
@@ -178,7 +178,7 @@ export default function Portfolios(){
               <span><b>{h.symbol}</b></span>
               <span>{h.weight}% weight</span>
               <span>{h.added_by==='ai'?'Added by AI':'Added by you'} · {fmtDateTime(h.added_at)}</span>
-              <span>{p?`$${p.last.toFixed(2)}`:'loading…'}</span>
+              <span>{h.entry_price?`$${h.entry_price.toFixed(2)}`:'not set'}</span>
               <span className={ret!=null?(ret>=0?'up':'down'):''}>{ret!=null?fmtPct(ret):'—'}</span>
               <button className="ghost" onClick={()=>removeHolding(h)}>REMOVE</button>
             </div>
