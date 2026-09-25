@@ -320,32 +320,41 @@ export default function Home(){
  outer: for(let b=0;b<total;b+=batch){if(stopRef.current)break;const r=seeded(b+symbol.length*999+Date.now()%10000);for(let j=0;j<Math.min(batch,total-b);j++){
    await waitWhilePaused();if(stopRef.current)break outer
    const index=completed+1;const family=families[Math.floor(r()*families.length)];const params=randomParams(r)
-   let sessions:Session[]=[];let storedParams=params
+   let sessions:Session[]=[];let storedParams=params;let pickedTier:typeof RESOLUTION_TIERS[number]|null=null
+   const runSession=(tier:typeof RESOLUTION_TIERS[number],rr:()=>number,useParams:any):Session=>{
+     if(tier.key==='15m'){
+       const dk=sessionDayKeys[Math.floor(rr()*sessionDayKeys.length)]
+       const cds=sessionDayMap[dk];const p2=clampParamsToSession(useParams,cds.length)
+       const res=backtest(cds,family,p2,undefined,capital)
+       return {candles:cds,trades:res.trades,metrics:res.metrics,startDate:cds[0]?.date,endDate:cds[cds.length-1]?.date,tier:'15m'}
+     }
+     const sourceData=tier.key==='1h'?hourlyData:dailyData;const holdMs=maxHoldMsFor(tier.key)
+     const slice=randomWindow(sourceData,rr,tier.minutes);const p2=clampParamsToSession(useParams,slice.length)
+     const res=backtest(slice,family,p2,holdMs,capital)
+     return {candles:slice,trades:res.trades,metrics:res.metrics,startDate:slice[0]?.date,endDate:slice[slice.length-1]?.date,tier:tier.key}
+   }
    if(live){
      const result=backtest(data,family,params,undefined,capital)
      sessions=[{candles:data,trades:result.trades,metrics:result.metrics,startDate:data[0]?.date,endDate:data[data.length-1]?.date,tier:'live'}]
    } else {
      const tier=pickTier(r)
      if(!tier){completed++;continue}
-     if(tier.key==='15m'){
-       for(let n=0;n<minTrades;n++){
-         const dk=sessionDayKeys[Math.floor(r()*sessionDayKeys.length)]
-         const cds=sessionDayMap[dk];const p2=clampParamsToSession(params,cds.length);if(n===0)storedParams=p2
-         const res=backtest(cds,family,p2,undefined,capital)
-         sessions.push({candles:cds,trades:res.trades,metrics:res.metrics,startDate:cds[0]?.date,endDate:cds[cds.length-1]?.date,tier:'15m'})
-       }
-     } else {
-       const sourceData=tier.key==='1h'?hourlyData:dailyData;const holdMs=maxHoldMsFor(tier.key)
-       for(let n=0;n<minTrades;n++){
-         const slice=randomWindow(sourceData,r,tier.minutes);const p2=clampParamsToSession(params,slice.length);if(n===0)storedParams=p2
-         const res=backtest(slice,family,p2,holdMs,capital)
-         sessions.push({candles:slice,trades:res.trades,metrics:res.metrics,startDate:slice[0]?.date,endDate:slice[slice.length-1]?.date,tier:tier.key})
-       }
+     pickedTier=tier
+     for(let n=0;n<minTrades;n++){
+       const sess=runSession(tier,r,params)
+       if(n===0)storedParams=clampParamsToSession(params,sess.candles.length)
+       sessions.push(sess)
      }
    }
    const agg=aggregateMetrics(sessions.map(s=>s.metrics))
    const passed=agg.trades>0&&agg.winRate>=45&&agg.returnPct>=.025&&agg.maxDrawdownPct<8&&agg.sharpe>=.85&&agg.sharpe<=1.5
-   const primary=sessions[0];const sampleSessions=sessions.slice(0,10)
+   const primary=sessions[0]
+   let sampleSessions=sessions.slice(0,10)
+   if(passed&&pickedTier&&sampleSessions.length<10){
+     const extra:Session[]=[]
+     for(let k=sampleSessions.length;k<10;k++)extra.push(runSession(pickedTier,r,storedParams))
+     sampleSessions=sampleSessions.concat(extra)
+   }
    const candidate={family,params:storedParams,result:{metrics:agg,trades:primary.trades},passed,reason:'',index,candles:primary.candles,startDate:primary.startDate,endDate:primary.endDate,sessions:sampleSessions,testedAt:new Date().toISOString()} as Candidate
    candidate.reason=explainCandidate(candidate,sessions.length)
    if(passed){qualified++;capital+=agg.profit;setBalance(capital);best.push(candidate);best.sort((a,b)=>b.result.metrics.score-a.result.metrics.score);if(best.length>25)best.pop()}
