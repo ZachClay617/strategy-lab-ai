@@ -186,8 +186,9 @@ export default function Portfolios(){
           </div>
 
           <div className="section-label">HOLDINGS</div>
-          {holdings.length>0&&<div className="row row-head" style={{gridTemplateColumns:'.7fr .7fr .9fr .8fr .8fr .7fr .7fr .6fr'}}>
+          {holdings.length>0&&<div className="row row-head" style={{gridTemplateColumns:'.7fr .6fr .7fr .9fr .8fr .8fr .7fr .7fr .6fr'}}>
             <span>Symbol</span>
+            <span>Shares</span>
             <span>Weight</span>
             <span>Added</span>
             <span>Average Cost</span>
@@ -200,9 +201,10 @@ export default function Portfolios(){
             const p=prices[h.symbol]
             const ret=p&&h.entry_price?(p.last/h.entry_price-1)*100:null
             const dayRet=p&&p.prevClose?(p.last/p.prevClose-1)*100:null
-            return <div className="row" key={h.id} style={{gridTemplateColumns:'.7fr .7fr .9fr .8fr .8fr .7fr .7fr .6fr'}}>
+            return <div className="row" key={h.id} style={{gridTemplateColumns:'.7fr .6fr .7fr .9fr .8fr .8fr .7fr .7fr .6fr'}}>
               <span><b>{h.symbol}</b></span>
-              <span>{weightOf(h).toFixed(1)}% weight{h.shares!=null?` · ${h.shares} sh`:''}</span>
+              <span>{h.shares!=null?h.shares:'—'}</span>
+              <span>{weightOf(h).toFixed(1)}% weight</span>
               <span>{h.added_by==='ai'?'Added by AI':'Added by you'} · {fmtDateTime(h.added_at)}</span>
               <span>{h.entry_price?`$${h.entry_price.toFixed(2)}`:'not set'}</span>
               <span>{p?`$${p.last.toFixed(2)}`:'loading…'}</span>
