@@ -7,40 +7,25 @@ const STARTING_CAPITAL = 10_000_000_000
 const families = ['Trend Following','Mean Reversion','Breakout','Momentum','Volume Confirmation','RSI Regime','Moving Average Cross']
 const markets = ['Stocks','Crypto']
 const speeds = [
-  { key:'slow', label:'Slow', ms:400 },
-  { key:'normal', label:'Normal', ms:180 },
-  { key:'fast', label:'Fast', ms:60 },
-  { key:'turbo', label:'Turbo', ms:5 },
-  { key:'realtime', label:'Real-time', ms:60000 },
+  { key:'slow', label:'Slow · 1 test / 3s', ms:3000 },
+  { key:'normal', label:'Normal · 1 test / s', ms:1000 },
+  { key:'fast', label:'Fast · 10 tests / s', ms:100 },
+  { key:'turbo', label:'Turbo · 50 tests / s', ms:20 },
+  { key:'ultraTurbo', label:'Ultra Turbo · 150 tests / s', ms:Math.round(1000/150) },
 ] as const
 const MAX_VARIATIONS = 100000
 const MAX_MIN_TRADES = 3000
-const CHART_WINDOWS = [
-  { label:'50 candles', value:50 },
-  { label:'100 candles', value:100 },
-  { label:'250 candles', value:250 },
-  { label:'500 candles', value:500 },
-  { label:'All', value:100000 },
-] as const
-const CANDLE_INTERVALS = [
-  { key:'1m', label:'1 Minute', minutes:1 },
-  { key:'15m', label:'15 Minutes', minutes:15 },
-  { key:'30m', label:'30 Minutes', minutes:30 },
-  { key:'1h', label:'1 Hour', minutes:60 },
-  { key:'1d', label:'Daily', minutes:1440 },
-] as const
+const CANDLE_MINUTES = 15
 const SESSION_START_MIN=9*60, SESSION_END_MIN=12*60
-// sim-minutes of market time revealed per real millisecond, for animated playback. fast/turbo skip animation entirely.
-const SIM_RATE:Record<string,number|undefined> = { slow:5/5000, normal:10/3000, realtime:1/60000, fast:undefined, turbo:undefined }
-const INTERVAL_RANGE_DAYS:Record<string,number> = { '1m':7, '15m':50, '30m':50, '1h':500, '1d':3650 }
+const SESSION_RANGE_DAYS = 55
 
 type Candle = { date:string; open:number; high:number; low:number; close:number; volume:number }
 type Trade = { side:'LONG'; entryIndex:number; exitIndex:number; entry:number; exit:number; qty:number; pnl:number; reason:string }
 type Session = { candles:Candle[]; trades:Trade[]; metrics:any; startDate?:string; endDate?:string }
-type Strategy = { id:string; name:string; family:string; symbol:string; market:string; score:number; approved:boolean; metrics:any; explanation:string; parameters:any; equity:any; trades:Trade[]; candles?:Candle[]; test_start_at?:string|null; test_end_at?:string|null; sessions?:Session[]; created_at:string }
+type Strategy = { id:string; run_id?:string; name:string; family:string; symbol:string; market:string; score:number; approved:boolean; metrics:any; explanation:string; parameters:any; equity:any; trades:Trade[]; candles?:Candle[]; test_start_at?:string|null; test_end_at?:string|null; sessions?:Session[]; created_at:string }
 type Run = { id:string; symbol:string; market:string; status:string; variations_requested:number; best_score:number|null; started_at:string; finished_at:string|null; starting_balance:number; current_balance:number; summary:string|null; best_strategy_name:string|null; best_reason:string|null; failure_reason:string|null; tested_count:number; qualified_count:number }
 
-type Candidate = { family:string; params:any; result:any; passed:boolean; reason:string; index:number; candles:Candle[]; startDate?:string; endDate?:string; sessions:Session[] }
+type Candidate = { family:string; params:any; result:any; passed:boolean; reason:string; index:number; candles:Candle[]; startDate?:string; endDate?:string; sessions:Session[]; testedAt:string }
 
 function fmtMoney(n:number){
   if (!Number.isFinite(n)) return '$0'
@@ -86,7 +71,7 @@ function backtest(data:Candle[], family:string, p:any){
   let cash=STARTING_CAPITAL, qty=0, side:'LONG'|null=null, entry=0, entryIndex=0, wins=0, losses=0, trades=0, peak=cash, maxDD=0
   const equity:number[]=[]; const tradeLog:Trade[]=[]
   const riskFraction=.20
-  const start=Math.max(35,p.slow,p.lookback)
+  const start=Math.max(3,p.slow,p.lookback)
   for(let i=start;i<data.length;i++){
     const c=data[i].close
     const {long,sell}=signalFor(data,i,family,p)
@@ -111,16 +96,8 @@ function backtest(data:Candle[], family:string, p:any){
   return {metrics:{returnPct:ret,winRate,maxDrawdownPct:maxDD*100,sharpe,consistency,trades,profit:cash-STARTING_CAPITAL,score,wins,losses},equity, trades:tradeLog, endingBalance:cash}
 }
 function randomParams(r:()=>number){return{fast:Math.floor(5+r()*55),slow:Math.floor(30+r()*120),lookback:Math.floor(10+r()*80),threshold:.001+r()*.03,rsi:25+Math.floor(r()*35),vol:r()*.8}}
-function randomWindow(data:Candle[], r:()=>number){
-  const minLen=Math.min(data.length,220)
-  if(data.length<=minLen)return data
-  const maxStart=data.length-minLen
-  const start=Math.floor(r()*maxStart)
-  const remaining=data.length-start
-  const len=Math.max(minLen,Math.floor(minLen+r()*(remaining-minLen)))
-  return data.slice(start,Math.min(data.length,start+len))
-}
 function fmtDateTime(iso?:string){if(!iso)return '—';return new Date(iso).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'})}
+function fmtClock(iso?:string){if(!iso)return '—';return new Date(iso).toLocaleTimeString('en-US',{timeZone:'America/New_York',hour:'numeric',minute:'2-digit'})}
 function etParts(iso:string){
   const d=new Date(iso)
   const fmt=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false})
@@ -141,9 +118,9 @@ function extractMorningSessions(data:Candle[]):Record<string,Candle[]>{
 function clampParamsToSession(p:any, len:number){
   const cap=(v:number,min:number,max:number)=>Math.max(min,Math.min(max,v))
   return {...p,
-    fast:Math.round(cap(p.fast,3,Math.max(3,Math.floor(len*.35)))),
-    slow:Math.round(cap(p.slow,5,Math.max(5,Math.floor(len*.6)))),
-    lookback:Math.round(cap(p.lookback,3,Math.max(3,Math.floor(len*.5)))),
+    fast:Math.round(cap(p.fast,2,Math.max(2,Math.floor(len*.35)))),
+    slow:Math.round(cap(p.slow,3,Math.max(3,Math.floor(len*.6)))),
+    lookback:Math.round(cap(p.lookback,2,Math.max(2,Math.floor(len*.5)))),
   }
 }
 function sma(data:Candle[], i:number, period:number){const from=Math.max(0,i-period);const w=data.slice(from,i+1);return w.length?w.reduce((s,x)=>s+x.close,0)/w.length:data[i].close}
@@ -155,31 +132,28 @@ function indicatorSeries(data:Candle[], family:string, p:any):{label:string,colo
     return {label:`${p.lookback}-candle high channel`,color:'#ffd166',values}
   }
   if(family==='Moving Average Cross'){
-    for(let i=0;i<n;i++){values[i]=i<3?null:sma(data,i,p.slow)}
+    for(let i=0;i<n;i++){values[i]=i<2?null:sma(data,i,p.slow)}
     return {label:`${p.slow}-period average`,color:'#ffd166',values}
   }
-  for(let i=0;i<n;i++){values[i]=i<3?null:sma(data,i,p.fast)}
+  for(let i=0;i<n;i++){values[i]=i<2?null:sma(data,i,p.fast)}
   return {label:`${p.fast}-period average`,color:'#ffd166',values}
 }
 function explainCandidate(c:Candidate,minTrades:number){const m=c.result.metrics;if(m.trades<minTrades)return`Rejected: only ${m.trades} completed trades, below the ${minTrades}-trade minimum.`;if(m.winRate<45)return`Rejected: ${m.winRate.toFixed(1)}% win rate is below the required 45%. It finished with ${m.wins} wins and ${m.losses} losses.`;if(m.returnPct<=0)return`Rejected: the strategy reached the win-rate threshold but lost ${Math.abs(m.returnPct).toFixed(2)}% of starting capital.`;if(m.maxDrawdownPct>50)return`Rejected: drawdown reached ${m.maxDrawdownPct.toFixed(1)}%, so the risk profile was too deep.`;return`Qualified: ${m.wins} wins / ${m.losses} losses, ${m.returnPct.toFixed(2)}% return, ${m.maxDrawdownPct.toFixed(1)}% max drawdown and ${m.sharpe.toFixed(2)} Sharpe.`}
 
-function CandleChart({candles,trades,activeIndex,title,live=false,windowSize=50,errorMessage,indicator,intervalMinutes,showCountdown=false,frameStartedAt,frameDurationMs}:{candles:Candle[];trades:Trade[];activeIndex:number;title:string;live?:boolean;windowSize?:number;errorMessage?:string|null;indicator?:{label:string,color:string,values:(number|null)[]}|null;intervalMinutes?:number;showCountdown?:boolean;frameStartedAt?:number|null;frameDurationMs?:number|null}){
-  const [now,setNow]=useState(Date.now())
-  const openCandle=candles[Math.min(activeIndex,candles.length-1)]
-  const closesAt=frameStartedAt!=null&&frameDurationMs!=null?frameStartedAt+frameDurationMs:(showCountdown&&openCandle&&intervalMinutes?new Date(openCandle.date).getTime()+intervalMinutes*60000:null)
-  useEffect(()=>{if(closesAt==null)return;setNow(Date.now());const id=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(id)},[closesAt])
+function CandleChart({candles,trades,activeIndex,title,live=false,windowSize=14,errorMessage,indicator}:{candles:Candle[];trades:Trade[];activeIndex:number;title:string;live?:boolean;windowSize?:number;errorMessage?:string|null;indicator?:{label:string,color:string,values:(number|null)[]}|null}){
   if(errorMessage)return <div className="chart empty error">⚠ {errorMessage}</div>
-  const size=Math.max(10,windowSize)
+  const size=Math.max(4,windowSize)
   const half=Math.floor(size*.8)
   const visible=candles.slice(Math.max(0,Math.min(candles.length-size,activeIndex-half)),Math.min(candles.length,Math.max(size,activeIndex+1)))
   if(!visible.length)return <div className="chart empty">Waiting for market data…</div>
-  const w=1000,h=460,padL=70,padR=20,padT=20,padB=30,min=Math.min(...visible.map(x=>x.low)),max=Math.max(...visible.map(x=>x.high)),spread=max-min||1,pricePad=spread*.08,adjMin=min-pricePad,adjMax=max+pricePad,range=adjMax-adjMin||1
+  const up=visible[visible.length-1]?.close>=visible[0]?.open
+  const w=1000,h=460,padL=64,padR=16,padT=20,padB=34,min=Math.min(...visible.map(x=>x.low)),max=Math.max(...visible.map(x=>x.high)),spread=max-min||1,pricePad=spread*.1,adjMin=min-pricePad,adjMax=max+pricePad,range=adjMax-adjMin||1
   const x=(i:number)=>padL+(i/(Math.max(visible.length-1,1)))*(w-padL-padR)
   const y=(v:number)=>h-padB-((v-adjMin)/range)*(h-padT-padB)
   const offset=candles.indexOf(visible[0])
   const markers=trades.filter(t=>t.entryIndex>=offset&&t.entryIndex<offset+visible.length)
-  const gridLines=5
-  const bodyWidth=Math.max(3,Math.min(14,(w-padL-padR)/visible.length*.62))
+  const gridLines=4
+  const bodyWidth=Math.max(4,Math.min(22,(w-padL-padR)/visible.length*.58))
   let indicatorPath=''
   if(indicator){
     let started=false
@@ -190,87 +164,63 @@ function CandleChart({candles,trades,activeIndex,title,live=false,windowSize=50,
       started=true
     }
   }
-  const remaining=closesAt!=null?Math.max(0,Math.round((closesAt-now)/1000)):null
-  return <div className="chart-wrap"><div className="chart-head"><div><b>{title}</b><span>{live?'LIVE MARKET DATA':'AI RESEARCH SIMULATION'}{indicator?` · ${indicator.label}`:''}</span></div>{remaining!=null&&<span className="countdown">Candle closes in {Math.floor(remaining/60)}:{String(remaining%60).padStart(2,'0')}</span>}<strong>{fmtPrice(candles[Math.min(activeIndex,candles.length-1)]?.close||0)}</strong></div><svg className="chart" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
-    {Array.from({length:gridLines}).map((_,i)=>{const v=adjMin+(range*i)/(gridLines-1);const yy=y(v);return <g key={i}><line x1={padL} x2={w-padR} y1={yy} y2={yy} stroke="#ffffff" strokeOpacity=".08" strokeWidth="1"/><text x={padL-8} y={yy+4} fill="#8fa0b8" fontSize="11" textAnchor="end">{fmtPrice(v)}</text></g>})}
-    {visible.map((c,i)=>{const up=c.close>=c.open;const cx=x(i),bodyTop=y(Math.max(c.open,c.close)),bodyBottom=y(Math.min(c.open,c.close));const color=up?'#3ddc97':'#ff5c7c';return <g key={c.date}><line x1={cx} x2={cx} y1={y(c.high)} y2={y(c.low)} stroke={color} strokeWidth="1.6"/><rect x={cx-bodyWidth/2} y={bodyTop} width={bodyWidth} height={Math.max(2.2,bodyBottom-bodyTop)} fill={color} stroke={color} strokeWidth="1"/></g>})}
-    {indicatorPath&&<path d={indicatorPath} fill="none" stroke={indicator!.color} strokeWidth="2" opacity=".85"/>}
-    {markers.map((t,i)=>{const ix=t.entryIndex-offset;const yy=y(t.entry);const exitIx=t.exitIndex-offset;const exitVisible=exitIx>=0&&exitIx<visible.length;const exitYy=y(t.exit);return <g key={`${t.entryIndex}-${i}`}>{exitVisible&&<line x1={x(ix)} y1={yy} x2={x(exitIx)} y2={exitYy} stroke="#8fa0b8" strokeWidth="1.5" strokeDasharray="4 3" opacity=".7"/>}<circle cx={x(ix)} cy={yy} r="6" fill="#57e8ff" stroke="#0a1220" strokeWidth="1.5"/><text x={x(ix)+8} y={yy-8} fill="#57e8ff" fontSize="12" fontWeight="800">BUY</text>{exitVisible&&<><circle cx={x(exitIx)} cy={exitYy} r="6" fill="#ff9b70" stroke="#0a1220" strokeWidth="1.5"/><text x={x(exitIx)+8} y={exitYy-8} fill="#ff9b70" fontSize="12" fontWeight="800">SELL</text></>}</g>})}
+  const timeTickCount=Math.min(visible.length,5)
+  const timeTicks=Array.from({length:timeTickCount}).map((_,k)=>{
+    const i=Math.round(k*(visible.length-1)/Math.max(1,timeTickCount-1))
+    return {i,label:fmtClock(visible[i]?.date)}
+  })
+  const lastClose=candles[Math.min(activeIndex,candles.length-1)]?.close||0
+  return <div className="chart-wrap rh"><div className="chart-head"><div><b>{title}</b><span>{live?'LIVE MARKET DATA':'AI RESEARCH SIMULATION'}{indicator?` · ${indicator.label}`:''}</span></div><strong className={up?'up':'down'}>{fmtPrice(lastClose)}</strong></div><svg className="chart" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+    {Array.from({length:gridLines}).map((_,i)=>{const v=adjMin+(range*i)/(gridLines-1);const yy=y(v);return <g key={i}><line x1={padL} x2={w-padR} y1={yy} y2={yy} stroke="#ffffff" strokeOpacity=".06" strokeWidth="1"/><text x={padL-8} y={yy+4} fill="#6b7690" fontSize="11" textAnchor="end">{fmtPrice(v)}</text></g>})}
+    {visible.map((c,i)=>{const rise=c.close>=c.open;const cx=x(i),bodyTop=y(Math.max(c.open,c.close)),bodyBottom=y(Math.min(c.open,c.close));const color=rise?'#00c805':'#ff5000';return <g key={c.date}><line x1={cx} x2={cx} y1={y(c.high)} y2={y(c.low)} stroke={color} strokeWidth="1.4"/><rect x={cx-bodyWidth/2} y={bodyTop} width={bodyWidth} height={Math.max(2,bodyBottom-bodyTop)} fill={color} rx="1.5"/></g>})}
+    {indicatorPath&&<path d={indicatorPath} fill="none" stroke={indicator!.color} strokeWidth="1.6" opacity=".8"/>}
+    {markers.map((t,i)=>{const ix=t.entryIndex-offset;const yy=y(t.entry);const exitIx=t.exitIndex-offset;const exitVisible=exitIx>=0&&exitIx<visible.length;const exitYy=y(t.exit);return <g key={`${t.entryIndex}-${i}`}>{exitVisible&&<line x1={x(ix)} y1={yy} x2={x(exitIx)} y2={exitYy} stroke="#8fa0b8" strokeWidth="1.3" strokeDasharray="4 3" opacity=".6"/>}<circle cx={x(ix)} cy={yy} r="5.5" fill="#57e8ff" stroke="#05070d" strokeWidth="1.5"/><text x={x(ix)+7} y={yy-7} fill="#57e8ff" fontSize="11" fontWeight="800">BUY</text>{exitVisible&&<><circle cx={x(exitIx)} cy={exitYy} r="5.5" fill="#ff9b70" stroke="#05070d" strokeWidth="1.5"/><text x={x(exitIx)+7} y={exitYy-7} fill="#ff9b70" fontSize="11" fontWeight="800">SELL</text></>}</g>})}
+    {timeTicks.map((t,k)=><text key={k} x={x(t.i)} y={h-10} fill="#6b7690" fontSize="11" textAnchor="middle">{t.label}</text>)}
   </svg></div>
 }
 
 export default function Home(){
- const [session,setSession]=useState<any>(null),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[mode,setMode]=useState<'login'|'signup'>('login'),[msg,setMsg]=useState(''),[strategies,setStrategies]=useState<Strategy[]>([]),[runs,setRuns]=useState<Run[]>([]),[running,setRunning]=useState(false),[progress,setProgress]=useState(0),[feed,setFeed]=useState<string[]>([]),[testLog,setTestLog]=useState<Candidate[]>([]),[selected,setSelected]=useState<Strategy|null>(null),[symbol,setSymbol]=useState('AAPL'),[market,setMarket]=useState('Stocks'),[lookback,setLookback]=useState(1825),[variations,setVariations]=useState(25000),[minTrades,setMinTrades]=useState(10),[idea,setIdea]=useState(''),[runMode,setRunMode]=useState<'paper'|'live'>('paper'),[balance,setBalance]=useState(STARTING_CAPITAL),[researchCandles,setResearchCandles]=useState<Candle[]>([]),[activeIndex,setActiveIndex]=useState(0),[activeTrades,setActiveTrades]=useState<Trade[]>([]),[activeCandidate,setActiveCandidate]=useState<Candidate|null>(null),[liveCandles,setLiveCandles]=useState<Candle[]>([]),[liveStatus,setLiveStatus]=useState('Waiting for live market data'),[selectedRun,setSelectedRun]=useState<Run|null>(null),[speed,setSpeed]=useState<typeof speeds[number]['key']>('normal'),[usingLiveData,setUsingLiveData]=useState(false),[tickerError,setTickerError]=useState<string|null>(null),[watchLive,setWatchLive]=useState(true),[chartWindow,setChartWindow]=useState<number>(100),[paused,setPaused]=useState(false),[candleInterval,setCandleInterval]=useState<typeof CANDLE_INTERVALS[number]['key']>('1m'),[frameClock,setFrameClock]=useState<{startedAt:number,durationMs:number}|null>(null)
+ const [session,setSession]=useState<any>(null),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[mode,setMode]=useState<'login'|'signup'>('login'),[msg,setMsg]=useState(''),[strategies,setStrategies]=useState<Strategy[]>([]),[runs,setRuns]=useState<Run[]>([]),[running,setRunning]=useState(false),[progress,setProgress]=useState(0),[feed,setFeed]=useState<string[]>([]),[testLog,setTestLog]=useState<Candidate[]>([]),[selected,setSelected]=useState<Strategy|null>(null),[symbol,setSymbol]=useState('AAPL'),[market,setMarket]=useState('Stocks'),[variations,setVariations]=useState(25000),[minTrades,setMinTrades]=useState(10),[idea,setIdea]=useState(''),[runMode,setRunMode]=useState<'paper'|'live'>('paper'),[balance,setBalance]=useState(STARTING_CAPITAL),[researchCandles,setResearchCandles]=useState<Candle[]>([]),[activeIndex,setActiveIndex]=useState(0),[activeTrades,setActiveTrades]=useState<Trade[]>([]),[activeCandidate,setActiveCandidate]=useState<Candidate|null>(null),[liveCandles,setLiveCandles]=useState<Candle[]>([]),[liveStatus,setLiveStatus]=useState('Waiting for live market data'),[selectedRun,setSelectedRun]=useState<Run|null>(null),[speed,setSpeed]=useState<typeof speeds[number]['key']>('normal'),[tickerError,setTickerError]=useState<string|null>(null),[watchLive,setWatchLive]=useState(true),[chartWindow,setChartWindow]=useState<number>(14),[paused,setPaused]=useState(false)
  const stopRef=useRef(false)
  const pauseRef=useRef(false)
  const skipRef=useRef(false)
- const speedMs=speeds.find(s=>s.key===speed)?.ms??180
+ const speedMs=speeds.find(s=>s.key===speed)?.ms??1000
  const speedRef=useRef(speedMs)
  useEffect(()=>{speedRef.current=speedMs},[speedMs])
- const speedKeyRef=useRef(speed)
- useEffect(()=>{speedKeyRef.current=speed},[speed])
- async function sleepSkippable(ms:number){
+ async function sleepSkippable(){
    const start=Date.now()
-   while(Date.now()-start<ms){
+   while(Date.now()-start<speedRef.current){
      if(stopRef.current||skipRef.current)break
-     await sleep(Math.min(40,ms))
+     await sleep(20)
    }
    skipRef.current=false
  }
  async function waitWhilePaused(){
    while(pauseRef.current&&!stopRef.current)await sleep(150)
  }
- async function waitFrame(ms:number){
-   const start=Date.now()
-   while(Date.now()-start<ms){
-     if(stopRef.current||skipRef.current)return
-     await sleep(Math.min(200,ms-(Date.now()-start)))
-   }
- }
- // reveals a test's candles one at a time at a pace set by the live speed control, so the chart visibly moves while the AI trades
- async function playAnimated(candles:Candle[], trades:Trade[], intervalMinutes:number){
-   const n=candles.length
-   for(let i=0;i<n;i++){
-     await waitWhilePaused()
-     if(stopRef.current){setFrameClock(null);return}
-     const visTrades=trades.filter(t=>t.entryIndex<=i).map(t=>t.exitIndex<=i?t:{...t,exitIndex:-9999})
-     setActiveIndex(i);setActiveTrades(visTrades)
-     const rate=SIM_RATE[speedKeyRef.current]
-     if(!rate)break
-     const waitMs=intervalMinutes/rate
-     setFrameClock({startedAt:Date.now(),durationMs:waitMs})
-     await waitFrame(waitMs)
-     if(stopRef.current){setFrameClock(null);return}
-     if(skipRef.current){skipRef.current=false;break}
-   }
-   setFrameClock(null);setActiveTrades(trades);setActiveIndex(n-1)
- }
  useEffect(()=>{if(!supabase)return;supabase.auth.getSession().then(({data})=>setSession(data.session));const {data}=supabase.auth.onAuthStateChange((_e,s)=>setSession(s));return()=>data.subscription.unsubscribe()},[])
  useEffect(()=>{if(session?.user)loadData()},[session?.user?.id])
  useEffect(()=>{if(!session?.user||market!=='Stocks')return;let dead=false;const load=async()=>{try{const r=await fetch(`/api/market?symbol=${encodeURIComponent(symbol)}&live=1`);const j=await r.json();if(dead)return;if(Array.isArray(j)&&j.length){setLiveCandles(j);setLiveStatus(`Updated ${new Date().toLocaleTimeString()}`);setTickerError(null)}else if(j?.error==='invalid_ticker'){setLiveCandles([]);setTickerError(j.message||`"${symbol}" is not a recognized ticker symbol.`)}else{setLiveStatus('Live feed unavailable')}}catch{if(!dead)setLiveStatus('Live feed unavailable')}};load();const id=setInterval(load,15000);return()=>{dead=true;clearInterval(id)}},[session?.user?.id,symbol,market])
- async function loadData(){if(!supabase||!session?.user)return;const [{data:s,error:sErr},{data:r,error:rErr}]=await Promise.all([supabase.from('strategies').select('*').eq('user_id',session.user.id).order('score',{ascending:false}).limit(100),supabase.from('research_runs').select('*').eq('user_id',session.user.id).order('started_at',{ascending:false}).limit(50)]);if(sErr||rErr){setMsg(`Could not load saved data: ${sErr?.message||rErr?.message}`);return}setMsg('');setStrategies((s||[]) as Strategy[]);setRuns((r||[]) as Run[]);const {data:p}=await supabase.from('profiles').select('current_balance').eq('id',session.user.id).maybeSingle();if(p?.current_balance!=null)setBalance(Number(p.current_balance))}
+ async function loadData(){if(!supabase||!session?.user)return;const [{data:s,error:sErr},{data:r,error:rErr}]=await Promise.all([supabase.from('strategies').select('*').eq('user_id',session.user.id).order('score',{ascending:false}).limit(200),supabase.from('research_runs').select('*').eq('user_id',session.user.id).order('started_at',{ascending:false}).limit(50)]);if(sErr||rErr){setMsg(`Could not load saved data: ${sErr?.message||rErr?.message}`);return}setMsg('');setStrategies((s||[]) as Strategy[]);setRuns((r||[]) as Run[]);const {data:p}=await supabase.from('profiles').select('current_balance').eq('id',session.user.id).maybeSingle();if(p?.current_balance!=null)setBalance(Number(p.current_balance))}
  async function auth(e:React.FormEvent){e.preventDefault();setMsg('');if(!supabase){setMsg('Add Supabase environment variables first.');return}const res=mode==='signup'?await supabase.auth.signUp({email,password}):await supabase.auth.signInWithPassword({email,password});if(res.error)setMsg(res.error.message);else if(mode==='signup')setMsg('Account created. Check your email if confirmation is enabled.')}
  async function signout(){await supabase?.auth.signOut();setSession(null)}
  async function saveEvent(runId:string,message:string,level='info',pct=0){if(!supabase||!session?.user)return;const {error}=await supabase.from('run_events').insert({run_id:runId,user_id:session.user.id,message,level,progress:pct});if(error)console.error('saveEvent failed',error)}
  async function runResearch(){if(!supabase||!session?.user||running)return;stopRef.current=false;pauseRef.current=false;skipRef.current=false;setPaused(false);setRunning(true);setProgress(0);setFeed([]);setTestLog([]);setSelectedRun(null);setActiveCandidate(null);const runId=crypto.randomUUID();const started=new Date().toISOString();const {error:runInsertError}=await supabase.from('research_runs').insert({id:runId,user_id:session.user.id,symbol:symbol.toUpperCase(),market,modes:[runMode],variations_requested:variations,status:'running',started_at:started,starting_balance:STARTING_CAPITAL,current_balance:STARTING_CAPITAL,tested_count:0,qualified_count:0,summary:'AI research started.',capital_events:[]});
  if(runInsertError){setMsg(`Could not start the run: ${runInsertError.message}`);setRunning(false);return}
  setMsg('')
- let data:Candle[]=[];const live=runMode==='live';const intervalMinutes=CANDLE_INTERVALS.find(c=>c.key===candleInterval)?.minutes??1
+ let data:Candle[]=[];const live=runMode==='live'
  if(live){
-   try{const res=await fetch(`/api/market?symbol=${encodeURIComponent(symbol)}&live=1&market=${encodeURIComponent(market)}`);const j=await res.json();if(j?.error==='invalid_ticker'){setTickerError(j.message);setMsg(`Could not start the run: ${j.message}`);setRunning(false);await supabase.from('research_runs').delete().eq('id',runId);return}if(!Array.isArray(j)||j.length<40)throw new Error('insufficient live data');data=j;setLiveCandles(j);setLiveStatus(`Updated ${new Date().toLocaleTimeString()}`);setUsingLiveData(true);setTickerError(null);setFeed(f=>['Live execution: testing against real-time market data instead of historical bars.',...f])}
-   catch{data=makeSynthetic(symbol,Math.max(lookback,1)); setUsingLiveData(true);setFeed(f=>['Live feed unavailable right now; falling back to historical/simulated data for this run.',...f])}
+   try{const res=await fetch(`/api/market?symbol=${encodeURIComponent(symbol)}&live=1&market=${encodeURIComponent(market)}`);const j=await res.json();if(j?.error==='invalid_ticker'){setTickerError(j.message);setMsg(`Could not start the run: ${j.message}`);setRunning(false);await supabase.from('research_runs').delete().eq('id',runId);return}if(!Array.isArray(j)||j.length<40)throw new Error('insufficient live data');data=j;setLiveCandles(j);setLiveStatus(`Updated ${new Date().toLocaleTimeString()}`);setTickerError(null);setFeed(f=>['Live execution: testing against real-time market data instead of historical bars.',...f])}
+   catch{data=makeSynthetic(symbol,5); setFeed(f=>['Live feed unavailable right now; falling back to simulated data for this run.',...f])}
  } else {
-   setUsingLiveData(false)
-   const useSession=candleInterval!=='1d'
-   try{const rangeDays=INTERVAL_RANGE_DAYS[candleInterval]??3650;const res=await fetch(`/api/market?symbol=${encodeURIComponent(symbol)}&market=${encodeURIComponent(market)}&interval=${candleInterval}&rangeDays=${rangeDays}`);data=await res.json();if((data as any)?.error==='invalid_ticker'){const message=(data as any).message;setTickerError(message);setMsg(`Could not start the run: ${message}`);setRunning(false);await supabase.from('research_runs').delete().eq('id',runId);return}if(!Array.isArray(data)||data.length<(useSession?30:60))throw new Error('insufficient data');setTickerError(null)}catch{data=makeSynthetic(symbol,useSession?60:lookback);setFeed(f=>['Market adapter unavailable; using clearly labeled development data.',...f])}
+   try{const res=await fetch(`/api/market?symbol=${encodeURIComponent(symbol)}&market=${encodeURIComponent(market)}&interval=15m&rangeDays=${SESSION_RANGE_DAYS}`);data=await res.json();if((data as any)?.error==='invalid_ticker'){const message=(data as any).message;setTickerError(message);setMsg(`Could not start the run: ${message}`);setRunning(false);await supabase.from('research_runs').delete().eq('id',runId);return}if(!Array.isArray(data)||data.length<20)throw new Error('insufficient data');setTickerError(null)}catch{data=makeSynthetic(symbol,60);setFeed(f=>['Market adapter unavailable; using clearly labeled development data.',...f])}
  }
  let sessionDayMap:Record<string,Candle[]>={};let sessionDayKeys:string[]=[]
- if(!live&&candleInterval!=='1d'){
+ if(!live){
    sessionDayMap=extractMorningSessions(data)
-   const minCandles=candleInterval==='1m'?20:candleInterval==='15m'?4:candleInterval==='30m'?3:2
-   sessionDayKeys=Object.keys(sessionDayMap).filter(k=>sessionDayMap[k].length>=minCandles).sort()
-   if(!sessionDayKeys.length){setMsg('No valid 9:00 AM–12:00 PM ET sessions were found for this ticker/interval. Try Daily or a different symbol.');setRunning(false);await supabase.from('research_runs').delete().eq('id',runId);return}
-   setFeed(f=>[`Found ${sessionDayKeys.length} historical 9:00 AM–12:00 PM ET sessions to test against.`,...f])
+   sessionDayKeys=Object.keys(sessionDayMap).filter(k=>sessionDayMap[k].length>=4).sort()
+   if(!sessionDayKeys.length){setMsg('No valid 9:00 AM–12:00 PM ET sessions were found for this ticker. Try a different symbol.');setRunning(false);await supabase.from('research_runs').delete().eq('id',runId);return}
+   setFeed(f=>[`Found ${sessionDayKeys.length} historical 9:00 AM–12:00 PM ET sessions to test against, one day at a time.`,...f])
  }
  setResearchCandles(data);setActiveIndex(0);setActiveTrades([])
  const best:any[]=[];let completed=0,qualified=0;const batch=100;const total=Math.max(50,variations);let lastEndingBalance=STARTING_CAPITAL
@@ -279,12 +229,11 @@ export default function Home(){
    const index=completed+1;const family=families[Math.floor(r()*families.length)];let params=randomParams(r)
    let testCandles:Candle[]; let primaryDayKey:string|undefined
    if(live){testCandles=data}
-   else if(candleInterval==='1d'){testCandles=randomWindow(data,r)}
    else {primaryDayKey=sessionDayKeys[Math.floor(r()*sessionDayKeys.length)];testCandles=sessionDayMap[primaryDayKey];params=clampParamsToSession(params,testCandles.length)}
    const result=backtest(testCandles,family,params);const passed=result.metrics.trades>=minTrades&&result.metrics.winRate>=45&&result.metrics.returnPct>0&&result.metrics.maxDrawdownPct<50
    const primarySession:Session={candles:testCandles,trades:result.trades,metrics:result.metrics,startDate:testCandles[0]?.date,endDate:testCandles[testCandles.length-1]?.date}
    const sessions:Session[]=[primarySession]
-   if(passed&&!live&&candleInterval!=='1d'&&sessionDayKeys.length>1){
+   if(passed&&!live&&sessionDayKeys.length>1){
      const others=sessionDayKeys.filter(k=>k!==primaryDayKey)
      for(let n=0;n<Math.min(2,others.length);n++){
        const idx=Math.floor(r()*others.length);const dk=others.splice(idx,1)[0]
@@ -292,23 +241,18 @@ export default function Home(){
        sessions.push({candles:cds,trades:res2.trades,metrics:res2.metrics,startDate:cds[0]?.date,endDate:cds[cds.length-1]?.date})
      }
    }
-   const candidate={family,params,result,passed,reason:'',index,candles:testCandles,startDate:testCandles[0]?.date,endDate:testCandles[testCandles.length-1]?.date,sessions} as Candidate
+   const candidate={family,params,result,passed,reason:'',index,candles:testCandles,startDate:testCandles[0]?.date,endDate:testCandles[testCandles.length-1]?.date,sessions,testedAt:new Date().toISOString()} as Candidate
    candidate.reason=explainCandidate(candidate,minTrades)
    lastEndingBalance=result.endingBalance
    if(passed){qualified++;best.push(candidate);best.sort((a,b)=>b.result.metrics.score-a.result.metrics.score);if(best.length>25)best.pop()}
-   setActiveCandidate(candidate);setResearchCandles(testCandles);setBalance(result.endingBalance)
-   const animRate=SIM_RATE[speedKeyRef.current]
-   if(animRate){setActiveTrades([]);setActiveIndex(0);await playAnimated(testCandles,result.trades,intervalMinutes)}
-   else{setActiveTrades(result.trades);setActiveIndex(testCandles.length-1)}
-   if(stopRef.current)break outer
-   setTestLog(prev=>[candidate,...prev].slice(0,18))
+   setActiveCandidate(candidate);setResearchCandles(testCandles);setBalance(result.endingBalance);setActiveTrades(result.trades);setActiveIndex(testCandles.length-1)
+   setTestLog(prev=>[candidate,...prev].slice(0,200))
    if(index===1||index%250===0||passed){setFeed(f=>[`TEST #${index.toLocaleString()} · ${family} · ${passed?'QUALIFIED':'REJECTED'} · ${candidate.reason}`,...f].slice(0,80));await saveEvent(runId,`Test #${index.toLocaleString()} · ${family} · ${passed?'qualified':'rejected'} · ${candidate.reason}`,passed?'success':'info',index/total*100)}
    completed++
+   setProgress(completed/total*100);if(completed%500===0||completed===total){const {error}=await supabase.from('research_runs').update({tested_count:completed,qualified_count:qualified,current_balance:lastEndingBalance}).eq('id',runId);if(error)console.error('run progress update failed',error)}
+   if(stopRef.current)break outer
+   await sleepSkippable()
  }
- setProgress(completed/total*100);if(completed%500===0||completed===total){const {error}=await supabase.from('research_runs').update({tested_count:completed,qualified_count:qualified,current_balance:lastEndingBalance}).eq('id',runId);if(error)console.error('run progress update failed',error)}
- if(stopRef.current)break
- // extra pacing between tests only applies to the unanimated fast/turbo speeds
- if(!SIM_RATE[speedKeyRef.current])await sleepSkippable(speedRef.current)
  }
  let strategySaveError:string|null=null
  for(const item of best.slice(0,25)){const m=item.result.metrics;const {error}=await supabase.from('strategies').insert({user_id:session.user.id,run_id:runId,symbol:symbol.toUpperCase(),market,name:`${item.family} / ${Math.round(m.score)} score`,family:item.family,parameters:item.params,source:idea?'AI + user idea':'AI generated',approved:true,score:m.score,metrics:m,equity:item.result.equity,trades:item.result.trades,candles:item.candles,test_start_at:item.startDate,test_end_at:item.endDate,sessions:item.sessions,explanation:`How it works: ${describeFamily(item.family,item.params)} Why it worked: this run generated ${m.wins} wins and ${m.losses} losses for a ${m.winRate.toFixed(1)}% win rate. It returned ${m.returnPct.toFixed(2)}% with ${m.maxDrawdownPct.toFixed(1)}% maximum drawdown and ${m.sharpe.toFixed(2)} Sharpe. The engine only buys and sells (goes long) and closes the position on a sell signal or at the end of the test. This is historical research, not a guarantee of future performance.`});if(error){console.error('strategy save failed',error);strategySaveError=error.message}}
@@ -318,22 +262,33 @@ export default function Home(){
  if(finishError)setMsg(`Run finished but could not save results: ${finishError.message}`)
  else if(strategySaveError)setMsg(`Run finished, but qualified strategies could not be saved: ${strategySaveError}. Run the latest Supabase migration and try again.`)
  await supabase.from('profiles').update({current_balance:lastEndingBalance}).eq('id',session.user.id)
- await saveEvent(runId,summary,'success',100);setFeed(f=>[summary,...f]);setRunning(false);setPaused(false);setProgress(100);setFrameClock(null);await loadData()
+ await saveEvent(runId,summary,'success',100);setFeed(f=>[summary,...f]);setRunning(false);setPaused(false);setProgress(100);await loadData()
  }
- async function resetBalance(){if(!supabase||!session?.user)return;const event={type:'reset',at:new Date().toISOString(),from:balance,to:STARTING_CAPITAL};await supabase.from('capital_events').insert({user_id:session.user.id,event_type:'reset',amount_before:balance,amount_after:STARTING_CAPITAL});await supabase.from('profiles').update({current_balance:STARTING_CAPITAL,starting_balance:STARTING_CAPITAL}).eq('id',session.user.id);setBalance(STARTING_CAPITAL)}
+ async function resetBalance(){if(!supabase||!session?.user)return;await supabase.from('capital_events').insert({user_id:session.user.id,event_type:'reset',amount_before:balance,amount_after:STARTING_CAPITAL});await supabase.from('profiles').update({current_balance:STARTING_CAPITAL,starting_balance:STARTING_CAPITAL}).eq('id',session.user.id);setBalance(STARTING_CAPITAL)}
  if(!session)return <main className="shell auth"><div className="brand">◈ STRATEGY LAB <em>AI</em></div><section className="auth-card"><div className="eyebrow">PERSISTENT RESEARCH PLATFORM</div><h1>Find strategies. <span>Test everything.</span></h1><p className="muted">Accounts and research data are stored in Supabase. Sessions persist across reloads and devices.</p><form onSubmit={auth} className="auth-form"><input type="email" placeholder="you@example.com" value={email} onChange={e=>setEmail(e.target.value)} required/><input type="password" placeholder="Password (8+ characters)" value={password} onChange={e=>setPassword(e.target.value)} minLength={8} required/><button className="primary">{mode==='login'?'ENTER LAB':'CREATE ACCOUNT'}</button></form><button className="link" onClick={()=>setMode(mode==='login'?'signup':'login')}>{mode==='login'?'Need an account? Create one':'Already have an account? Sign in'}</button>{msg&&<div className="msg">{msg}</div>}</section></main>
  return <main className="shell"><header className="topbar"><div className="brand">◈ STRATEGY LAB <em>AI</em></div><div className="top-actions"><span className="pill">{session.user.email}</span><button className="ghost" onClick={signout}>Log out</button></div></header>
  {msg&&<div className="msg banner">{msg}</div>}
  <section className="hero"><div><div className="eyebrow">AI STRATEGY RESEARCH ENGINE</div><h1>Build. Break. <span>Repeat.</span></h1><p className="muted">Watch the engine generate, test, buy and sell, reject weak ideas, and save the strategies that pass the rules.</p></div><div className="balance"><small>AI RESEARCH CAPITAL</small><strong>{fmtMoney(balance)}</strong><button onClick={resetBalance}>RESET TO {fmtMoney(STARTING_CAPITAL)}</button></div></section>
- <div className="grid"><section className="panel"><div className="panel-title"><h2>RUN CONFIGURATION</h2><span className="badge">45% MIN WIN RATE</span></div><label>Ticker symbol<input value={symbol} onChange={e=>{setSymbol(e.target.value.toUpperCase());setTickerError(null)}}/>{tickerError&&<span className="field-warning">⚠ {tickerError}</span>}</label><label>Market<select value={market} onChange={e=>setMarket(e.target.value)}>{markets.map(x=><option key={x}>{x}</option>)}</select></label><label>Candle timeframe<select value={candleInterval} onChange={e=>setCandleInterval(e.target.value as typeof candleInterval)}>{CANDLE_INTERVALS.map(c=><option key={c.key} value={c.key}>{c.label}</option>)}</select></label>{candleInterval==='1d'?<label>Lookback<select value={lookback} onChange={e=>setLookback(+e.target.value)}><option value={365}>1 year</option><option value={1095}>3 years</option><option value={1825}>5 years</option><option value={3650}>10 years</option></select></label>:<p className="tiny">Each test uses a randomly chosen day's 9:00 AM–12:00 PM ET session (3 hours) at the {CANDLE_INTERVALS.find(c=>c.key===candleInterval)?.label} timeframe.</p>}<label>Strategy variations (up to {MAX_VARIATIONS.toLocaleString()})<input type="number" min={50} max={MAX_VARIATIONS} value={variations} onChange={e=>setVariations(clamp(Math.round(+e.target.value||0),50,MAX_VARIATIONS))}/></label><label>Minimum trades (up to {MAX_MIN_TRADES.toLocaleString()})<input type="number" min={1} max={MAX_MIN_TRADES} value={minTrades} onChange={e=>setMinTrades(clamp(Math.round(+e.target.value||0),1,MAX_MIN_TRADES))}/></label><label>Test speed<select value={speed} onChange={e=>setSpeed(e.target.value as typeof speed)}>{speeds.map(s=><option key={s.key} value={s.key}>{s.label}</option>)}</select></label><label>User strategy idea<textarea value={idea} onChange={e=>setIdea(e.target.value)} placeholder="Optional: describe a strategy you want tested..."/></label><div className="section-label">TEST SOURCES</div><div className="checks mode-pick">{([['paper','Paper trading / backtesting'],['live','Live execution']] as const).map(([k,label])=><label key={k}><input type="radio" name="runMode" checked={runMode===k} onChange={()=>setRunMode(k)}/>{label}</label>)}</div><button className="run" onClick={runResearch} disabled={running}>{running?`AI TRADING · ${progress.toFixed(1)}%`:'▶ RUN AI SEARCH'}</button>{running&&<div className="run-controls"><button className="ghost" onClick={()=>{pauseRef.current=!pauseRef.current;setPaused(pauseRef.current)}}>{paused?'▶ Resume':'⏸ Pause'}</button><button className="ghost" onClick={()=>{skipRef.current=true}} disabled={paused}>⏭ Skip strategy</button><button className="ghost stop" onClick={()=>{stopRef.current=true;pauseRef.current=false;setPaused(false)}}>⏹ Stop</button></div>}<p className="tiny">{runMode==='paper'?(candleInterval==='1d'?'Paper trading / backtesting runs the AI\'s strategy tests by backtesting the selected ticker over a randomly chosen historical date range each time. No real data feed or broker is touched.':'Paper trading / backtesting runs each test over a randomly chosen day\'s 9:00 AM–12:00 PM ET session. No real data feed or broker is touched.'):'Live execution runs the AI\'s tests against live, real-time market data instead of historical bars. It never places a real trade or touches a broker account.'}</p></section>
- <section className="panel"><div className="panel-title"><h2>LIVE MARKET CHART</h2><span className="muted">{running&&watchLive?(runMode==='live'?'AI TRADING ON LIVE DATA':'AI TRADING (BACKTEST)'):liveStatus}</span></div><div className="chart-controls"><label className="inline-check"><input type="checkbox" checked={watchLive} onChange={e=>setWatchLive(e.target.checked)}/>Watch AI trade in real time</label><div className="zoom-controls"><span>Zoom</span><button className="ghost small-btn" onClick={()=>setChartWindow(w=>clamp(Math.round(w*.6),15,5000))}>−</button><select value={chartWindow} onChange={e=>setChartWindow(+e.target.value)}>{CHART_WINDOWS.map(w=><option key={w.value} value={w.value}>{w.label}</option>)}</select><button className="ghost small-btn" onClick={()=>setChartWindow(w=>clamp(Math.round(w*1.6),15,5000))}>+</button></div></div>{runMode==='paper'&&activeCandidate&&<div className="tiny test-window">Testing {symbol} from <b>{fmtDateTime(activeCandidate.startDate)}</b> to <b>{fmtDateTime(activeCandidate.endDate)}</b></div>}{(()=>{const displayCandles=researchCandles.length?researchCandles:liveCandles;const displayTrades=watchLive?activeTrades:[];const displayIndex=researchCandles.length?activeIndex:Math.max(0,liveCandles.length-1);const err=!displayCandles.length&&tickerError?tickerError:null;const ind=activeCandidate&&displayCandles===researchCandles?indicatorSeries(displayCandles,activeCandidate.family,activeCandidate.params):null;const intervalMinutes=CANDLE_INTERVALS.find(c=>c.key===candleInterval)?.minutes??1;return displayCandles.length||err?<CandleChart candles={displayCandles} trades={displayTrades} activeIndex={displayIndex} windowSize={chartWindow} title={activeCandidate?`TEST #${activeCandidate.index.toLocaleString()} · ${activeCandidate.family}`:`${symbol} · chart`} live={runMode==='live'} errorMessage={err} indicator={ind} intervalMinutes={intervalMinutes} showCountdown={running} frameStartedAt={running?frameClock?.startedAt:undefined} frameDurationMs={running?frameClock?.durationMs:undefined}/>:<div className="chart empty">Run a search to watch the AI trade on this chart.</div>})()}<p className="tiny">This is the chart the AI trades on. Zoom and timeframe only change what you see — they never change what data the AI uses to trade.</p></section></div>
+ <div className="grid"><section className="panel"><div className="panel-title"><h2>RUN CONFIGURATION</h2><span className="badge">45% MIN WIN RATE</span></div><label>Ticker symbol<input value={symbol} onChange={e=>{setSymbol(e.target.value.toUpperCase());setTickerError(null)}}/>{tickerError&&<span className="field-warning">⚠ {tickerError}</span>}</label><label>Market<select value={market} onChange={e=>setMarket(e.target.value)}>{markets.map(x=><option key={x}>{x}</option>)}</select></label><p className="tiny">Each test trades one randomly chosen historical day at a time, using its 9:00 AM–12:00 PM ET session on 15-minute candles.</p><label>Strategy variations (up to {MAX_VARIATIONS.toLocaleString()})<input type="number" min={50} max={MAX_VARIATIONS} value={variations} onChange={e=>setVariations(clamp(Math.round(+e.target.value||0),50,MAX_VARIATIONS))}/></label><label>Minimum trades (up to {MAX_MIN_TRADES.toLocaleString()})<input type="number" min={1} max={MAX_MIN_TRADES} value={minTrades} onChange={e=>setMinTrades(clamp(Math.round(+e.target.value||0),1,MAX_MIN_TRADES))}/></label><label>Test speed<select value={speed} onChange={e=>setSpeed(e.target.value as typeof speed)}>{speeds.map(s=><option key={s.key} value={s.key}>{s.label}</option>)}</select></label><label>User strategy idea<textarea value={idea} onChange={e=>setIdea(e.target.value)} placeholder="Optional: describe a strategy you want tested..."/></label><div className="section-label">TEST SOURCES</div><div className="checks mode-pick">{([['paper','Paper trading / backtesting'],['live','Live execution']] as const).map(([k,label])=><label key={k}><input type="radio" name="runMode" checked={runMode===k} onChange={()=>setRunMode(k)}/>{label}</label>)}</div><button className="run" onClick={runResearch} disabled={running}>{running?`AI TRADING · ${progress.toFixed(1)}%`:'▶ RUN AI SEARCH'}</button>{running&&<div className="run-controls"><button className="ghost" onClick={()=>{pauseRef.current=!pauseRef.current;setPaused(pauseRef.current)}}>{paused?'▶ Resume':'⏸ Pause'}</button><button className="ghost" onClick={()=>{skipRef.current=true}} disabled={paused}>⏭ Skip strategy</button><button className="ghost stop" onClick={()=>{stopRef.current=true;pauseRef.current=false;setPaused(false)}}>⏹ Stop</button></div>}<p className="tiny">{runMode==='paper'?'Paper trading / backtesting backtests the selected ticker one historical day at a time. No real data feed or broker is touched.':'Live execution runs the AI\'s tests against live, real-time market data instead of historical bars. It never places a real trade or touches a broker account.'}</p></section>
+ <section className="panel"><div className="panel-title"><h2>LIVE MARKET CHART</h2><span className="muted">{running&&watchLive?(runMode==='live'?'AI TRADING ON LIVE DATA':'AI TRADING (BACKTEST)'):liveStatus}</span></div><div className="chart-controls"><label className="inline-check"><input type="checkbox" checked={watchLive} onChange={e=>setWatchLive(e.target.checked)}/>Watch AI trade</label><div className="zoom-controls"><span>Zoom</span><button className="ghost small-btn" onClick={()=>setChartWindow(w=>clamp(w-2,4,60))}>−</button><button className="ghost small-btn" onClick={()=>setChartWindow(w=>clamp(w+2,4,60))}>+</button></div></div>{runMode==='paper'&&activeCandidate&&<div className="tiny test-window">Testing {symbol} on <b>{fmtDateTime(activeCandidate.startDate)}</b> ({fmtClock(activeCandidate.startDate)}–{fmtClock(activeCandidate.endDate)} ET)</div>}{(()=>{const displayCandles=watchLive&&researchCandles.length?researchCandles:liveCandles;const displayTrades=watchLive?activeTrades:[];const displayIndex=watchLive&&researchCandles.length?activeIndex:Math.max(0,liveCandles.length-1);const err=!displayCandles.length&&tickerError?tickerError:null;const ind=activeCandidate&&displayCandles===researchCandles?indicatorSeries(displayCandles,activeCandidate.family,activeCandidate.params):null;return displayCandles.length||err?<CandleChart candles={displayCandles} trades={displayTrades} activeIndex={displayIndex} windowSize={chartWindow} title={activeCandidate?`TEST #${activeCandidate.index.toLocaleString()} · ${activeCandidate.family}`:`${symbol} · chart`} live={runMode==='live'} errorMessage={err} indicator={ind}/>:<div className="chart empty">Run a search to watch the AI trade on this chart.</div>})()}<p className="tiny">This is the chart the AI trades on. Zoom only changes what you see — it never changes what data the AI uses to trade.</p></section></div>
  <div className="grid"><section className="panel"><div className="panel-title"><h2>AI TRADING ARENA</h2><span className={running?'live-dot':''}>{running?'ENGINE TRADING':'READY'}</span></div><div className="trade-status"><div><span>Mode</span><b>{runMode==='live'?'Live execution':'Paper trading / backtesting'}</b></div><div><span>Current test</span><b>{activeCandidate?`${activeCandidate.family} · ${activeCandidate.passed?'QUALIFIED':'REJECTED'}`:'—'}</b></div><div><span>Outcome</span><b>{activeCandidate?.reason||'Waiting for the first strategy test.'}</b></div></div></section>
- <section className="panel"><div className="panel-title"><h2>WHAT THE AI IS TESTING</h2><span className="muted">Latest tests</span></div><div className="test-list">{testLog.length?testLog.map(c=><div className={`test-item ${c.passed?'pass':'fail'}`} key={c.index}><div><b>#{c.index.toLocaleString()} · {c.family}</b><span>{c.reason}</span></div><strong>{c.result.metrics.score.toFixed(1)}</strong></div>):<div className="empty">Every observed test will show its strategy, result, and rejection/qualification reason here.</div>}</div></section></div>
- <section className="panel"><div className="panel-title"><h2>SUCCESSFUL STRATEGY LOG</h2><span className="muted">Saved to Supabase · sorted by score</span></div><div className="metrics"><div><span>Approval rule</span><b>≥45% WR + positive return</b></div><div><span>Research capital</span><b>{fmtMoney(STARTING_CAPITAL)}</b></div><div><span>Position mode</span><b>Long only (buy/sell)</b></div><div><span>Market feed</span><b>Live chart</b></div></div><div className="table">{strategies.length===0?<div className="empty">No successful strategies saved yet. Run the engine and qualified strategies will appear here.</div>:strategies.map(s=><button className="row" key={s.id} onClick={()=>setSelected(s)}><div><strong>{s.name}</strong><span>{s.symbol} · {s.market} · {s.family} · completed {fmtDateTime(s.created_at)}</span><span className="how-it-works">{describeFamily(s.family,s.parameters)}</span>{s.sessions?.length?<span className="how-it-works">{s.sessions.length} test session{s.sessions.length>1?'s':''}: {s.sessions.map(sess=>fmtDateTime(sess.startDate)).join(' · ')}</span>:null}</div><span>{s.metrics?.winRate?.toFixed(1)}% WR</span><span>{s.metrics?.returnPct?.toFixed(1)}% return</span><span>{s.metrics?.maxDrawdownPct?.toFixed(1)}% DD</span><span>{s.metrics?.sharpe?.toFixed(2)} Sharpe</span><span>{s.metrics?.trades} trades</span></button>)}</div></section>
+ <section className="panel"><div className="panel-title"><h2>WHAT THE AI IS TESTING</h2><span className="muted">Scroll for more · {testLog.length} shown</span></div><div className="test-list">{testLog.length?testLog.map(c=><div className={`test-item ${c.passed?'pass':'fail'}`} key={`${c.index}-${c.testedAt}`}><div className="test-item-main"><b>#{c.index.toLocaleString()} · {c.family}</b><span>{c.reason}</span></div><div className="test-item-stats"><span>{c.result.metrics.winRate.toFixed(1)}% WR</span><span>{c.result.metrics.maxDrawdownPct.toFixed(1)}% DD</span><span>{fmtDateTime(c.testedAt)}</span><strong>{c.result.metrics.score.toFixed(1)}</strong></div></div>):<div className="empty">Every observed test will show its strategy, result, and rejection/qualification reason here.</div>}</div></section></div>
+ <section className="panel"><div className="panel-title"><h2>SUCCESSFUL STRATEGY LOG</h2><span className="muted">Saved to Supabase · grouped by run</span></div><div className="metrics"><div><span>Approval rule</span><b>≥45% WR + positive return</b></div><div><span>Research capital</span><b>{fmtMoney(STARTING_CAPITAL)}</b></div><div><span>Position mode</span><b>Long only (buy/sell)</b></div><div><span>Market feed</span><b>Live chart</b></div></div>
+ {strategies.length===0?<div className="empty">No successful strategies saved yet. Run the engine and qualified strategies will appear here.</div>:(()=>{
+   const groups:Record<string,Strategy[]>={}
+   for(const s of strategies){const key=s.run_id||'ungrouped';(groups[key] ||= []).push(s)}
+   const entries=Object.entries(groups).map(([runId,list])=>{
+     const run=runs.find(rr=>rr.id===runId)
+     const when=run?.started_at||list[0]?.created_at
+     return {runId,run,list:list.slice().sort((a,b)=>b.score-a.score),when}
+   }).sort((a,b)=>new Date(b.when||0).getTime()-new Date(a.when||0).getTime())
+   return <div className="run-groups">{entries.map(g=><div className="run-group" key={g.runId}><div className="run-group-header"><b>{g.run?`${g.run.symbol} · ${g.run.market}`:g.list[0]?.symbol}</b><span>{fmtDateTime(g.when)}</span><span>{g.list.length} qualified</span>{g.run&&<span>{(g.run.tested_count||g.run.variations_requested).toLocaleString()} tested</span>}</div><div className="table">{g.list.map(s=><button className="row" key={s.id} onClick={()=>setSelected(s)}><div><strong>{s.name}</strong><span>{s.family} · completed {fmtDateTime(s.created_at)}</span><span className="how-it-works">{describeFamily(s.family,s.parameters)}</span>{s.sessions?.length?<span className="how-it-works">{s.sessions.length} test session{s.sessions.length>1?'s':''}: {s.sessions.map(sess=>fmtDateTime(sess.startDate)).join(' · ')}</span>:null}</div><span>{s.metrics?.winRate?.toFixed(1)}% WR</span><span>{s.metrics?.returnPct?.toFixed(1)}% return</span><span>{s.metrics?.maxDrawdownPct?.toFixed(1)}% DD</span><span>{s.metrics?.sharpe?.toFixed(2)} Sharpe</span><span>{s.metrics?.trades} trades</span></button>)}</div></div>)}</div>
+ })()}
+ </section>
  {selected&&<section className="panel replay"><div className="panel-title"><h2>STRATEGY REPLAY & WHY IT WORKED</h2><button className="ghost" onClick={()=>setSelected(null)}>CLOSE</button></div><h3>{selected.name}</h3><p className="tiny">Completed {fmtDateTime(selected.created_at)}</p><p className="muted">{selected.explanation}</p><div className="replay-grid"><div><span>Win rate</span><b>{selected.metrics.winRate.toFixed(1)}%</b></div><div><span>Return</span><b>{selected.metrics.returnPct.toFixed(2)}%</b></div><div><span>Drawdown</span><b>{selected.metrics.maxDrawdownPct.toFixed(1)}%</b></div><div><span>Sharpe</span><b>{selected.metrics.sharpe.toFixed(2)}</b></div><div><span>Trades</span><b>{selected.metrics.trades}</b></div></div>
- {(()=>{const sessions=selected.sessions?.length?selected.sessions:(selected.candles?.length?[{candles:selected.candles,trades:selected.trades,metrics:selected.metrics,startDate:selected.test_start_at||undefined,endDate:selected.test_end_at||undefined}]:[])
- if(!sessions.length)return <div className="chart empty">No stored chart for this strategy yet — run the migration and generate a new strategy to see its chart.</div>
- return sessions.map((sess,si)=><div className="session-block" key={si}><h4>Session {si+1} of {sessions.length} · {fmtDateTime(sess.startDate)} to {fmtDateTime(sess.endDate)}</h4><CandleChart candles={sess.candles} trades={sess.trades} activeIndex={sess.candles.length-1} windowSize={Math.min(sess.candles.length,250)} title={`${selected.symbol} · session ${si+1}`} indicator={indicatorSeries(sess.candles,selected.family,selected.parameters)}/><div className="section-label">EVERY TRADE THIS SESSION MADE</div><div className="trade-table">{sess.trades?.length?sess.trades.map((t,i)=><div className={`trade-row ${t.pnl>=0?'win':'loss'}`} key={i}><span>#{i+1}</span><span>{fmtDateTime(sess.candles?.[t.entryIndex]?.date)}</span><span>BUY {fmtPrice(t.entry)}</span><span>{fmtDateTime(sess.candles?.[t.exitIndex]?.date)}</span><span>SELL {fmtPrice(t.exit)}</span><span>{t.pnl>=0?'WIN':'LOSS'}</span><b>{fmtMoney(t.pnl)}</b></div>):<div className="empty">No trades recorded.</div>}</div></div>)
+ {(()=>{const sessionsList=selected.sessions?.length?selected.sessions:(selected.candles?.length?[{candles:selected.candles,trades:selected.trades,metrics:selected.metrics,startDate:selected.test_start_at||undefined,endDate:selected.test_end_at||undefined}]:[])
+ if(!sessionsList.length)return <div className="chart empty">No stored chart for this strategy yet — run the migration and generate a new strategy to see its chart.</div>
+ return sessionsList.map((sess,si)=><div className="session-block" key={si}><h4>Session {si+1} of {sessionsList.length} · {fmtDateTime(sess.startDate)} ({fmtClock(sess.startDate)}–{fmtClock(sess.endDate)} ET)</h4><CandleChart candles={sess.candles} trades={sess.trades} activeIndex={sess.candles.length-1} windowSize={Math.min(sess.candles.length,20)} title={`${selected.symbol} · session ${si+1}`} indicator={indicatorSeries(sess.candles,selected.family,selected.parameters)}/><div className="section-label">EVERY TRADE THIS SESSION MADE</div><div className="trade-table">{sess.trades?.length?sess.trades.map((t,i)=><div className={`trade-row ${t.pnl>=0?'win':'loss'}`} key={i}><span>#{i+1}</span><span>{fmtDateTime(sess.candles?.[t.entryIndex]?.date)}</span><span>BUY {fmtPrice(t.entry)}</span><span>{fmtDateTime(sess.candles?.[t.exitIndex]?.date)}</span><span>SELL {fmtPrice(t.exit)}</span><span>{t.pnl>=0?'WIN':'LOSS'}</span><b>{fmtMoney(t.pnl)}</b></div>):<div className="empty">No trades recorded.</div>}</div></div>)
  })()}
  </section>}
  <section className="panel"><div className="panel-title"><h2>RESEARCH RUN HISTORY</h2><span className="muted">Click a run for the full outcome</span></div>{runs.length===0?<div className="empty">Your completed research runs will appear here.</div>:runs.map(r=><button className="history" key={r.id} onClick={()=>setSelectedRun(selectedRun?.id===r.id?null:r)}><span><b>{r.symbol} · {r.market}</b><small>{new Date(r.started_at).toLocaleString()}</small></span><span>{(r.tested_count||r.variations_requested).toLocaleString()} tested</span><span>{(r.qualified_count||0).toLocaleString()} qualified</span><span>{r.status}</span><span>{r.best_score?.toFixed(1)??'—'} score</span></button>)}{selectedRun&&<div className="run-detail"><h3>{selectedRun.best_strategy_name||'No qualifying strategy'}</h3><p>{selectedRun.summary||selectedRun.failure_reason||'No summary was stored for this run.'}</p>{selectedRun.best_reason&&<p><b>Why the leader passed:</b> {selectedRun.best_reason}</p>}{selectedRun.failure_reason&&<p><b>Why nothing passed:</b> {selectedRun.failure_reason}</p>}</div>}</section>
