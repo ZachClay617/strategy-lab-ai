@@ -128,11 +128,12 @@ export default function Portfolios(){
 
   const selected=portfolios.find(p=>p.id===selectedId)
   const totalWeight=holdings.reduce((s,h)=>s+h.weight,0)
-  const portfolioReturn=holdings.length?holdings.reduce((s,h)=>{
+  const trackedWeight=holdings.reduce((s,h)=>prices[h.symbol]&&h.entry_price?s+h.weight:s,0)
+  const portfolioReturn=trackedWeight?holdings.reduce((s,h)=>{
     const p=prices[h.symbol];if(!p||!h.entry_price)return s
     const ret=(p.last/h.entry_price-1)*100
-    return s+ret*(h.weight/Math.max(totalWeight,1))
-  },0):0
+    return s+ret*(h.weight/trackedWeight)
+  },0):null
 
   return <div className="shell">
     <section className="hero"><div><div className="eyebrow">AI PORTFOLIO AUTOPILOT</div><h1>Describe it. <span>Track it.</span></h1><p className="muted">Give the AI a plain-language description of what you want a portfolio to do. It builds and maintains a real-symbol portfolio against that description, on your command, and logs every change.</p></div></section>
@@ -155,7 +156,7 @@ export default function Portfolios(){
             <div className="metrics">
               <div><span>Holdings</span><b>{holdings.length}</b></div>
               <div><span>Total weight</span><b>{totalWeight.toFixed(1)}%</b></div>
-              <div><span>Tracked return</span><b className={portfolioReturn>=0?'up':'down'}>{fmtPct(portfolioReturn)}</b></div>
+              <div><span>Tracked return</span><b className={portfolioReturn==null?'':portfolioReturn>=0?'up':'down'}>{portfolioReturn==null?'—':fmtPct(portfolioReturn)}</b></div>
               <div><span>Last AI research</span><b>{fmtDateTime(log.find(l=>l.action==='ai_rebalance')?.created_at)}</b></div>
             </div>
           </div>
