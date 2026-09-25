@@ -399,7 +399,6 @@ export default function Portfolios(){
             <div className="panel-title">
               {editingName?<div className="portfolio-name-edit"><input value={nameDraft} onChange={e=>setNameDraft(e.target.value)} autoFocus/><button className="ghost" onClick={saveName} disabled={!nameDraft.trim()}>SAVE</button><button className="ghost" onClick={()=>{setEditingName(false);setNameDraft(selected.name)}}>CANCEL</button></div>:<h2>{selected.name.toUpperCase()}<button className="ghost portfolio-name-btn" onClick={()=>{setNameDraft(selected.name);setEditingName(true)}} title="Rename portfolio">RENAME</button></h2>}
               <span className="muted">Updated {fmtDateTime(selected.updated_at)}</span>
-              <button className="ghost" onClick={backToOverview}>← OVERVIEW</button>
             </div>
             <div className="metrics" style={{gridTemplateColumns:'repeat(7,1fr)'}}>
               <div><span>Holdings</span><b>{holdings.length}</b></div>
