@@ -1,5 +1,6 @@
 import './globals.css'
 import type { Metadata } from 'next'
+import NavBar from './components/NavBar'
 
 export const metadata: Metadata = {
   title: 'Strategy Lab AI',
@@ -7,5 +8,8 @@ export const metadata: Metadata = {
 }
 
 export default function RootLayout({children}:{children:React.ReactNode}) {
-  return <html lang="en"><body>{children}</body></html>
+  return <html lang="en"><body>
+    <NavBar/>
+    {children}
+  </body></html>
 }
