@@ -337,7 +337,7 @@ export default function Portfolios(){
           </div>
 
           <div className="section-label">YOUR PORTFOLIOS</div>
-          {portfolios.length>0&&<div className="row row-head" style={{gridTemplateColumns:'1.4fr .7fr .9fr 1.1fr 1.1fr .9fr .9fr'}}>
+          {portfolios.length>0&&<div className="row row-head" style={{gridTemplateColumns:'minmax(0,1.4fr) minmax(0,.7fr) minmax(0,.9fr) minmax(0,1.1fr) minmax(0,1.1fr) minmax(0,.9fr) minmax(0,.9fr)'}}>
             <span>Portfolio</span>
             <span>Holdings</span>
             <span>Total value</span>
@@ -348,14 +348,14 @@ export default function Portfolios(){
           </div>}
           <div className="table">{portfolios.map(p=>{
             const m=sumMetrics(allHoldings[p.id]||[])
-            return <div className="row" key={p.id} style={{gridTemplateColumns:'1.4fr .7fr .9fr 1.1fr 1.1fr .9fr .9fr'}}>
-              <span><b>{p.name}</b><span className="how-it-works">{p.description||'No description yet.'}</span></span>
+            return <div className="row" key={p.id} style={{gridTemplateColumns:'minmax(0,1.4fr) minmax(0,.7fr) minmax(0,.9fr) minmax(0,1.1fr) minmax(0,1.1fr) minmax(0,.9fr) minmax(0,.9fr)'}}>
+              <span style={{minWidth:0,overflow:'hidden'}}><b>{p.name}</b><span className="how-it-works" style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'100%'}}>{p.description||'No description yet.'}</span></span>
               <span>{m.holdings}</span>
               <span>{m.value>0?`$${m.value.toFixed(2)}`:'—'}</span>
               <span className={m.returnPct==null?'':m.returnPct>=0?'up':'down'}>{m.returnPct==null?'—':`${fmtPct(m.returnPct)} (${fmtDollar(m.returnDollar)})`}</span>
               <span className={m.dayReturnPct==null?'':m.dayReturnPct>=0?'up':'down'}>{m.dayReturnPct==null?'—':`${fmtPct(m.dayReturnPct)} (${fmtDollar(m.dayReturnDollar)})`}</span>
               <span>{fmtDateTime(p.created_at)}</span>
-              <div style={{display:'flex',gap:6}}>
+              <div style={{display:'flex',gap:6,minWidth:0}}>
                 <button className="run" style={{marginTop:0}} onClick={()=>viewPortfolio(p.id)}>VIEW</button>
                 <button className="ghost" onClick={()=>researchPortfolio(p.id)}>🔍</button>
               </div>
