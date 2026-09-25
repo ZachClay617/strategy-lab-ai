@@ -399,7 +399,7 @@ export default function Portfolios(){
           </div>
 
           <div className="section-label">HOLDINGS</div>
-          {holdings.length>0&&<div className="row row-head" style={{gridTemplateColumns:'.6fr .6fr .6fr .9fr .8fr .7fr .7fr .7fr .9fr'}}>
+          {holdings.length>0&&<div className="row row-head" style={{gridTemplateColumns:'minmax(0,.9fr) minmax(0,.6fr) minmax(0,.6fr) minmax(0,.9fr) minmax(0,.8fr) minmax(0,.7fr) minmax(0,.9fr) minmax(0,.9fr) minmax(0,.9fr)'}}>
             <span>Symbol</span>
             <span>Shares</span>
             <span>Weight</span>
@@ -418,16 +418,16 @@ export default function Portfolios(){
             const dayRet=p&&p.prevClose?(p.last/p.prevClose-1)*100:null
             const dayRetDollar=p&&p.prevClose?(p.last-p.prevClose)*sh:null
             const isEditing=editingId===h.id
-            return <div className="row" key={h.id} style={{gridTemplateColumns:'.6fr .6fr .6fr .9fr .8fr .7fr .7fr .7fr .9fr'}}>
-              <span><b>{h.symbol}</b>{names[h.symbol]&&<span className="how-it-works" style={{marginTop:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'100%'}}>{names[h.symbol]}</span>}</span>
+            return <div className="row" key={h.id} style={{gridTemplateColumns:'minmax(0,.9fr) minmax(0,.6fr) minmax(0,.6fr) minmax(0,.9fr) minmax(0,.8fr) minmax(0,.7fr) minmax(0,.9fr) minmax(0,.9fr) minmax(0,.9fr)'}}>
+              <span style={{minWidth:0,overflow:'hidden'}}><b>{h.symbol}</b>{names[h.symbol]&&<span className="how-it-works" style={{marginTop:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'100%'}}>{names[h.symbol]}</span>}</span>
               <span>{isEditing?<input type="number" min={0} step="0.0001" value={editShares} onChange={e=>setEditShares(e.target.value)} placeholder="1"/>:(h.shares!=null?h.shares:'1 (default)')}</span>
               <span>{weightOf(h).toFixed(1)}%</span>
-              <span>{h.added_by==='ai'?'Added by AI':'Added by you'} · {fmtDateTime(h.added_at)}</span>
+              <span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{h.added_by==='ai'?'Added by AI':'Added by you'} · {fmtDateTime(h.added_at)}</span>
               <span>{isEditing?<input type="number" min={0} step="0.01" value={editAvgCost} onChange={e=>setEditAvgCost(e.target.value)} placeholder="not set"/>:(h.entry_price?`$${h.entry_price.toFixed(2)}`:'not set')}</span>
               <span>{p?`$${p.last.toFixed(2)}`:'loading…'}</span>
-              <span className={ret!=null?(ret>=0?'up':'down'):''}>{ret!=null?`${fmtPct(ret)} (${fmtDollar(retDollar!)})`:'—'}</span>
-              <span className={dayRet!=null?(dayRet>=0?'up':'down'):''}>{dayRet!=null?`${fmtPct(dayRet)} (${fmtDollar(dayRetDollar!)})`:'—'}</span>
-              {isEditing?<div style={{display:'flex',gap:6}}><button className="ghost" onClick={()=>saveEditHolding(h)}>SAVE</button><button className="ghost" onClick={cancelEditHolding}>CANCEL</button></div>:<div style={{display:'flex',gap:6}}><button className="ghost" onClick={()=>startEditHolding(h)}>EDIT</button><button className="ghost" onClick={()=>removeHolding(h)}>REMOVE</button></div>}
+              <span className={ret!=null?(ret>=0?'up':'down'):''} style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ret!=null?`${fmtPct(ret)} (${fmtDollar(retDollar!)})`:'—'}</span>
+              <span className={dayRet!=null?(dayRet>=0?'up':'down'):''} style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{dayRet!=null?`${fmtPct(dayRet)} (${fmtDollar(dayRetDollar!)})`:'—'}</span>
+              {isEditing?<div style={{display:'flex',gap:6,minWidth:0}}><button className="ghost" onClick={()=>saveEditHolding(h)}>SAVE</button><button className="ghost" onClick={cancelEditHolding}>CANCEL</button></div>:<div style={{display:'flex',gap:6,minWidth:0}}><button className="ghost" onClick={()=>startEditHolding(h)}>EDIT</button><button className="ghost" onClick={()=>removeHolding(h)}>REMOVE</button></div>}
             </div>
           })}</div>
           {!holdings.length&&<div className="empty">No holdings yet. Add one manually or let the AI research the portfolio.</div>}
