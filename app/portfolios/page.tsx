@@ -8,6 +8,7 @@ type LogEntry = { id:string; created_at:string; actor:string; action:string; mes
 
 function fmtDateTime(iso?:string){if(!iso)return '—';return new Date(iso).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'})}
 function fmtPct(n:number){return `${n>=0?'+':''}${n.toFixed(2)}%`}
+function fmtDollar(n:number){return `${n>=0?'+':'-'}$${Math.abs(n).toFixed(2)}`}
 
 function ReturnChart({points,title}:{points:{date:string;returnPct:number}[];title:string}){
   if(points.length<2)return <div className="chart empty">Not enough price history yet to chart return over time.</div>
@@ -217,9 +218,11 @@ export default function Portfolios(){
   if(!session)return <div className="shell"><p className="msg banner">Log in on the <a href="/">Research</a> page first, then come back here.</p></div>
 
   const selected=portfolios.find(p=>p.id===selectedId)
-  const holdingValue=(h:Holding)=>{const p=prices[h.symbol];return h.shares!=null&&p?h.shares*p.last:null}
+  const effectiveShares=(h:Holding)=>h.shares!=null?h.shares:1
+  const holdingValue=(h:Holding)=>{const p=prices[h.symbol];return p?effectiveShares(h)*p.last:null}
   const sharesValueTotal=holdings.reduce((s,h)=>{const v=holdingValue(h);return v!=null?s+v:s},0)
   const weightOf=(h:Holding)=>{const v=holdingValue(h);return v!=null&&sharesValueTotal>0?v/sharesValueTotal*100:h.weight}
+  const totalValue=sharesValueTotal
   const totalWeight=holdings.reduce((s,h)=>s+weightOf(h),0)
   const trackedWeight=holdings.reduce((s,h)=>prices[h.symbol]&&h.entry_price?s+weightOf(h):s,0)
   const portfolioReturn=trackedWeight?holdings.reduce((s,h)=>{
@@ -227,12 +230,20 @@ export default function Portfolios(){
     const ret=(p.last/h.entry_price-1)*100
     return s+ret*(weightOf(h)/trackedWeight)
   },0):null
+  const portfolioReturnDollar=holdings.reduce((s,h)=>{
+    const p=prices[h.symbol];if(!p||!h.entry_price)return s
+    return s+(p.last-h.entry_price)*effectiveShares(h)
+  },0)
   const dayTrackedWeight=holdings.reduce((s,h)=>{const p=prices[h.symbol];return p&&p.prevClose?s+weightOf(h):s},0)
   const dayReturn=dayTrackedWeight?holdings.reduce((s,h)=>{
     const p=prices[h.symbol];if(!p||!p.prevClose)return s
     const ret=(p.last/p.prevClose-1)*100
     return s+ret*(weightOf(h)/dayTrackedWeight)
   },0):null
+  const dayReturnDollar=holdings.reduce((s,h)=>{
+    const p=prices[h.symbol];if(!p||!p.prevClose)return s
+    return s+(p.last-p.prevClose)*effectiveShares(h)
+  },0)
 
   return <div className="shell">
     <section className="hero"><div><div className="eyebrow">AI PORTFOLIO AUTOPILOT</div><h1>Describe it. <span>Track it.</span></h1><p className="muted">Give the AI a plain-language description of what you want a portfolio to do. It builds and maintains a real-symbol portfolio against that description, on your command, and logs every change.</p></div></section>
@@ -252,11 +263,12 @@ export default function Portfolios(){
         {!selected?<div className="empty">Select or create a portfolio to see its detail.</div>:<>
           <div className="portfolio-sticky">
             <div className="panel-title"><h2>{selected.name.toUpperCase()}</h2><span className="muted">Updated {fmtDateTime(selected.updated_at)}</span></div>
-            <div className="metrics" style={{gridTemplateColumns:'repeat(6,1fr)'}}>
+            <div className="metrics" style={{gridTemplateColumns:'repeat(7,1fr)'}}>
               <div><span>Holdings</span><b>{holdings.length}</b></div>
               <div><span>Total weight</span><b>{totalWeight.toFixed(1)}%</b></div>
-              <div><span>TOTAL RETURN</span><b className={portfolioReturn==null?'':portfolioReturn>=0?'up':'down'}>{portfolioReturn==null?'—':fmtPct(portfolioReturn)}</b></div>
-              <div><span>DAYS' RETURN</span><b className={dayReturn==null?'':dayReturn>=0?'up':'down'}>{dayReturn==null?'—':fmtPct(dayReturn)}</b></div>
+              <div><span>Total value</span><b>{sharesValueTotal>0?`$${totalValue.toFixed(2)}`:'—'}</b></div>
+              <div><span>TOTAL RETURN</span><b className={portfolioReturn==null?'':portfolioReturn>=0?'up':'down'}>{portfolioReturn==null?'—':`${fmtPct(portfolioReturn)} (${fmtDollar(portfolioReturnDollar)})`}</b></div>
+              <div><span>DAYS' RETURN</span><b className={dayReturn==null?'':dayReturn>=0?'up':'down'}>{dayReturn==null?'—':`${fmtPct(dayReturn)} (${fmtDollar(dayReturnDollar)})`}</b></div>
               <div><span>Created</span><b>{fmtDateTime(selected.created_at)}</b></div>
               <div><span>Last AI research</span><b>{fmtDateTime(log.find(l=>l.action==='ai_rebalance')?.created_at)}</b></div>
             </div>
@@ -276,17 +288,20 @@ export default function Portfolios(){
           </div>}
           <div className="table">{holdings.map(h=>{
             const p=prices[h.symbol]
+            const sh=effectiveShares(h)
             const ret=p&&h.entry_price?(p.last/h.entry_price-1)*100:null
+            const retDollar=p&&h.entry_price?(p.last-h.entry_price)*sh:null
             const dayRet=p&&p.prevClose?(p.last/p.prevClose-1)*100:null
+            const dayRetDollar=p&&p.prevClose?(p.last-p.prevClose)*sh:null
             return <div className="row" key={h.id} style={{gridTemplateColumns:'.6fr .5fr .6fr .9fr .7fr .7fr .7fr .7fr .6fr'}}>
               <span><b>{h.symbol}</b></span>
-              <span>{h.shares!=null?h.shares:'—'}</span>
+              <span>{h.shares!=null?h.shares:'1 (default)'}</span>
               <span>{weightOf(h).toFixed(1)}%</span>
               <span>{h.added_by==='ai'?'Added by AI':'Added by you'} · {fmtDateTime(h.added_at)}</span>
               <span>{h.entry_price?`$${h.entry_price.toFixed(2)}`:'not set'}</span>
               <span>{p?`$${p.last.toFixed(2)}`:'loading…'}</span>
-              <span className={ret!=null?(ret>=0?'up':'down'):''}>{ret!=null?fmtPct(ret):'—'}</span>
-              <span className={dayRet!=null?(dayRet>=0?'up':'down'):''}>{dayRet!=null?fmtPct(dayRet):'—'}</span>
+              <span className={ret!=null?(ret>=0?'up':'down'):''}>{ret!=null?`${fmtPct(ret)} (${fmtDollar(retDollar!)})`:'—'}</span>
+              <span className={dayRet!=null?(dayRet>=0?'up':'down'):''}>{dayRet!=null?`${fmtPct(dayRet)} (${fmtDollar(dayRetDollar!)})`:'—'}</span>
               <button className="ghost" onClick={()=>removeHolding(h)}>REMOVE</button>
             </div>
           })}</div>
