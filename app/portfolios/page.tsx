@@ -29,7 +29,7 @@ function ReturnChart({points,title}:{points:{date:string;returnPct:number}[];tit
       {Array.from({length:gridLines}).map((_,i)=>{const v=adjMin+(range*i)/(gridLines-1);const yy=y(v);return <g key={i}><line x1={padL} x2={w-padR} y1={yy} y2={yy} stroke="#ffffff" strokeOpacity=".06" strokeWidth="1"/><text x={padL-8} y={yy+4} fill="#6b7690" fontSize="11" textAnchor="end">{v.toFixed(1)}%</text></g>})}
       {adjMin<0&&adjMax>0&&<line x1={padL} x2={w-padR} y1={y(0)} y2={y(0)} stroke="#8fa0b8" strokeDasharray="4 4" strokeWidth="1"/>}
       <path d={path} fill="none" stroke={up?'#00c805':'#ff5000'} strokeWidth="2"/>
-      {points.map((p,i)=><g key={p.date}><circle cx={x(i)} cy={y(p.returnPct)} r="10" fill="transparent"><title>{`${new Date(p.date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}\nReturn: ${fmtPct(p.returnPct)}`}</title></circle><circle cx={x(i)} cy={y(p.returnPct)} r="3.5" fill={p.returnPct>=0?'#00c805':'#ff5000'} stroke="#05070d" strokeWidth="1.3" pointerEvents="none"/></g>)}
+      {points.map((p,i)=><g key={`${p.date}-${i}`}><circle cx={x(i)} cy={y(p.returnPct)} r="10" fill="transparent"><title>{`${fmtDateTime(p.date)}\nReturn: ${fmtPct(p.returnPct)}`}</title></circle><circle cx={x(i)} cy={y(p.returnPct)} r="3.5" fill={p.returnPct>=0?'#00c805':'#ff5000'} stroke="#05070d" strokeWidth="1.3" pointerEvents="none"/></g>)}
       {timeTicks.map((t,k)=><text key={k} x={x(t.i)} y={h-10} fill="#6b7690" fontSize="11" textAnchor="middle">{t.label}</text>)}
     </svg>
   </div>
@@ -133,14 +133,27 @@ export default function Portfolios(){
   async function loadReturnSeries(list:Holding[]){
     const withEntry=list.filter(h=>h.entry_price)
     if(!withEntry.length){setReturnSeries([]);return}
+
+    // Snapshots are written every ~15 minutes by a server-side cron job (see
+    // /api/cron/portfolio-snapshots) so the chart keeps gaining real data points
+    // even while nobody has the site open. They give the recent period fine
+    // granularity; older history (before tracking started, or before this
+    // feature existed) is backfilled below from daily closes.
+    let snapshotPoints:{date:string;returnPct:number}[]=[]
+    if(supabase&&selectedId){
+      const {data:snaps}=await supabase.from('portfolio_snapshots').select('taken_at,return_pct').eq('portfolio_id',selectedId).order('taken_at',{ascending:true})
+      if(snaps?.length)snapshotPoints=snaps.map(s=>({date:s.taken_at as string,returnPct:Number(s.return_pct)}))
+    }
+
     const earliest=withEntry.reduce((min,h)=>h.added_at<min?h.added_at:min,withEntry[0].added_at)
+    const backfillEnd=snapshotPoints.length?snapshotPoints[0].date.slice(0,10):null
     const daysSince=Math.max(5,Math.ceil((Date.now()-new Date(earliest).getTime())/86400000)+2)
     const rangeDays=Math.min(3650,daysSince)
     const perSymbol=await Promise.all(withEntry.map(async h=>({symbol:h.symbol,series:await fetchDailySeries(h.symbol,rangeDays)})))
     const dateSet=new Set<string>()
-    for(const s of perSymbol)for(const c of s.series)dateSet.add(c.date)
+    for(const s of perSymbol)for(const c of s.series)if(!backfillEnd||c.date<backfillEnd)dateSet.add(c.date)
     const dates=Array.from(dateSet).sort()
-    const points:{date:string;returnPct:number}[]=[]
+    const backfillPoints:{date:string;returnPct:number}[]=[]
     for(const dateKey of dates){
       let weightedSum=0,weightTotal=0
       for(const h of withEntry){
@@ -154,9 +167,9 @@ export default function Portfolios(){
         weightedSum+=((close/h.entry_price!)-1)*100*w
         weightTotal+=w
       }
-      if(weightTotal>0)points.push({date:dateKey,returnPct:weightedSum/weightTotal})
+      if(weightTotal>0)backfillPoints.push({date:dateKey+'T12:00:00.000Z',returnPct:weightedSum/weightTotal})
     }
-    setReturnSeries(points)
+    setReturnSeries([...backfillPoints,...snapshotPoints])
   }
   async function addHolding(e:React.FormEvent){
     e.preventDefault();if(!supabase||!selectedId||!addSymbol.trim())return
