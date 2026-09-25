@@ -186,27 +186,31 @@ export default function Portfolios(){
           </div>
 
           <div className="section-label">HOLDINGS</div>
+          {holdings.length>0&&<div className="row row-head" style={{gridTemplateColumns:'.6fr .5fr .6fr .9fr .7fr .7fr .7fr .7fr .6fr'}}>
+            <span>Symbol</span>
+            <span>Shares</span>
+            <span>Weight</span>
+            <span>Added</span>
+            <span>Average Cost</span>
+            <span>Current Price</span>
+            <span>TOTAL RETURN</span>
+            <span>DAYS' RETURN</span>
+            <span></span>
+          </div>}
           <div className="table">{holdings.map(h=>{
             const p=prices[h.symbol]
             const ret=p&&h.entry_price?(p.last/h.entry_price-1)*100:null
             const dayRet=p&&p.prevClose?(p.last/p.prevClose-1)*100:null
-            return <div className="holding-card" key={h.id}>
-              <div className="holding-top">
-                <div className="holding-id">
-                  <b>{h.symbol}</b>
-                  <span className="holding-sub">{h.shares!=null?`${h.shares} sh · `:''}{weightOf(h).toFixed(1)}% weight</span>
-                </div>
-                <div className="holding-returns">
-                  <div className="holding-metric"><span>Total return</span><b className={ret!=null?(ret>=0?'up':'down'):''}>{ret!=null?fmtPct(ret):'—'}</b></div>
-                  <div className="holding-metric"><span>Day's return</span><b className={dayRet!=null?(dayRet>=0?'up':'down'):''}>{dayRet!=null?fmtPct(dayRet):'—'}</b></div>
-                </div>
-                <button className="ghost" onClick={()=>removeHolding(h)}>REMOVE</button>
-              </div>
-              <div className="holding-meta">
-                <span>{h.added_by==='ai'?'Added by AI':'Added by you'} · {fmtDateTime(h.added_at)}</span>
-                <span>Avg cost {h.entry_price?`$${h.entry_price.toFixed(2)}`:'not set'}</span>
-                <span>Price {p?`$${p.last.toFixed(2)}`:'loading…'}</span>
-              </div>
+            return <div className="row" key={h.id} style={{gridTemplateColumns:'.6fr .5fr .6fr .9fr .7fr .7fr .7fr .7fr .6fr'}}>
+              <span><b>{h.symbol}</b></span>
+              <span>{h.shares!=null?h.shares:'—'}</span>
+              <span>{weightOf(h).toFixed(1)}%</span>
+              <span>{h.added_by==='ai'?'Added by AI':'Added by you'} · {fmtDateTime(h.added_at)}</span>
+              <span>{h.entry_price?`$${h.entry_price.toFixed(2)}`:'not set'}</span>
+              <span>{p?`$${p.last.toFixed(2)}`:'loading…'}</span>
+              <span className={ret!=null?(ret>=0?'up':'down'):''}>{ret!=null?fmtPct(ret):'—'}</span>
+              <span className={dayRet!=null?(dayRet>=0?'up':'down'):''}>{dayRet!=null?fmtPct(dayRet):'—'}</span>
+              <button className="ghost" onClick={()=>removeHolding(h)}>REMOVE</button>
             </div>
           })}</div>
           {!holdings.length&&<div className="empty">No holdings yet. Add one manually or let the AI research the portfolio.</div>}
