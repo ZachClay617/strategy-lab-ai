@@ -31,6 +31,26 @@ export async function fetchCandles(symbol:string, opts:{ live?:boolean; interval
   }catch(e){return {error:String(e)}}
 }
 
+export async function fetchSymbolName(symbol:string):Promise<string|null>{
+  try{
+    const url=`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1d&interval=1d`
+    const r=await fetch(url,{headers:{'User-Agent':'StrategyLabAI/3.0'},cache:'no-store'})
+    const j=await r.json().catch(()=>null)
+    const meta=j?.chart?.result?.[0]?.meta
+    return meta?.longName||meta?.shortName||null
+  }catch{return null}
+}
+
+export async function fetchSymbolNames(symbols:string[]):Promise<Record<string,string>>{
+  if(!symbols.length)return {}
+  const out:Record<string,string>={}
+  await Promise.all(symbols.map(async sym=>{
+    const name=await fetchSymbolName(sym)
+    if(name)out[sym]=name
+  }))
+  return out
+}
+
 export async function fetchLastPrice(symbol:string, live:boolean=true):Promise<number|null>{
   const result=live
     ? await fetchCandles(symbol,{live:true})

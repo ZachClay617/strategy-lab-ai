@@ -43,6 +43,7 @@ export default function Portfolios(){
   const [holdings,setHoldings]=useState<Holding[]>([])
   const [log,setLog]=useState<LogEntry[]>([])
   const [prices,setPrices]=useState<Record<string,{last:number;prevClose:number|null}>>({})
+  const [names,setNames]=useState<Record<string,string>>({})
   const [newName,setNewName]=useState('')
   const [newDesc,setNewDesc]=useState('')
   const [descDraft,setDescDraft]=useState('')
@@ -65,6 +66,10 @@ export default function Portfolios(){
   useEffect(()=>{if(session?.user)loadPortfolios()},[session?.user?.id])
   useEffect(()=>{if(selectedId)loadPortfolio(selectedId);else{setHoldings([]);setLog([]);setDescDraft('')}},[selectedId])
   useEffect(()=>{if(holdings.length)loadPrices(holdings.map(h=>h.symbol))},[holdings.map(h=>h.symbol).join(',')])
+  useEffect(()=>{
+    const symbols=holdings.map(h=>h.symbol).filter(sym=>!(sym in names))
+    if(symbols.length)loadNames(symbols)
+  },[holdings.map(h=>h.symbol).join(',')])
   useEffect(()=>{if(holdings.length)loadReturnSeries(holdings);else setReturnSeries([])},[holdings,prices])
   useEffect(()=>{if(portfolios.length)loadAllHoldings();else setAllHoldings({})},[portfolios.map(p=>p.id).join(',')])
   useEffect(()=>{
@@ -107,6 +112,13 @@ export default function Portfolios(){
       return [sym,null] as const
     }))
     setPrices(prev=>{const next={...prev};for(const [sym,v] of entries)if(v)next[sym]=v;return next})
+  }
+  async function loadNames(symbols:string[]){
+    try{
+      const r=await fetch(`/api/market?names=${encodeURIComponent(symbols.join(','))}`)
+      const j=await r.json()
+      if(j&&typeof j==='object')setNames(prev=>({...prev,...j}))
+    }catch{}
   }
   async function addLog(portfolioId:string,actor:string,action:string,message:string,detail?:any){
     if(!supabase||!session?.user)return
@@ -315,7 +327,7 @@ export default function Portfolios(){
   const overview=sumMetrics(Object.values(allHoldings).flat())
 
   return <div className="shell portfolios-page">
-    <section className="hero"><div><div className="eyebrow">AI PORTFOLIO AUTOPILOT</div><h1>Describe it. <span>Track it.</span></h1><p className="muted">Give the AI a plain-language description of what you want a portfolio to do. It builds and maintains a real-symbol portfolio against that description, on your command, and logs every change.</p></div></section>
+    <section className="hero"><div><div className="eyebrow">AI PORTFOLIO AUTOPILOT</div><h1>Describe it. Track it. <span>Visualize it.</span></h1><p className="muted">Give the AI a plain-language description of what you want a portfolio to do. It builds and maintains a real-symbol portfolio against that description, on your command, and logs every change.</p></div></section>
     {msg&&<p className="msg banner">{msg}</p>}
     <div className="grid">
       <section className="panel">
@@ -338,7 +350,7 @@ export default function Portfolios(){
             <div><span>DAYS' RETURN</span><b className={overview.dayReturnPct==null?'':overview.dayReturnPct>=0?'up':'down'}>{overview.dayReturnPct==null?'—':`${fmtPct(overview.dayReturnPct)} (${fmtDollar(overview.dayReturnDollar)})`}</b></div>
           </div>
 
-          <div className="section-label"><b>YOUR PORTFOLIOS</b></div>
+          <div className="section-label overview-label"><b>YOUR PORTFOLIOS</b></div>
           <div className="portfolio-cards">{portfolios.map(p=>{
             const m=sumMetrics(allHoldings[p.id]||[])
             const retUp=m.returnPct!=null&&m.returnPct>=0
@@ -407,7 +419,7 @@ export default function Portfolios(){
             const dayRetDollar=p&&p.prevClose?(p.last-p.prevClose)*sh:null
             const isEditing=editingId===h.id
             return <div className="row" key={h.id} style={{gridTemplateColumns:'.6fr .6fr .6fr .9fr .8fr .7fr .7fr .7fr .9fr'}}>
-              <span><b>{h.symbol}</b></span>
+              <span><b>{h.symbol}</b>{names[h.symbol]&&<span className="how-it-works" style={{marginTop:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'100%'}}>{names[h.symbol]}</span>}</span>
               <span>{isEditing?<input type="number" min={0} step="0.0001" value={editShares} onChange={e=>setEditShares(e.target.value)} placeholder="1"/>:(h.shares!=null?h.shares:'1 (default)')}</span>
               <span>{weightOf(h).toFixed(1)}%</span>
               <span>{h.added_by==='ai'?'Added by AI':'Added by you'} · {fmtDateTime(h.added_at)}</span>

@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { fetchCandles } from '@/lib/market'
+import { fetchCandles, fetchSymbolNames } from '@/lib/market'
 
 export async function GET(req:NextRequest){
+  const namesParam=req.nextUrl.searchParams.get('names')
+  if(namesParam){
+    const symbols=namesParam.split(',').map(s=>s.trim()).filter(Boolean)
+    const names=await fetchSymbolNames(symbols)
+    return NextResponse.json(names)
+  }
   const symbol=req.nextUrl.searchParams.get('symbol')||'AAPL'
   const live=req.nextUrl.searchParams.get('live')==='1'
   const market=req.nextUrl.searchParams.get('market')||'Stocks'
