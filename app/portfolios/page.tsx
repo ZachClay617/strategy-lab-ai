@@ -366,7 +366,7 @@ export default function Portfolios(){
                 <span>Created {fmtDateTime(p.created_at)}</span>
                 <div className="portfolio-card-actions" onClick={e=>e.stopPropagation()}>
                   <button className="run" style={{marginTop:0}} onClick={()=>viewPortfolio(p.id)}>OPEN →</button>
-                  <button className="ghost" onClick={()=>researchPortfolio(p.id)} title="Costs real money — calls a paid AI model">🖨️ A-TAMP</button>
+                  <button className="ghost" onClick={()=>researchPortfolio(p.id)} title="Costs real money — calls a paid AI model">A-TAMP</button>
                 </div>
               </div>
             </div>
@@ -438,8 +438,8 @@ export default function Portfolios(){
           <button className="ghost" onClick={saveDescription} disabled={descDraft===selected.description}>SAVE DESCRIPTION</button>
 
           <div className="section-label">A-TAMP AI RESEARCH</div>
-          <p className="field-warning">⚠️ Running this costs real money — it calls a paid AI model and pulls live market data on every run.</p>
-          <button className="run" onClick={runResearch} disabled={researching}>{researching?'A-TAMP IS PRINTING…':'🖨️ LET A-TAMP RESEARCH & REBALANCE'}</button>
+          <p className="field-warning">Running this costs real money — it calls a paid AI model and pulls live market data on every run.</p>
+          <button className="run" onClick={runResearch} disabled={researching}>{researching?'A-TAMP IS PRINTING…':'LET A-TAMP RESEARCH & REBALANCE'}</button>
           <p className="tiny">A-Tamp (Autonomous Trading Money Printer) pulls real live/historical prices across a broad multi-sector universe of stocks, scores them against your description (with full AI reasoning when an ANTHROPIC_API_KEY is configured, otherwise a rules-based momentum/volatility screen), and proposes portfolio changes for you to apply.</p>
 
           {proposal&&<div className="run-detail">
@@ -453,7 +453,7 @@ export default function Portfolios(){
           </div>}
 
           <div className="section-label">CHANGE LOG</div>
-          <div className="test-list change-log-scroll">{log.map(l=><div className={`test-item ${l.actor==='ai'?'pass':''}`} key={l.id}><div className="test-item-main"><b>{l.actor==='ai'?'🤖 AI':'👤 You'} · {l.action.replace(/_/g,' ')}</b><span>{l.message}</span></div><div className="test-item-stats"><span>{fmtDateTime(l.created_at)}</span></div></div>)}
+          <div className="test-list change-log-scroll">{log.map(l=><div className={`test-item ${l.actor==='ai'?'pass':''}`} key={l.id}><div className="test-item-main"><b>{l.actor==='ai'?'AI':'You'} · {l.action.replace(/_/g,' ')}</b><span>{l.message}</span></div><div className="test-item-stats"><span>{fmtDateTime(l.created_at)}</span></div></div>)}
           {!log.length&&<div className="empty">No changes logged yet.</div>}</div>
         </>}
       </section>
