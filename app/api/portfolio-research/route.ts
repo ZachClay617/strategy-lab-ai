@@ -88,6 +88,7 @@ export async function POST(req:NextRequest){
       const j=await r.json()
       if(!r.ok||j?.error){console.error('Anthropic API error',r.status,JSON.stringify(j))}
       const text=j?.content?.[0]?.text
+      if(!text)console.error('Anthropic response had no text content',JSON.stringify(j).slice(0,2000))
       if(text){
         const parsed=JSON.parse(text.slice(text.indexOf('{'),text.lastIndexOf('}')+1))
         const validSymbols=new Set(marketData.map(m=>m.symbol))
@@ -95,6 +96,7 @@ export async function POST(req:NextRequest){
         const total=holdings.reduce((s:number,h:any)=>s+h.weight,0)||1
         const normalized=holdings.map((h:any)=>({...h,weight:Math.round(h.weight/total*1000)/10}))
         if(normalized.length)return NextResponse.json({mode:'ai',holdings:normalized,summary:parsed.summary||'',dataAsOf:new Date().toISOString(),universeSize:marketData.length})
+        console.error('AI returned zero valid holdings after filtering',JSON.stringify(parsed).slice(0,2000))
       }
     }catch(e){console.error('portfolio AI call failed, falling back to heuristic',e)}
   }
