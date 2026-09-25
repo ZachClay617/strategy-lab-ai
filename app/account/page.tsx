@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { CURRENCIES } from '@/lib/currencies'
 
@@ -29,6 +30,7 @@ function resizeImageToDataUrl(file:File, size=160, quality=0.82):Promise<string>
 }
 
 export default function Account(){
+  const router=useRouter()
   const [session,setSession]=useState<any>(null)
   const [profile,setProfile]=useState<Profile|null>(null)
   const [nameDraft,setNameDraft]=useState('')
@@ -88,6 +90,11 @@ export default function Account(){
     setNewPassword('');setConfirmPassword('');setMsg('Password changed.')
   }
 
+  async function signOut(){
+    await supabase?.auth.signOut()
+    router.push('/')
+  }
+
   if(!supabase)return <div className="shell"><p className="msg banner">Add Supabase environment variables first.</p></div>
   if(!session)return <div className="shell"><p className="msg banner">Log in on the <a href="/">Research</a> page first, then come back here.</p></div>
 
@@ -124,6 +131,9 @@ export default function Account(){
 
         <div className="section-label">EMAIL</div>
         <p className="muted">{session.user.email}</p>
+
+        <div className="section-label">SESSION</div>
+        <button className="ghost" onClick={signOut}>LOG OUT</button>
       </section>
     </div>
   </div>
