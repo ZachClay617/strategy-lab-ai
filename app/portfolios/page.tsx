@@ -15,7 +15,7 @@ export default function Portfolios(){
   const [selectedId,setSelectedId]=useState<string|null>(null)
   const [holdings,setHoldings]=useState<Holding[]>([])
   const [log,setLog]=useState<LogEntry[]>([])
-  const [prices,setPrices]=useState<Record<string,{last:number;series:{date:string;close:number}[]}>>({})
+  const [prices,setPrices]=useState<Record<string,{last:number}>>({})
   const [newName,setNewName]=useState('')
   const [newDesc,setNewDesc]=useState('')
   const [descDraft,setDescDraft]=useState('')
@@ -49,12 +49,10 @@ export default function Portfolios(){
   }
   async function loadPrices(symbols:string[]){
     const entries=await Promise.all(symbols.map(async sym=>{
-      try{
-        const r=await fetch(`/api/market?symbol=${encodeURIComponent(sym)}&interval=1d&rangeDays=400`)
-        const j=await r.json()
-        if(!Array.isArray(j)||!j.length)return [sym,null] as const
-        return [sym,{last:j[j.length-1].close,series:j.map((c:any)=>({date:c.date,close:c.close}))}] as const
-      }catch{return [sym,null] as const}
+      const live=await fetchLastPrice(sym,true)
+      if(live!=null)return [sym,{last:live}] as const
+      const eod=await fetchLastPrice(sym,false)
+      return eod!=null?[sym,{last:eod}] as const:[sym,null] as const
     }))
     setPrices(prev=>{const next={...prev};for(const [sym,v] of entries)if(v)next[sym]=v;return next})
   }
@@ -77,9 +75,10 @@ export default function Portfolios(){
     await addLog(selectedId,'user','description_updated',`Description changed.`,{before:prev,after:descDraft})
     await loadPortfolios();await loadPortfolio(selectedId)
   }
-  async function fetchLastPrice(symbol:string):Promise<number|null>{
+  async function fetchLastPrice(symbol:string,live:boolean=true):Promise<number|null>{
     try{
-      const r=await fetch(`/api/market?symbol=${encodeURIComponent(symbol)}&interval=1d&rangeDays=10`)
+      const url=live?`/api/market?symbol=${encodeURIComponent(symbol)}&live=1`:`/api/market?symbol=${encodeURIComponent(symbol)}&interval=1d&rangeDays=10`
+      const r=await fetch(url)
       const j=await r.json()
       return Array.isArray(j)&&j.length?j[j.length-1].close:null
     }catch{return null}
