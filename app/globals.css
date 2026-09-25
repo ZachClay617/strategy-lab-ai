@@ -49,6 +49,11 @@
 .portfolio-card-head{position:relative;display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
 .portfolio-card-name{font-size:16px;font-weight:900;letter-spacing:.02em;background:linear-gradient(90deg,#eef2ff,#a9c4ff);-webkit-background-clip:text;background-clip:text;color:transparent}
 .portfolio-card-head .how-it-works{max-width:230px}
+.portfolio-card-desc{display:flex;align-items:flex-start;gap:6px}
+.portfolio-card-desc .how-it-works.collapsed{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:210px}
+.portfolio-card-desc .how-it-works.expanded{white-space:normal;max-width:230px}
+.desc-toggle{flex-shrink:0;margin-top:3px;width:16px;height:16px;padding:0;line-height:1;font-size:8px;display:flex;align-items:center;justify-content:center;border-radius:5px;border:1px solid #2a3556;background:#0a0f20;color:var(--muted)}
+.desc-toggle:hover{color:#fff;border-color:#4f6bb0}
 .portfolio-card-badge{flex-shrink:0;font-size:9px;font-weight:800;letter-spacing:.1em;padding:5px 9px;border-radius:999px;border:1px solid #2a3556;color:var(--muted);background:#0a0f20}
 .portfolio-card-badge.up{color:#00c805;border-color:#1f4a3a;background:#00c80512}
 .portfolio-card-badge.down{color:#ff5000;border-color:#4a1f28;background:#ff500012}

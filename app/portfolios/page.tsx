@@ -59,6 +59,7 @@ export default function Portfolios(){
   const [view,setView]=useState<'overview'|'detail'>('overview')
   const [allHoldings,setAllHoldings]=useState<Record<string,Holding[]>>({})
   const [pendingResearchId,setPendingResearchId]=useState<string|null>(null)
+  const [expandedDesc,setExpandedDesc]=useState<Record<string,boolean>>({})
 
   useEffect(()=>{if(!supabase)return;supabase.auth.getSession().then(({data})=>setSession(data.session));const {data}=supabase.auth.onAuthStateChange((_e,s)=>setSession(s));return()=>data.subscription.unsubscribe()},[])
   useEffect(()=>{if(session?.user)loadPortfolios()},[session?.user?.id])
@@ -229,6 +230,7 @@ export default function Portfolios(){
     await addLog(selectedId,'user','holding_removed',`Removed ${h.symbol} (was ${h.shares!=null?`${h.shares} shares`:`${h.weight}% weight`}).`,{symbol:h.symbol,weight:h.weight,shares:h.shares})
     await loadPortfolio(selectedId)
   }
+  function toggleDesc(id:string,e:React.MouseEvent){e.stopPropagation();setExpandedDesc(prev=>({...prev,[id]:!prev[id]}))}
   function viewPortfolio(id:string){setSelectedId(id);setView('detail');setMsg('')}
   function backToOverview(){setView('overview');setMsg('')}
   function researchPortfolio(id:string){
@@ -345,7 +347,13 @@ export default function Portfolios(){
               <div className="portfolio-card-glow"/>
               <div className="portfolio-card-grid"/>
               <div className="portfolio-card-head">
-                <div><div className="portfolio-card-name">{p.name}</div><div className="how-it-works">{p.description||'No description yet.'}</div></div>
+                <div>
+                  <div className="portfolio-card-name">{p.name}</div>
+                  <div className="portfolio-card-desc">
+                    <span className={`how-it-works ${expandedDesc[p.id]?'expanded':'collapsed'}`}>{p.description||'No description yet.'}</span>
+                    {p.description&&<button className="desc-toggle" onClick={e=>toggleDesc(p.id,e)} aria-label={expandedDesc[p.id]?'Collapse description':'Expand description'}>{expandedDesc[p.id]?'▲':'▼'}</button>}
+                  </div>
+                </div>
                 <div className={`portfolio-card-badge ${m.returnPct==null?'':retUp?'up':'down'}`}>{m.returnPct==null?'UNTRACKED':retUp?'▲ UP':'▼ DOWN'}</div>
               </div>
               <div className="portfolio-card-stats">
