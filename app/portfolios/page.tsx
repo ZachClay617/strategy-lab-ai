@@ -21,6 +21,7 @@ export default function Portfolios(){
   const [descDraft,setDescDraft]=useState('')
   const [addSymbol,setAddSymbol]=useState('')
   const [addWeight,setAddWeight]=useState(10)
+  const [addAvgCost,setAddAvgCost]=useState('')
   const [researching,setResearching]=useState(false)
   const [msg,setMsg]=useState('')
   const [proposal,setProposal]=useState<any>(null)
@@ -86,11 +87,12 @@ export default function Portfolios(){
   async function addHolding(e:React.FormEvent){
     e.preventDefault();if(!supabase||!selectedId||!addSymbol.trim())return
     const sym=addSymbol.trim().toUpperCase()
-    const entryPrice=await fetchLastPrice(sym)
+    const manualCost=addAvgCost.trim()?Number(addAvgCost):null
+    const entryPrice=manualCost&&manualCost>0?manualCost:await fetchLastPrice(sym)
     const {error}=await supabase.from('portfolio_holdings').insert({portfolio_id:selectedId,symbol:sym,weight:addWeight,added_by:'user',entry_price:entryPrice})
     if(error){setMsg(`Could not add ${sym}: ${error.message}`);return}
-    await addLog(selectedId,'user','holding_added',`Added ${sym} at ${addWeight}% weight.`,{symbol:sym,weight:addWeight})
-    setAddSymbol('');setAddWeight(10);await loadPortfolio(selectedId)
+    await addLog(selectedId,'user','holding_added',`Added ${sym} at ${addWeight}% weight${manualCost?`, average cost $${manualCost.toFixed(2)}`:''}.`,{symbol:sym,weight:addWeight,entryPrice})
+    setAddSymbol('');setAddWeight(10);setAddAvgCost('');await loadPortfolio(selectedId)
   }
   async function removeHolding(h:Holding){
     if(!supabase||!selectedId)return
@@ -176,9 +178,12 @@ export default function Portfolios(){
           {!holdings.length&&<div className="empty">No holdings yet. Add one manually or let the AI research the portfolio.</div>}
 
           <div className="section-label">ADD A STOCK</div>
-          <form onSubmit={addHolding} className="checks mode-pick" style={{marginBottom:10}}>
-            <label>Symbol<input value={addSymbol} onChange={e=>setAddSymbol(e.target.value.toUpperCase())} placeholder="AAPL" required/></label>
-            <label>Weight %<input type="number" min={0} max={100} value={addWeight} onChange={e=>setAddWeight(+e.target.value)}/></label>
+          <form onSubmit={addHolding}>
+            <div className="add-holding-grid" style={{marginBottom:10}}>
+              <label>Symbol<input value={addSymbol} onChange={e=>setAddSymbol(e.target.value.toUpperCase())} placeholder="AAPL" required/></label>
+              <label>Weight %<input type="number" min={0} max={100} value={addWeight} onChange={e=>setAddWeight(+e.target.value)}/></label>
+              <label>Average cost (optional)<input type="number" min={0} step="0.01" value={addAvgCost} onChange={e=>setAddAvgCost(e.target.value)} placeholder="Live price if blank"/></label>
+            </div>
             <button className="run" type="submit" style={{marginTop:0}}>+ ADD</button>
           </form>
 
