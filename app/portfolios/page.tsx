@@ -15,7 +15,7 @@ export default function Portfolios(){
   const [selectedId,setSelectedId]=useState<string|null>(null)
   const [holdings,setHoldings]=useState<Holding[]>([])
   const [log,setLog]=useState<LogEntry[]>([])
-  const [prices,setPrices]=useState<Record<string,{last:number}>>({})
+  const [prices,setPrices]=useState<Record<string,{last:number;prevClose:number|null}>>({})
   const [newName,setNewName]=useState('')
   const [newDesc,setNewDesc]=useState('')
   const [descDraft,setDescDraft]=useState('')
@@ -50,10 +50,12 @@ export default function Portfolios(){
   }
   async function loadPrices(symbols:string[]){
     const entries=await Promise.all(symbols.map(async sym=>{
+      const daily=await fetchDailyCloses(sym)
+      const prevClose=daily.length>1?daily[daily.length-2]:null
       const live=await fetchLastPrice(sym,true)
-      if(live!=null)return [sym,{last:live}] as const
-      const eod=await fetchLastPrice(sym,false)
-      return eod!=null?[sym,{last:eod}] as const:[sym,null] as const
+      if(live!=null)return [sym,{last:live,prevClose:prevClose??(daily.length?daily[daily.length-1]:null)}] as const
+      if(daily.length)return [sym,{last:daily[daily.length-1],prevClose}] as const
+      return [sym,null] as const
     }))
     setPrices(prev=>{const next={...prev};for(const [sym,v] of entries)if(v)next[sym]=v;return next})
   }
@@ -83,6 +85,14 @@ export default function Portfolios(){
       const j=await r.json()
       return Array.isArray(j)&&j.length?j[j.length-1].close:null
     }catch{return null}
+  }
+  async function fetchDailyCloses(symbol:string):Promise<number[]>{
+    try{
+      const url=`/api/market?symbol=${encodeURIComponent(symbol)}&interval=1d&rangeDays=10`
+      const r=await fetch(url)
+      const j=await r.json()
+      return Array.isArray(j)?j.map((c:any)=>c.close):[]
+    }catch{return []}
   }
   async function addHolding(e:React.FormEvent){
     e.preventDefault();if(!supabase||!selectedId||!addSymbol.trim())return
@@ -135,6 +145,12 @@ export default function Portfolios(){
     const ret=(p.last/h.entry_price-1)*100
     return s+ret*(h.weight/trackedWeight)
   },0):null
+  const dayTrackedWeight=holdings.reduce((s,h)=>{const p=prices[h.symbol];return p&&p.prevClose?s+h.weight:s},0)
+  const dayReturn=dayTrackedWeight?holdings.reduce((s,h)=>{
+    const p=prices[h.symbol];if(!p||!p.prevClose)return s
+    const ret=(p.last/p.prevClose-1)*100
+    return s+ret*(h.weight/dayTrackedWeight)
+  },0):null
 
   return <div className="shell">
     <section className="hero"><div><div className="eyebrow">AI PORTFOLIO AUTOPILOT</div><h1>Describe it. <span>Track it.</span></h1><p className="muted">Give the AI a plain-language description of what you want a portfolio to do. It builds and maintains a real-symbol portfolio against that description, on your command, and logs every change.</p></div></section>
@@ -154,34 +170,38 @@ export default function Portfolios(){
         {!selected?<div className="empty">Select or create a portfolio to see its detail.</div>:<>
           <div className="portfolio-sticky">
             <div className="panel-title"><h2>{selected.name.toUpperCase()}</h2><span className="muted">Updated {fmtDateTime(selected.updated_at)}</span></div>
-            <div className="metrics">
+            <div className="metrics" style={{gridTemplateColumns:'repeat(5,1fr)'}}>
               <div><span>Holdings</span><b>{holdings.length}</b></div>
               <div><span>Total weight</span><b>{totalWeight.toFixed(1)}%</b></div>
-              <div><span>Tracked return</span><b className={portfolioReturn==null?'':portfolioReturn>=0?'up':'down'}>{portfolioReturn==null?'—':fmtPct(portfolioReturn)}</b></div>
+              <div><span>TOTAL RETURN</span><b className={portfolioReturn==null?'':portfolioReturn>=0?'up':'down'}>{portfolioReturn==null?'—':fmtPct(portfolioReturn)}</b></div>
+              <div><span>DAYS' RETURN</span><b className={dayReturn==null?'':dayReturn>=0?'up':'down'}>{dayReturn==null?'—':fmtPct(dayReturn)}</b></div>
               <div><span>Last AI research</span><b>{fmtDateTime(log.find(l=>l.action==='ai_rebalance')?.created_at)}</b></div>
             </div>
           </div>
 
           <div className="section-label">HOLDINGS</div>
-          {holdings.length>0&&<div className="row row-head" style={{gridTemplateColumns:'.7fr .7fr .9fr .8fr .8fr .7fr .6fr'}}>
+          {holdings.length>0&&<div className="row row-head" style={{gridTemplateColumns:'.7fr .7fr .9fr .8fr .8fr .7fr .7fr .6fr'}}>
             <span>Symbol</span>
             <span>Weight</span>
             <span>Added</span>
             <span>Average Cost</span>
             <span>Current Price</span>
-            <span>Return</span>
+            <span>TOTAL RETURN</span>
+            <span>DAYS' RETURN</span>
             <span></span>
           </div>}
           <div className="table">{holdings.map(h=>{
             const p=prices[h.symbol]
             const ret=p&&h.entry_price?(p.last/h.entry_price-1)*100:null
-            return <div className="row" key={h.id} style={{gridTemplateColumns:'.7fr .7fr .9fr .8fr .8fr .7fr .6fr'}}>
+            const dayRet=p&&p.prevClose?(p.last/p.prevClose-1)*100:null
+            return <div className="row" key={h.id} style={{gridTemplateColumns:'.7fr .7fr .9fr .8fr .8fr .7fr .7fr .6fr'}}>
               <span><b>{h.symbol}</b></span>
               <span>{h.weight}% weight</span>
               <span>{h.added_by==='ai'?'Added by AI':'Added by you'} · {fmtDateTime(h.added_at)}</span>
               <span>{h.entry_price?`$${h.entry_price.toFixed(2)}`:'not set'}</span>
               <span>{p?`$${p.last.toFixed(2)}`:'loading…'}</span>
               <span className={ret!=null?(ret>=0?'up':'down'):''}>{ret!=null?fmtPct(ret):'—'}</span>
+              <span className={dayRet!=null?(dayRet>=0?'up':'down'):''}>{dayRet!=null?fmtPct(dayRet):'—'}</span>
               <button className="ghost" onClick={()=>removeHolding(h)}>REMOVE</button>
             </div>
           })}</div>
