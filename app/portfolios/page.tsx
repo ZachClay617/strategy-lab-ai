@@ -53,6 +53,9 @@ export default function Portfolios(){
   const [msg,setMsg]=useState('')
   const [proposal,setProposal]=useState<any>(null)
   const [returnSeries,setReturnSeries]=useState<{date:string;returnPct:number}[]>([])
+  const [editingId,setEditingId]=useState<string|null>(null)
+  const [editShares,setEditShares]=useState('')
+  const [editAvgCost,setEditAvgCost]=useState('')
 
   useEffect(()=>{if(!supabase)return;supabase.auth.getSession().then(({data})=>setSession(data.session));const {data}=supabase.auth.onAuthStateChange((_e,s)=>setSession(s));return()=>data.subscription.unsubscribe()},[])
   useEffect(()=>{if(session?.user)loadPortfolios()},[session?.user?.id])
@@ -184,6 +187,25 @@ export default function Portfolios(){
     await addLog(selectedId,'user','holding_added',`Added ${sym} · ${sharesNum} shares${manualCost?`, average cost $${manualCost.toFixed(2)}`:''}.`,{symbol:sym,shares:sharesNum,entryPrice})
     setAddSymbol('');setAddShares('');setAddAvgCost('');await loadPortfolio(selectedId)
   }
+  function startEditHolding(h:Holding){
+    setEditingId(h.id)
+    setEditShares(h.shares!=null?String(h.shares):'')
+    setEditAvgCost(h.entry_price!=null?String(h.entry_price):'')
+  }
+  function cancelEditHolding(){
+    setEditingId(null);setEditShares('');setEditAvgCost('')
+  }
+  async function saveEditHolding(h:Holding){
+    if(!supabase||!selectedId)return
+    const sharesNum=editShares.trim()?Number(editShares):null
+    if(editShares.trim()&&(!sharesNum||sharesNum<=0)){setMsg('Enter a valid number of shares.');return}
+    const costNum=editAvgCost.trim()?Number(editAvgCost):null
+    if(editAvgCost.trim()&&(!costNum||costNum<=0)){setMsg('Enter a valid average cost.');return}
+    const {error}=await supabase.from('portfolio_holdings').update({shares:sharesNum,entry_price:costNum}).eq('id',h.id)
+    if(error){setMsg(`Could not update ${h.symbol}: ${error.message}`);return}
+    await addLog(selectedId,'user','holding_edited',`Updated ${h.symbol} · ${sharesNum!=null?`${sharesNum} shares`:'no shares set'}${costNum!=null?`, average cost $${costNum.toFixed(2)}`:''}.`,{symbol:h.symbol,shares:sharesNum,entryPrice:costNum})
+    cancelEditHolding();await loadPortfolio(selectedId)
+  }
   async function removeHolding(h:Holding){
     if(!supabase||!selectedId)return
     const {error}=await supabase.from('portfolio_holdings').delete().eq('id',h.id)
@@ -275,7 +297,7 @@ export default function Portfolios(){
           </div>
 
           <div className="section-label">HOLDINGS</div>
-          {holdings.length>0&&<div className="row row-head" style={{gridTemplateColumns:'.6fr .5fr .6fr .9fr .7fr .7fr .7fr .7fr .6fr'}}>
+          {holdings.length>0&&<div className="row row-head" style={{gridTemplateColumns:'.6fr .6fr .6fr .9fr .8fr .7fr .7fr .7fr .9fr'}}>
             <span>Symbol</span>
             <span>Shares</span>
             <span>Weight</span>
@@ -293,16 +315,17 @@ export default function Portfolios(){
             const retDollar=p&&h.entry_price?(p.last-h.entry_price)*sh:null
             const dayRet=p&&p.prevClose?(p.last/p.prevClose-1)*100:null
             const dayRetDollar=p&&p.prevClose?(p.last-p.prevClose)*sh:null
-            return <div className="row" key={h.id} style={{gridTemplateColumns:'.6fr .5fr .6fr .9fr .7fr .7fr .7fr .7fr .6fr'}}>
+            const isEditing=editingId===h.id
+            return <div className="row" key={h.id} style={{gridTemplateColumns:'.6fr .6fr .6fr .9fr .8fr .7fr .7fr .7fr .9fr'}}>
               <span><b>{h.symbol}</b></span>
-              <span>{h.shares!=null?h.shares:'1 (default)'}</span>
+              <span>{isEditing?<input type="number" min={0} step="0.0001" value={editShares} onChange={e=>setEditShares(e.target.value)} placeholder="1"/>:(h.shares!=null?h.shares:'1 (default)')}</span>
               <span>{weightOf(h).toFixed(1)}%</span>
               <span>{h.added_by==='ai'?'Added by AI':'Added by you'} · {fmtDateTime(h.added_at)}</span>
-              <span>{h.entry_price?`$${h.entry_price.toFixed(2)}`:'not set'}</span>
+              <span>{isEditing?<input type="number" min={0} step="0.01" value={editAvgCost} onChange={e=>setEditAvgCost(e.target.value)} placeholder="not set"/>:(h.entry_price?`$${h.entry_price.toFixed(2)}`:'not set')}</span>
               <span>{p?`$${p.last.toFixed(2)}`:'loading…'}</span>
               <span className={ret!=null?(ret>=0?'up':'down'):''}>{ret!=null?`${fmtPct(ret)} (${fmtDollar(retDollar!)})`:'—'}</span>
               <span className={dayRet!=null?(dayRet>=0?'up':'down'):''}>{dayRet!=null?`${fmtPct(dayRet)} (${fmtDollar(dayRetDollar!)})`:'—'}</span>
-              <button className="ghost" onClick={()=>removeHolding(h)}>REMOVE</button>
+              {isEditing?<div style={{display:'flex',gap:6}}><button className="ghost" onClick={()=>saveEditHolding(h)}>SAVE</button><button className="ghost" onClick={cancelEditHolding}>CANCEL</button></div>:<div style={{display:'flex',gap:6}}><button className="ghost" onClick={()=>startEditHolding(h)}>EDIT</button><button className="ghost" onClick={()=>removeHolding(h)}>REMOVE</button></div>}
             </div>
           })}</div>
           {!holdings.length&&<div className="empty">No holdings yet. Add one manually or let the AI research the portfolio.</div>}
