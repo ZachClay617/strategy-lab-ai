@@ -56,19 +56,35 @@ export default function Portfolios(){
   const [editingId,setEditingId]=useState<string|null>(null)
   const [editShares,setEditShares]=useState('')
   const [editAvgCost,setEditAvgCost]=useState('')
+  const [view,setView]=useState<'overview'|'detail'>('overview')
+  const [allHoldings,setAllHoldings]=useState<Record<string,Holding[]>>({})
+  const [pendingResearchId,setPendingResearchId]=useState<string|null>(null)
 
   useEffect(()=>{if(!supabase)return;supabase.auth.getSession().then(({data})=>setSession(data.session));const {data}=supabase.auth.onAuthStateChange((_e,s)=>setSession(s));return()=>data.subscription.unsubscribe()},[])
   useEffect(()=>{if(session?.user)loadPortfolios()},[session?.user?.id])
   useEffect(()=>{if(selectedId)loadPortfolio(selectedId);else{setHoldings([]);setLog([]);setDescDraft('')}},[selectedId])
   useEffect(()=>{if(holdings.length)loadPrices(holdings.map(h=>h.symbol))},[holdings.map(h=>h.symbol).join(',')])
   useEffect(()=>{if(holdings.length)loadReturnSeries(holdings);else setReturnSeries([])},[holdings,prices])
+  useEffect(()=>{if(portfolios.length)loadAllHoldings();else setAllHoldings({})},[portfolios.map(p=>p.id).join(',')])
+  useEffect(()=>{
+    const symbols=Array.from(new Set(Object.values(allHoldings).flat().map(h=>h.symbol)))
+    if(symbols.length)loadPrices(symbols)
+  },[Object.values(allHoldings).flat().map(h=>h.symbol).join(',')])
+  useEffect(()=>{if(pendingResearchId&&selectedId===pendingResearchId){setPendingResearchId(null);runResearch()}},[holdings])
 
   async function loadPortfolios(){
     if(!supabase||!session?.user)return
     const {data,error}=await supabase.from('portfolios').select('*').eq('user_id',session.user.id).order('created_at',{ascending:false})
     if(error){setMsg(`Could not load portfolios: ${error.message}. Run migration_v9_portfolios.sql in Supabase.`);return}
     setPortfolios((data||[]) as Portfolio[])
-    if(!selectedId&&data?.length)setSelectedId(data[0].id)
+  }
+  async function loadAllHoldings(){
+    if(!supabase||!portfolios.length)return
+    const {data,error}=await supabase.from('portfolio_holdings').select('*').in('portfolio_id',portfolios.map(p=>p.id))
+    if(error)return
+    const grouped:Record<string,Holding[]>={}
+    for(const h of (data||[]) as Holding[])(grouped[h.portfolio_id]=grouped[h.portfolio_id]||[]).push(h)
+    setAllHoldings(grouped)
   }
   async function loadPortfolio(id:string){
     if(!supabase)return
@@ -213,6 +229,15 @@ export default function Portfolios(){
     await addLog(selectedId,'user','holding_removed',`Removed ${h.symbol} (was ${h.shares!=null?`${h.shares} shares`:`${h.weight}% weight`}).`,{symbol:h.symbol,weight:h.weight,shares:h.shares})
     await loadPortfolio(selectedId)
   }
+  function viewPortfolio(id:string){setSelectedId(id);setView('detail');setMsg('')}
+  function backToOverview(){setView('overview');setMsg('')}
+  function researchPortfolio(id:string){
+    const portfolio=portfolios.find(p=>p.id===id)
+    if(!portfolio?.description.trim()){setMsg('Add a description first so the AI knows what this portfolio should do.');return}
+    setView('detail')
+    if(selectedId===id)runResearch()
+    else{setSelectedId(id);setPendingResearchId(id)}
+  }
   async function runResearch(){
     if(!selectedId)return
     const portfolio=portfolios.find(p=>p.id===selectedId)
@@ -267,13 +292,33 @@ export default function Portfolios(){
     return s+(p.last-p.prevClose)*effectiveShares(h)
   },0)
 
+  function sumMetrics(list:Holding[]){
+    let value=0,costBasis=0,returnDollar=0,priorValue=0,dayReturnDollar=0
+    for(const h of list){
+      const p=prices[h.symbol];if(!p)continue
+      const sh=h.shares!=null?h.shares:1
+      value+=sh*p.last
+      if(h.entry_price){costBasis+=h.entry_price*sh;returnDollar+=(p.last-h.entry_price)*sh}
+      if(p.prevClose){priorValue+=p.prevClose*sh;dayReturnDollar+=(p.last-p.prevClose)*sh}
+    }
+    return {
+      holdings:list.length,
+      value,
+      returnPct:costBasis>0?returnDollar/costBasis*100:null,
+      returnDollar,
+      dayReturnPct:priorValue>0?dayReturnDollar/priorValue*100:null,
+      dayReturnDollar,
+    }
+  }
+  const overview=sumMetrics(Object.values(allHoldings).flat())
+
   return <div className="shell">
     <section className="hero"><div><div className="eyebrow">AI PORTFOLIO AUTOPILOT</div><h1>Describe it. <span>Track it.</span></h1><p className="muted">Give the AI a plain-language description of what you want a portfolio to do. It builds and maintains a real-symbol portfolio against that description, on your command, and logs every change.</p></div></section>
     {msg&&<p className="msg banner">{msg}</p>}
     <div className="grid">
       <section className="panel">
-        <div className="panel-title"><h2>YOUR PORTFOLIOS</h2></div>
-        <div className="table">{portfolios.map(p=><button key={p.id} className="row" style={{gridTemplateColumns:'1fr'}} onClick={()=>setSelectedId(p.id)}><div><strong>{p.name}</strong>{p.id===selectedId?<span> · selected</span>:null}<span className="how-it-works">{p.description||'No description yet.'}</span></div></button>)}</div>
+        <div className="panel-title"><h2>YOUR PORTFOLIOS</h2>{view==='detail'&&<button className="ghost" onClick={backToOverview}>← OVERVIEW</button>}</div>
+        <div className="table">{portfolios.map(p=><button key={p.id} className="row" style={{gridTemplateColumns:'1fr'}} onClick={()=>viewPortfolio(p.id)}><div><strong>{p.name}</strong>{p.id===selectedId&&view==='detail'?<span> · selected</span>:null}<span className="how-it-works">{p.description||'No description yet.'}</span></div></button>)}</div>
         {!portfolios.length&&<div className="empty">No portfolios yet. Create your first one below.</div>}
         <form onSubmit={createPortfolio}>
           <label>Portfolio name<input value={newName} onChange={e=>setNewName(e.target.value)} placeholder="e.g. Dividend Compounders" required/></label>
@@ -282,9 +327,44 @@ export default function Portfolios(){
         </form>
       </section>
       <section className="panel">
-        {!selected?<div className="empty">Select or create a portfolio to see its detail.</div>:<>
+        {view==='overview'?<>
+          <div className="panel-title"><h2>OVERVIEW</h2></div>
+          <div className="metrics" style={{gridTemplateColumns:'repeat(4,1fr)'}}>
+            <div><span>Total holdings tracked</span><b>{overview.holdings}</b></div>
+            <div><span>Total value</span><b>{overview.value>0?`$${overview.value.toFixed(2)}`:'—'}</b></div>
+            <div><span>TOTAL RETURN</span><b className={overview.returnPct==null?'':overview.returnPct>=0?'up':'down'}>{overview.returnPct==null?'—':`${fmtPct(overview.returnPct)} (${fmtDollar(overview.returnDollar)})`}</b></div>
+            <div><span>DAYS' RETURN</span><b className={overview.dayReturnPct==null?'':overview.dayReturnPct>=0?'up':'down'}>{overview.dayReturnPct==null?'—':`${fmtPct(overview.dayReturnPct)} (${fmtDollar(overview.dayReturnDollar)})`}</b></div>
+          </div>
+
+          <div className="section-label">YOUR PORTFOLIOS</div>
+          {portfolios.length>0&&<div className="row row-head" style={{gridTemplateColumns:'1.4fr .7fr .9fr 1.1fr 1.1fr .9fr .9fr'}}>
+            <span>Portfolio</span>
+            <span>Holdings</span>
+            <span>Total value</span>
+            <span>TOTAL RETURN</span>
+            <span>DAYS' RETURN</span>
+            <span>Created</span>
+            <span></span>
+          </div>}
+          <div className="table">{portfolios.map(p=>{
+            const m=sumMetrics(allHoldings[p.id]||[])
+            return <div className="row" key={p.id} style={{gridTemplateColumns:'1.4fr .7fr .9fr 1.1fr 1.1fr .9fr .9fr'}}>
+              <span><b>{p.name}</b><span className="how-it-works">{p.description||'No description yet.'}</span></span>
+              <span>{m.holdings}</span>
+              <span>{m.value>0?`$${m.value.toFixed(2)}`:'—'}</span>
+              <span className={m.returnPct==null?'':m.returnPct>=0?'up':'down'}>{m.returnPct==null?'—':`${fmtPct(m.returnPct)} (${fmtDollar(m.returnDollar)})`}</span>
+              <span className={m.dayReturnPct==null?'':m.dayReturnPct>=0?'up':'down'}>{m.dayReturnPct==null?'—':`${fmtPct(m.dayReturnPct)} (${fmtDollar(m.dayReturnDollar)})`}</span>
+              <span>{fmtDateTime(p.created_at)}</span>
+              <div style={{display:'flex',gap:6}}>
+                <button className="run" style={{marginTop:0}} onClick={()=>viewPortfolio(p.id)}>VIEW</button>
+                <button className="ghost" onClick={()=>researchPortfolio(p.id)}>🔍</button>
+              </div>
+            </div>
+          })}</div>
+          {!portfolios.length&&<div className="empty">No portfolios yet. Create your first one on the left.</div>}
+        </>:!selected?<div className="empty">Select or create a portfolio to see its detail.</div>:<>
           <div className="portfolio-sticky">
-            <div className="panel-title"><h2>{selected.name.toUpperCase()}</h2><span className="muted">Updated {fmtDateTime(selected.updated_at)}</span></div>
+            <div className="panel-title"><h2>{selected.name.toUpperCase()}</h2><span className="muted">Updated {fmtDateTime(selected.updated_at)}</span><button className="ghost" onClick={backToOverview}>← OVERVIEW</button></div>
             <div className="metrics" style={{gridTemplateColumns:'repeat(7,1fr)'}}>
               <div><span>Holdings</span><b>{holdings.length}</b></div>
               <div><span>Total weight</span><b>{totalWeight.toFixed(1)}%</b></div>
