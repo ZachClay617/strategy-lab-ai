@@ -175,11 +175,12 @@ export default function Portfolios(){
         {!selected?<div className="empty">Select or create a portfolio to see its detail.</div>:<>
           <div className="portfolio-sticky">
             <div className="panel-title"><h2>{selected.name.toUpperCase()}</h2><span className="muted">Updated {fmtDateTime(selected.updated_at)}</span></div>
-            <div className="metrics" style={{gridTemplateColumns:'repeat(5,1fr)'}}>
+            <div className="metrics" style={{gridTemplateColumns:'repeat(6,1fr)'}}>
               <div><span>Holdings</span><b>{holdings.length}</b></div>
               <div><span>Total weight</span><b>{totalWeight.toFixed(1)}%</b></div>
               <div><span>TOTAL RETURN</span><b className={portfolioReturn==null?'':portfolioReturn>=0?'up':'down'}>{portfolioReturn==null?'—':fmtPct(portfolioReturn)}</b></div>
               <div><span>DAYS' RETURN</span><b className={dayReturn==null?'':dayReturn>=0?'up':'down'}>{dayReturn==null?'—':fmtPct(dayReturn)}</b></div>
+              <div><span>Created</span><b>{fmtDateTime(selected.created_at)}</b></div>
               <div><span>Last AI research</span><b>{fmtDateTime(log.find(l=>l.action==='ai_rebalance')?.created_at)}</b></div>
             </div>
           </div>
