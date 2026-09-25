@@ -93,10 +93,10 @@ function describeFamily(family:string, p:any){
   return 'Custom rule set.'
 }
 
-function backtest(data:Candle[], family:string, p:any, maxHoldMs?:number){
-  let cash=STARTING_CAPITAL, qty=0, side:'LONG'|null=null, entry=0, entryIndex=0, wins=0, losses=0, trades=0, peak=cash, maxDD=0
+function backtest(data:Candle[], family:string, p:any, maxHoldMs?:number, startingCash:number=STARTING_CAPITAL){
+  let cash=startingCash, qty=0, side:'LONG'|null=null, entry=0, entryIndex=0, wins=0, losses=0, trades=0, peak=cash, maxDD=0
   const equity:number[]=[]; const tradeLog:Trade[]=[]
-  const riskFraction=.20
+  const riskFraction=.02
   const start=Math.max(3,p.slow,p.lookback)
   for(let i=start;i<data.length;i++){
     const c=data[i].close
@@ -113,14 +113,14 @@ function backtest(data:Candle[], family:string, p:any, maxHoldMs?:number){
     peak=Math.max(peak,mark);maxDD=Math.max(maxDD,(peak-mark)/Math.max(peak,1));equity.push(mark)
   }
   if(side){const c=data[data.length-1].close;const pnl=(c-entry)*qty;cash+=pnl;const win=pnl>=0;if(win)wins++;else losses++;trades++;tradeLog.push({side,entryIndex,exitIndex:data.length-1,entry,exit:c,qty,pnl,reason:'End-of-test liquidation.'})}
-  const ret=(cash/STARTING_CAPITAL-1)*100
+  const ret=(cash/startingCash-1)*100
   const winRate=trades?wins/trades*100:0
   const daily:number[]=[];for(let i=1;i<equity.length;i++)daily.push((equity[i]-equity[i-1])/Math.max(Math.abs(equity[i-1]),1))
   const mean=daily.reduce((a,b)=>a+b,0)/(daily.length||1);const sd=Math.sqrt(daily.reduce((a,b)=>a+(b-mean)**2,0)/(daily.length||1))||1
   const sharpe=mean/sd*Math.sqrt(252)
   const consistency=clamp(50+ret*.25-maxDD*100*.35+Math.min(trades,100)*.15,0,100)
   const score=clamp(ret*.35+winRate*.3+sharpe*10*.15+consistency*.15-(maxDD*100)*.25,0,100)
-  return {metrics:{returnPct:ret,winRate,maxDrawdownPct:maxDD*100,sharpe,consistency,trades,profit:cash-STARTING_CAPITAL,score,wins,losses},equity, trades:tradeLog, endingBalance:cash}
+  return {metrics:{returnPct:ret,winRate,maxDrawdownPct:maxDD*100,sharpe,consistency,trades,profit:cash-startingCash,score,wins,losses},equity, trades:tradeLog, endingBalance:cash}
 }
 // combines a strategy's per-session results into one set of metrics, so qualification (including minimum trades) applies to the whole strategy across every session it was tested on, not just one
 function aggregateMetrics(list:any[]){
@@ -243,10 +243,12 @@ export default function Home(){
  const speedRef=useRef(speedMs)
  useEffect(()=>{speedRef.current=speedMs},[speedMs])
  async function sleepSkippable(){
+   const total=speedRef.current
+   if(total<=20){await sleep(total);skipRef.current=false;return}
    const start=Date.now()
-   while(Date.now()-start<speedRef.current){
+   while(Date.now()-start<total){
      if(stopRef.current||skipRef.current)break
-     await sleep(20)
+     await sleep(Math.min(20,total-(Date.now()-start)))
    }
    skipRef.current=false
  }
@@ -312,7 +314,7 @@ export default function Home(){
    const index=completed+1;const family=families[Math.floor(r()*families.length)];const params=randomParams(r)
    let sessions:Session[]=[];let storedParams=params
    if(live){
-     const result=backtest(data,family,params)
+     const result=backtest(data,family,params,undefined,capital)
      sessions=[{candles:data,trades:result.trades,metrics:result.metrics,startDate:data[0]?.date,endDate:data[data.length-1]?.date,tier:'live'}]
    } else {
      const tier=pickTier(r)
@@ -321,14 +323,14 @@ export default function Home(){
        for(let n=0;n<minTrades;n++){
          const dk=sessionDayKeys[Math.floor(r()*sessionDayKeys.length)]
          const cds=sessionDayMap[dk];const p2=clampParamsToSession(params,cds.length);if(n===0)storedParams=p2
-         const res=backtest(cds,family,p2)
+         const res=backtest(cds,family,p2,undefined,capital)
          sessions.push({candles:cds,trades:res.trades,metrics:res.metrics,startDate:cds[0]?.date,endDate:cds[cds.length-1]?.date,tier:'15m'})
        }
      } else {
        const sourceData=tier.key==='1h'?hourlyData:dailyData;const holdMs=maxHoldMsFor(tier.key)
        for(let n=0;n<minTrades;n++){
          const slice=randomWindow(sourceData,r,tier.minutes);const p2=clampParamsToSession(params,slice.length);if(n===0)storedParams=p2
-         const res=backtest(slice,family,p2,holdMs)
+         const res=backtest(slice,family,p2,holdMs,capital)
          sessions.push({candles:slice,trades:res.trades,metrics:res.metrics,startDate:slice[0]?.date,endDate:slice[slice.length-1]?.date,tier:tier.key})
        }
      }
@@ -339,11 +341,12 @@ export default function Home(){
    const candidate={family,params:storedParams,result:{metrics:agg,trades:primary.trades},passed,reason:'',index,candles:primary.candles,startDate:primary.startDate,endDate:primary.endDate,sessions:sampleSessions,testedAt:new Date().toISOString()} as Candidate
    candidate.reason=explainCandidate(candidate,sessions.length)
    if(passed){qualified++;capital+=agg.profit;setBalance(capital);best.push(candidate);best.sort((a,b)=>b.result.metrics.score-a.result.metrics.score);if(best.length>25)best.pop()}
-   setActiveCandidate(candidate);setResearchCandles(primary.candles);setActiveTrades(primary.trades);setActiveIndex(primary.candles.length-1)
-   setTestLog(prev=>[candidate,...prev].slice(0,200))
+   const uiStride=speedRef.current<=2?25:speedRef.current<=10?5:1
+   if(passed||index===1||index%uiStride===0){setActiveCandidate(candidate);setResearchCandles(primary.candles);setActiveTrades(primary.trades);setActiveIndex(primary.candles.length-1);setTestLog(prev=>[candidate,...prev].slice(0,200))}
    if(index===1||index%250===0||passed){setFeed(f=>[`TEST #${index.toLocaleString()} · ${family} · ${passed?'QUALIFIED':'REJECTED'} · ${candidate.reason}`,...f].slice(0,80));await saveEvent(runId,`Test #${index.toLocaleString()} · ${family} · ${passed?'qualified':'rejected'} · ${candidate.reason}`,passed?'success':'info',index/total*100)}
    completed++
-   setProgress(completed/total*100);if(completed%500===0||completed===total){const {error}=await supabase.from('research_runs').update({tested_count:completed,qualified_count:qualified,current_balance:capital}).eq('id',runId);if(error)console.error('run progress update failed',error)}
+   if(completed%uiStride===0||completed===total)setProgress(completed/total*100)
+   if(completed%500===0||completed===total){const {error}=await supabase.from('research_runs').update({tested_count:completed,qualified_count:qualified,current_balance:capital}).eq('id',runId);if(error)console.error('run progress update failed',error)}
    if(stopRef.current)break outer
    await sleepSkippable()
  }
@@ -374,7 +377,7 @@ export default function Home(){
  return sessionsList.map((sess,si)=>{const range=sess.tier==='15m'?`${fmtDateTime(sess.startDate)} (${fmtClock(sess.startDate)}–${fmtClock(sess.endDate)} ET)`:`${fmtDateTime(sess.startDate)} → ${fmtDateTime(sess.endDate)}`;return <div className="session-block" key={si}><h4>Session {si+1} of {sessionsList.length} · {range} · real {tierLabel(sess.tier)} bars</h4><CandleChart candles={sess.candles} trades={sess.trades} activeIndex={sess.candles.length-1} windowSize={Math.min(sess.candles.length,20)} title={`${selected.symbol} · session ${si+1}`} indicator={indicatorSeries(sess.candles,selected.family,selected.parameters)}/><div className="section-label">EVERY TRADE THIS SESSION MADE</div><div className="trade-table">{sess.trades?.length?sess.trades.map((t,i)=>{const pct=(t.exit-t.entry)/t.entry*100;const entryDate=sess.candles?.[t.entryIndex]?.date;const exitDate=sess.candles?.[t.exitIndex]?.date;const held=entryDate&&exitDate?fmtDuration(new Date(exitDate).getTime()-new Date(entryDate).getTime()):'—';return <div className={`trade-row ${t.pnl>=0?'win':'loss'}`} key={i}><span>#{i+1}</span><span>{fmtDateTime(entryDate)}</span><span>BUY {fmtPrice(t.entry)}</span><span>{fmtDateTime(exitDate)}</span><span>SELL {fmtPrice(t.exit)}</span><span>Held {held}</span><span>{t.pnl>=0?'WIN':'LOSS'}</span><span>{pct>=0?'+':''}{pct.toFixed(2)}%</span><b>{fmtMoney(t.pnl)}</b></div>}):<div className="empty">No trades recorded.</div>}</div></div>})
  })()}
  </section>}
- <section className="panel"><div className="panel-title"><h2>SUCCESSFUL STRATEGY LOG</h2><span className="muted">Saved to Supabase · grouped by run</span></div><div className="metrics"><div><span>Approval rule</span><b>≥45% WR + positive return</b></div><div><span>Research capital</span><b>{fmtMoney(STARTING_CAPITAL)}</b></div><div><span>Position mode</span><b>Long only (buy/sell)</b></div><div><span>Market feed</span><b>Live chart</b></div></div>
+ <section className="panel"><div className="panel-title"><h2>SUCCESSFUL STRATEGY LOG</h2><span className="muted">Saved to Supabase · grouped by run</span></div><div className="metrics"><div><span>Approval rule</span><b>≥45% WR + positive return</b></div><div><span>Research capital</span><b>{fmtMoney(balance)}</b></div><div><span>Position mode</span><b>Long only, max 2% risk per trade</b></div><div><span>Market feed</span><b>Live chart</b></div></div>
  {strategies.length>0&&<label className="inline-select run-sort"><span>Sort runs by</span><select value={runSort} onChange={e=>setRunSort(e.target.value as typeof runSort)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="qualified">Most successful overall (qualified count)</option><option value="bestScore">Best single strategy score</option></select></label>}
  {strategies.length===0?<div className="empty">No successful strategies saved yet. Run the engine and qualified strategies will appear here.</div>:(()=>{
    const groups:Record<string,Strategy[]>={}
