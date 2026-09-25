@@ -9,6 +9,32 @@ type LogEntry = { id:string; created_at:string; actor:string; action:string; mes
 function fmtDateTime(iso?:string){if(!iso)return '—';return new Date(iso).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'})}
 function fmtPct(n:number){return `${n>=0?'+':''}${n.toFixed(2)}%`}
 
+function ReturnChart({points,title}:{points:{date:string;returnPct:number}[];title:string}){
+  if(points.length<2)return <div className="chart empty">Not enough price history yet to chart return over time.</div>
+  const w=1000,h=320,padL=64,padR=16,padT=20,padB=34
+  const values=points.map(p=>p.returnPct)
+  const min=Math.min(0,...values),max=Math.max(0,...values)
+  const spread=max-min||1,pricePad=spread*.1
+  const adjMin=min-pricePad,adjMax=max+pricePad,range=adjMax-adjMin||1
+  const x=(i:number)=>padL+(i/(Math.max(points.length-1,1)))*(w-padL-padR)
+  const y=(v:number)=>h-padB-((v-adjMin)/range)*(h-padT-padB)
+  const path=points.map((p,i)=>`${i===0?'M':'L'}${x(i).toFixed(1)} ${y(p.returnPct).toFixed(1)}`).join(' ')
+  const up=points[points.length-1].returnPct>=points[0].returnPct
+  const gridLines=4
+  const timeTickCount=Math.min(points.length,6)
+  const timeTicks=Array.from({length:timeTickCount}).map((_,k)=>{const i=Math.round(k*(points.length-1)/Math.max(1,timeTickCount-1));return {i,label:new Date(points[i].date).toLocaleDateString('en-US',{month:'short',day:'numeric'})}})
+  return <div className="chart-wrap rh">
+    <div className="chart-head"><div><b>{title}</b><span>RETURN % OVER TIME</span></div><strong className={up?'up':'down'}>{fmtPct(points[points.length-1].returnPct)}</strong></div>
+    <svg className="chart" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+      {Array.from({length:gridLines}).map((_,i)=>{const v=adjMin+(range*i)/(gridLines-1);const yy=y(v);return <g key={i}><line x1={padL} x2={w-padR} y1={yy} y2={yy} stroke="#ffffff" strokeOpacity=".06" strokeWidth="1"/><text x={padL-8} y={yy+4} fill="#6b7690" fontSize="11" textAnchor="end">{v.toFixed(1)}%</text></g>})}
+      {adjMin<0&&adjMax>0&&<line x1={padL} x2={w-padR} y1={y(0)} y2={y(0)} stroke="#8fa0b8" strokeDasharray="4 4" strokeWidth="1"/>}
+      <path d={path} fill="none" stroke={up?'#00c805':'#ff5000'} strokeWidth="2"/>
+      {points.map((p,i)=><g key={p.date}><circle cx={x(i)} cy={y(p.returnPct)} r="10" fill="transparent"><title>{`${new Date(p.date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}\nReturn: ${fmtPct(p.returnPct)}`}</title></circle><circle cx={x(i)} cy={y(p.returnPct)} r="3.5" fill={p.returnPct>=0?'#00c805':'#ff5000'} stroke="#05070d" strokeWidth="1.3" pointerEvents="none"/></g>)}
+      {timeTicks.map((t,k)=><text key={k} x={x(t.i)} y={h-10} fill="#6b7690" fontSize="11" textAnchor="middle">{t.label}</text>)}
+    </svg>
+  </div>
+}
+
 export default function Portfolios(){
   const [session,setSession]=useState<any>(null)
   const [portfolios,setPortfolios]=useState<Portfolio[]>([])
@@ -25,11 +51,13 @@ export default function Portfolios(){
   const [researching,setResearching]=useState(false)
   const [msg,setMsg]=useState('')
   const [proposal,setProposal]=useState<any>(null)
+  const [returnSeries,setReturnSeries]=useState<{date:string;returnPct:number}[]>([])
 
   useEffect(()=>{if(!supabase)return;supabase.auth.getSession().then(({data})=>setSession(data.session));const {data}=supabase.auth.onAuthStateChange((_e,s)=>setSession(s));return()=>data.subscription.unsubscribe()},[])
   useEffect(()=>{if(session?.user)loadPortfolios()},[session?.user?.id])
   useEffect(()=>{if(selectedId)loadPortfolio(selectedId);else{setHoldings([]);setLog([]);setDescDraft('')}},[selectedId])
   useEffect(()=>{if(holdings.length)loadPrices(holdings.map(h=>h.symbol))},[holdings.map(h=>h.symbol).join(',')])
+  useEffect(()=>{if(holdings.length)loadReturnSeries(holdings);else setReturnSeries([])},[holdings,prices])
 
   async function loadPortfolios(){
     if(!supabase||!session?.user)return
@@ -93,6 +121,42 @@ export default function Portfolios(){
       const j=await r.json()
       return Array.isArray(j)?j.map((c:any)=>c.close):[]
     }catch{return []}
+  }
+  async function fetchDailySeries(symbol:string, rangeDays:number):Promise<{date:string;close:number}[]>{
+    try{
+      const url=`/api/market?symbol=${encodeURIComponent(symbol)}&interval=1d&rangeDays=${rangeDays}`
+      const r=await fetch(url)
+      const j=await r.json()
+      return Array.isArray(j)?j.map((c:any)=>({date:String(c.date).slice(0,10),close:c.close})):[]
+    }catch{return []}
+  }
+  async function loadReturnSeries(list:Holding[]){
+    const withEntry=list.filter(h=>h.entry_price)
+    if(!withEntry.length){setReturnSeries([]);return}
+    const earliest=withEntry.reduce((min,h)=>h.added_at<min?h.added_at:min,withEntry[0].added_at)
+    const daysSince=Math.max(5,Math.ceil((Date.now()-new Date(earliest).getTime())/86400000)+2)
+    const rangeDays=Math.min(3650,daysSince)
+    const perSymbol=await Promise.all(withEntry.map(async h=>({symbol:h.symbol,series:await fetchDailySeries(h.symbol,rangeDays)})))
+    const dateSet=new Set<string>()
+    for(const s of perSymbol)for(const c of s.series)dateSet.add(c.date)
+    const dates=Array.from(dateSet).sort()
+    const points:{date:string;returnPct:number}[]=[]
+    for(const dateKey of dates){
+      let weightedSum=0,weightTotal=0
+      for(const h of withEntry){
+        if(h.added_at.slice(0,10)>dateKey)continue
+        const s=perSymbol.find(x=>x.symbol===h.symbol);if(!s)continue
+        let close:number|null=null
+        for(const c of s.series){if(c.date<=dateKey)close=c.close;else break}
+        if(close==null)continue
+        const w=weightOf(h)
+        if(!(w>0))continue
+        weightedSum+=((close/h.entry_price!)-1)*100*w
+        weightTotal+=w
+      }
+      if(weightTotal>0)points.push({date:dateKey,returnPct:weightedSum/weightTotal})
+    }
+    setReturnSeries(points)
   }
   async function addHolding(e:React.FormEvent){
     e.preventDefault();if(!supabase||!selectedId||!addSymbol.trim())return
@@ -214,6 +278,9 @@ export default function Portfolios(){
             </div>
           })}</div>
           {!holdings.length&&<div className="empty">No holdings yet. Add one manually or let the AI research the portfolio.</div>}
+
+          <div className="section-label">RETURN OVER TIME</div>
+          <ReturnChart points={returnSeries} title={`${selected.name.toUpperCase()} · TOTAL RETURN`}/>
 
           <div className="section-label">ADD A STOCK</div>
           <form onSubmit={addHolding}>
