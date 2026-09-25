@@ -337,27 +337,29 @@ export default function Portfolios(){
           </div>
 
           <div className="section-label">YOUR PORTFOLIOS</div>
-          {portfolios.length>0&&<div className="row row-head" style={{gridTemplateColumns:'minmax(0,1.4fr) minmax(0,.7fr) minmax(0,.9fr) minmax(0,1.1fr) minmax(0,1.1fr) minmax(0,.9fr) minmax(0,.9fr)'}}>
-            <span>Portfolio</span>
-            <span>Holdings</span>
-            <span>Total value</span>
-            <span>TOTAL RETURN</span>
-            <span>DAYS' RETURN</span>
-            <span>Created</span>
-            <span></span>
-          </div>}
-          <div className="table">{portfolios.map(p=>{
+          <div className="portfolio-cards">{portfolios.map(p=>{
             const m=sumMetrics(allHoldings[p.id]||[])
-            return <div className="row" key={p.id} style={{gridTemplateColumns:'minmax(0,1.4fr) minmax(0,.7fr) minmax(0,.9fr) minmax(0,1.1fr) minmax(0,1.1fr) minmax(0,.9fr) minmax(0,.9fr)'}}>
-              <span style={{minWidth:0,overflow:'hidden'}}><b>{p.name}</b><span className="how-it-works" style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'100%'}}>{p.description||'No description yet.'}</span></span>
-              <span>{m.holdings}</span>
-              <span>{m.value>0?`$${m.value.toFixed(2)}`:'—'}</span>
-              <span className={m.returnPct==null?'':m.returnPct>=0?'up':'down'}>{m.returnPct==null?'—':`${fmtPct(m.returnPct)} (${fmtDollar(m.returnDollar)})`}</span>
-              <span className={m.dayReturnPct==null?'':m.dayReturnPct>=0?'up':'down'}>{m.dayReturnPct==null?'—':`${fmtPct(m.dayReturnPct)} (${fmtDollar(m.dayReturnDollar)})`}</span>
-              <span>{fmtDateTime(p.created_at)}</span>
-              <div style={{display:'flex',gap:6,minWidth:0}}>
-                <button className="run" style={{marginTop:0}} onClick={()=>viewPortfolio(p.id)}>VIEW</button>
-                <button className="ghost" onClick={()=>researchPortfolio(p.id)}>🔍</button>
+            const retUp=m.returnPct!=null&&m.returnPct>=0
+            const dayUp=m.dayReturnPct!=null&&m.dayReturnPct>=0
+            return <div className={`portfolio-card ${m.returnPct==null?'':retUp?'card-up':'card-down'}`} key={p.id} onClick={()=>viewPortfolio(p.id)}>
+              <div className="portfolio-card-glow"/>
+              <div className="portfolio-card-grid"/>
+              <div className="portfolio-card-head">
+                <div><div className="portfolio-card-name">{p.name}</div><div className="how-it-works">{p.description||'No description yet.'}</div></div>
+                <div className={`portfolio-card-badge ${m.returnPct==null?'':retUp?'up':'down'}`}>{m.returnPct==null?'UNTRACKED':retUp?'▲ UP':'▼ DOWN'}</div>
+              </div>
+              <div className="portfolio-card-stats">
+                <div><span>Holdings</span><b>{m.holdings}</b></div>
+                <div><span>Total value</span><b>{m.value>0?`$${m.value.toFixed(2)}`:'—'}</b></div>
+                <div><span>TOTAL RETURN</span><b className={m.returnPct==null?'':retUp?'up':'down'}>{m.returnPct==null?'—':fmtPct(m.returnPct)}</b><em className={m.returnPct==null?'':retUp?'up':'down'}>{m.returnPct==null?'':fmtDollar(m.returnDollar)}</em></div>
+                <div><span>DAYS' RETURN</span><b className={m.dayReturnPct==null?'':dayUp?'up':'down'}>{m.dayReturnPct==null?'—':fmtPct(m.dayReturnPct)}</b><em className={m.dayReturnPct==null?'':dayUp?'up':'down'}>{m.dayReturnPct==null?'':fmtDollar(m.dayReturnDollar)}</em></div>
+              </div>
+              <div className="portfolio-card-foot">
+                <span>Created {fmtDateTime(p.created_at)}</span>
+                <div className="portfolio-card-actions" onClick={e=>e.stopPropagation()}>
+                  <button className="run" style={{marginTop:0}} onClick={()=>viewPortfolio(p.id)}>OPEN →</button>
+                  <button className="ghost" onClick={()=>researchPortfolio(p.id)}>🔍 RESEARCH</button>
+                </div>
               </div>
             </div>
           })}</div>
