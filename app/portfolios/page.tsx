@@ -301,6 +301,20 @@ export default function Portfolios(){
     await addLog(selectedId,'user','holding_removed',`Removed ${h.symbol} (was ${h.shares!=null?`${h.shares} shares`:`${h.weight}% weight`}).`,{symbol:h.symbol,weight:h.weight,shares:h.shares})
     await loadPortfolio(selectedId)
   }
+  async function deleteClosedTrade(ct:ClosedTrade){
+    if(!supabase||!selectedId)return
+    const {error}=await supabase.from('portfolio_realized_trades').delete().eq('id',ct.id)
+    if(error){setMsg(`Could not remove that trade from history: ${error.message}`);return}
+    await addLog(selectedId,'user','trade_history_removed',`Removed ${ct.symbol} (${ct.shares} sh, ${fmtDollar(ct.realized_pl)}) from realized trade history — no longer counted toward total return. Use this if a holding was added by accident.`,{symbol:ct.symbol,shares:ct.shares,entryPrice:ct.entry_price,exitPrice:ct.exit_price,realizedPl:ct.realized_pl})
+    await loadPortfolio(selectedId)
+  }
+  async function clearTradeHistory(){
+    if(!supabase||!selectedId||!closedTrades.length)return
+    const {error}=await supabase.from('portfolio_realized_trades').delete().eq('portfolio_id',selectedId)
+    if(error){setMsg(`Could not clear trade history: ${error.message}`);return}
+    await addLog(selectedId,'user','trade_history_cleared',`Cleared all ${closedTrades.length} realized trade(s) from this portfolio's history — total return no longer includes past sells.`,{count:closedTrades.length})
+    await loadPortfolio(selectedId)
+  }
   function toggleDesc(id:string,e:React.MouseEvent){e.stopPropagation();setExpandedDesc(prev=>({...prev,[id]:!prev[id]}))}
   function viewPortfolio(id:string){setSelectedId(id);setView('detail');setMsg('')}
   function backToOverview(){setView('overview');setMsg('')}
@@ -519,6 +533,37 @@ export default function Portfolios(){
             </div>
           })}</div>
           {!holdings.length&&<div className="empty">No holdings yet. Add one manually or let the AI research the portfolio.</div>}
+
+          <div className="panel-title" style={{marginBottom:8,marginTop:18}}>
+            <h2 className="section-label" style={{margin:0}}>TRADE HISTORY (SOLD POSITIONS)</h2>
+            {closedTrades.length>0&&<button className="ghost" onClick={clearTradeHistory}>CLEAR ALL</button>}
+          </div>
+          {closedTrades.length>0&&<>
+            <p className="tiny">Counted toward TOTAL RETURN and REALIZED RETURN above and in the chart below. Added a stock by accident and sold it to clean up? Remove it here so it stops being counted.</p>
+            <div className="row row-head" style={{gridTemplateColumns:'.7fr .6fr .8fr .8fr 1.1fr 1fr .6fr'}}>
+              <span>Symbol</span>
+              <span>Shares</span>
+              <span>Entry</span>
+              <span>Exit</span>
+              <span>Realized P/L</span>
+              <span>Closed</span>
+              <span></span>
+            </div>
+            <div className="table">{closedTrades.map(ct=>{
+              const pl=ct.realized_pl
+              const plPct=ct.entry_price>0?(ct.exit_price/ct.entry_price-1)*100:null
+              return <div className="row" key={ct.id} style={{gridTemplateColumns:'.7fr .6fr .8fr .8fr 1.1fr 1fr .6fr'}}>
+                <span><b>{ct.symbol}</b></span>
+                <span>{ct.shares}</span>
+                <span>${ct.entry_price.toFixed(2)}</span>
+                <span>${ct.exit_price.toFixed(2)}</span>
+                <span className={pl>=0?'up':'down'}>{fmtDollar(pl)}{plPct!=null?` (${fmtPct(plPct)})`:''}</span>
+                <span>{fmtDateTime(ct.closed_at)}</span>
+                <button className="ghost" onClick={()=>deleteClosedTrade(ct)} title="Remove this trade so it no longer counts toward total return">REMOVE</button>
+              </div>
+            })}</div>
+          </>}
+          {!closedTrades.length&&<div className="empty">No closed trades yet — sells will show up here.</div>}
 
           <div className="section-label">RETURN OVER TIME</div>
           <ReturnChart points={liveReturnSeries} title={`${selected.name.toUpperCase()} · TOTAL RETURN`}/>
