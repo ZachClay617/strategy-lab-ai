@@ -431,7 +431,7 @@ export default function Portfolios(){
         <form onSubmit={createPortfolio}>
           <label>Portfolio name<input value={newName} onChange={e=>setNewName(e.target.value)} placeholder="e.g. Dividend Compounders" required/></label>
           <label>Description — tell the AI what this portfolio should do<textarea value={newDesc} onChange={e=>setNewDesc(e.target.value)} placeholder="e.g. Aggressive growth tech and AI names, willing to accept high volatility for upside."/></label>
-          <button className="run" type="submit">+ MAKE A-TAMP GENERATE PORTFOLIO</button>
+          <button className="run cta-glow" type="submit">+ MAKE A-TAMP GENERATE PORTFOLIO</button>
         </form>
       </section>
       <section className="panel">
@@ -473,7 +473,7 @@ export default function Portfolios(){
               <div className="portfolio-card-foot">
                 <span>Created {fmtDateTime(p.created_at)}</span>
                 <div className="portfolio-card-actions" onClick={e=>e.stopPropagation()}>
-                  <button className="run" style={{marginTop:0}} onClick={()=>viewPortfolio(p.id)}>OPEN →</button>
+                  <button className="run cta-glow" style={{marginTop:0}} onClick={()=>viewPortfolio(p.id)}>OPEN →</button>
                   <button className="ghost" onClick={()=>researchPortfolio(p.id)} title="Costs real money — calls a paid AI model">A-TAMP</button>
                 </div>
               </div>

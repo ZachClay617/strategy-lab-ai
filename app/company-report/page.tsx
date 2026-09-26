@@ -190,7 +190,7 @@ export default function CompanyReportPage() {
     <section className="panel">
       <form onSubmit={generate} className="add-holding-grid" style={{ gridTemplateColumns: '2fr 1fr', alignItems: 'end' }}>
         <label>Ticker symbol<input value={symbol} onChange={e => setSymbol(e.target.value.toUpperCase())} placeholder="e.g. AAPL (stocks and ETFs only, not crypto)" required /></label>
-        <button className="run" type="submit" disabled={loading} style={{ marginTop: 0 }}>{loading ? 'GENERATING…' : 'MAKE A-TAMP GENERATE COMPANY REPORT'}</button>
+        <button className="run cta-glow" type="submit" disabled={loading} style={{ marginTop: 0 }}>{loading ? 'GENERATING…' : 'MAKE A-TAMP GENERATE COMPANY REPORT'}</button>
       </form>
       <p className="field-warning">Running this costs real money — it calls a paid AI model to write the analysis sections of the report.</p>
       {!session && <p className="muted" style={{ marginTop: 12 }}>Log in on the <a href="/research">Research</a> page to save reports and revisit them here later.</p>}
