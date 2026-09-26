@@ -9,6 +9,7 @@ import { fetchLastPrice } from '@/lib/market'
 export const dynamic = 'force-dynamic'
 
 type Holding = { id:string; portfolio_id:string; symbol:string; weight:number; entry_price:number|null; shares:number|null }
+type ClosedTrade = { portfolio_id:string; shares:number; entry_price:number; realized_pl:number }
 
 function isAuthorized(req:NextRequest){
   const secret=process.env.CRON_SECRET
@@ -34,6 +35,9 @@ export async function GET(req:NextRequest){
   const {data:holdings,error:hErr}=await admin.from('portfolio_holdings').select('id,portfolio_id,symbol,weight,entry_price,shares')
   if(hErr)return NextResponse.json({error:hErr.message},{status:500})
 
+  const {data:closedTrades,error:cErr}=await admin.from('portfolio_realized_trades').select('portfolio_id,shares,entry_price,realized_pl')
+  if(cErr)return NextResponse.json({error:cErr.message},{status:500})
+
   const bySymbol=new Map<string,number|null>()
   for(const h of (holdings||[]) as Holding[])if(!bySymbol.has(h.symbol))bySymbol.set(h.symbol,null)
   await Promise.all(Array.from(bySymbol.keys()).map(async sym=>{
@@ -46,22 +50,31 @@ export async function GET(req:NextRequest){
     const list=holdingsByPortfolio.get(h.portfolio_id)||[]
     list.push(h);holdingsByPortfolio.set(h.portfolio_id,list)
   }
+  const closedByPortfolio=new Map<string,ClosedTrade[]>()
+  for(const c of (closedTrades||[]) as ClosedTrade[]){
+    const list=closedByPortfolio.get(c.portfolio_id)||[]
+    list.push(c);closedByPortfolio.set(c.portfolio_id,list)
+  }
 
+  // All-time return: unrealized gain/loss on open holdings plus realized
+  // gain/loss already locked in from past (sold) trades, as a share of
+  // everything ever invested — mirrors the frontend's all-time calculation
+  // so closing a position doesn't erase its contribution to performance.
   const rows:{portfolio_id:string;user_id:string;return_pct:number}[]=[]
   for(const p of portfolios){
     const list=holdingsByPortfolio.get(p.id)||[]
-    if(!list.length)continue
-    const holdingValue=(h:Holding)=>{const price=bySymbol.get(h.symbol);return h.shares!=null&&price!=null?h.shares*price:null}
-    const sharesValueTotal=list.reduce((s,h)=>{const v=holdingValue(h);return v!=null?s+v:s},0)
-    const weightOf=(h:Holding)=>{const v=holdingValue(h);return v!=null&&sharesValueTotal>0?v/sharesValueTotal*100:h.weight}
-    const trackedWeight=list.reduce((s,h)=>{const price=bySymbol.get(h.symbol);return price!=null&&h.entry_price?s+weightOf(h):s},0)
-    if(!(trackedWeight>0))continue
-    const returnPct=list.reduce((s,h)=>{
-      const price=bySymbol.get(h.symbol);if(price==null||!h.entry_price)return s
-      const ret=(price/h.entry_price-1)*100
-      return s+ret*(weightOf(h)/trackedWeight)
-    },0)
-    rows.push({portfolio_id:p.id,user_id:p.user_id,return_pct:returnPct})
+    const closed=closedByPortfolio.get(p.id)||[]
+    if(!list.length&&!closed.length)continue
+    let gainDollar=0,costBasis=0
+    for(const h of list){
+      const price=bySymbol.get(h.symbol);if(price==null||!h.entry_price)continue
+      const sh=h.shares!=null?h.shares:1
+      costBasis+=h.entry_price*sh
+      gainDollar+=(price-h.entry_price)*sh
+    }
+    for(const c of closed){costBasis+=c.entry_price*c.shares;gainDollar+=c.realized_pl}
+    if(!(costBasis>0))continue
+    rows.push({portfolio_id:p.id,user_id:p.user_id,return_pct:gainDollar/costBasis*100})
   }
 
   if(rows.length){

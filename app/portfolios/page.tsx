@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 
 type Portfolio = { id:string; name:string; description:string; created_at:string; updated_at:string }
 type Holding = { id:string; portfolio_id:string; symbol:string; weight:number; added_by:string; added_at:string; entry_price?:number|null; shares?:number|null }
+type ClosedTrade = { id:string; portfolio_id:string; symbol:string; shares:number; entry_price:number; exit_price:number; realized_pl:number; opened_at:string; closed_at:string }
 type LogEntry = { id:string; created_at:string; actor:string; action:string; message:string; detail:any }
 
 function fmtDateTime(iso?:string){if(!iso)return '—';return new Date(iso).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'})}
@@ -41,6 +42,8 @@ export default function Portfolios(){
   const [portfolios,setPortfolios]=useState<Portfolio[]>([])
   const [selectedId,setSelectedId]=useState<string|null>(null)
   const [holdings,setHoldings]=useState<Holding[]>([])
+  const [closedTrades,setClosedTrades]=useState<ClosedTrade[]>([])
+  const [allClosedTrades,setAllClosedTrades]=useState<Record<string,ClosedTrade[]>>({})
   const [log,setLog]=useState<LogEntry[]>([])
   const [prices,setPrices]=useState<Record<string,{last:number;prevClose:number|null}>>({})
   const [names,setNames]=useState<Record<string,string>>({})
@@ -72,7 +75,7 @@ export default function Portfolios(){
     const symbols=holdings.map(h=>h.symbol).filter(sym=>!(sym in names))
     if(symbols.length)loadNames(symbols)
   },[holdings.map(h=>h.symbol).join(',')])
-  useEffect(()=>{if(holdings.length)loadReturnSeries(holdings);else setReturnSeries([])},[holdings])
+  useEffect(()=>{if(holdings.length||closedTrades.length)loadReturnSeries(holdings,closedTrades);else setReturnSeries([])},[holdings,closedTrades])
   useEffect(()=>{
     if(!(view==='detail'&&selectedId&&holdings.length))return
     const symbols=holdings.map(h=>h.symbol)
@@ -94,20 +97,31 @@ export default function Portfolios(){
   }
   async function loadAllHoldings(){
     if(!supabase||!portfolios.length)return
-    const {data,error}=await supabase.from('portfolio_holdings').select('*').in('portfolio_id',portfolios.map(p=>p.id))
-    if(error)return
-    const grouped:Record<string,Holding[]>={}
-    for(const h of (data||[]) as Holding[])(grouped[h.portfolio_id]=grouped[h.portfolio_id]||[]).push(h)
-    setAllHoldings(grouped)
+    const [{data,error},{data:closed,error:closedErr}]=await Promise.all([
+      supabase.from('portfolio_holdings').select('*').in('portfolio_id',portfolios.map(p=>p.id)),
+      supabase.from('portfolio_realized_trades').select('*').in('portfolio_id',portfolios.map(p=>p.id)),
+    ])
+    if(!error){
+      const grouped:Record<string,Holding[]>={}
+      for(const h of (data||[]) as Holding[])(grouped[h.portfolio_id]=grouped[h.portfolio_id]||[]).push(h)
+      setAllHoldings(grouped)
+    }
+    if(!closedErr){
+      const groupedClosed:Record<string,ClosedTrade[]>={}
+      for(const c of (closed||[]) as ClosedTrade[])(groupedClosed[c.portfolio_id]=groupedClosed[c.portfolio_id]||[]).push(c)
+      setAllClosedTrades(groupedClosed)
+    }
   }
   async function loadPortfolio(id:string){
     if(!supabase)return
-    const [{data:h,error:hErr},{data:l,error:lErr}]=await Promise.all([
+    const [{data:h,error:hErr},{data:l,error:lErr},{data:c,error:cErr}]=await Promise.all([
       supabase.from('portfolio_holdings').select('*').eq('portfolio_id',id).order('weight',{ascending:false}),
       supabase.from('portfolio_log').select('*').eq('portfolio_id',id).order('created_at',{ascending:false}).limit(200),
+      supabase.from('portfolio_realized_trades').select('*').eq('portfolio_id',id).order('closed_at',{ascending:true}),
     ])
     if(hErr||lErr){setMsg(`Could not load portfolio detail: ${hErr?.message||lErr?.message}`);return}
     setHoldings((h||[]) as Holding[]);setLog((l||[]) as LogEntry[])
+    setClosedTrades(cErr?[]:(c||[]) as ClosedTrade[])
     const p=portfolios.find(x=>x.id===id);setDescDraft(p?.description||'');setNameDraft(p?.name||'')
   }
   async function loadPrices(symbols:string[]){
@@ -179,9 +193,9 @@ export default function Portfolios(){
       return Array.isArray(j)?j.map((c:any)=>({date:String(c.date).slice(0,10),close:c.close})):[]
     }catch{return []}
   }
-  async function loadReturnSeries(list:Holding[]){
+  async function loadReturnSeries(list:Holding[],closed:ClosedTrade[]){
     const withEntry=list.filter(h=>h.entry_price)
-    if(!withEntry.length){setReturnSeries([]);return}
+    if(!withEntry.length&&!closed.length){setReturnSeries([]);return}
 
     // Snapshots are written every ~15 minutes by a server-side cron job (see
     // /api/cron/portfolio-snapshots) so the chart keeps gaining real data points
@@ -194,29 +208,49 @@ export default function Portfolios(){
       if(snaps?.length)snapshotPoints=snaps.map(s=>({date:s.taken_at as string,returnPct:Number(s.return_pct)}))
     }
 
-    const earliest=withEntry.reduce((min,h)=>h.added_at<min?h.added_at:min,withEntry[0].added_at)
+    const openDates=withEntry.map(h=>h.added_at)
+    const closedDates=closed.map(c=>c.opened_at)
+    const allStartDates=[...openDates,...closedDates]
+    if(!allStartDates.length){setReturnSeries([]);return}
+    const earliest=allStartDates.reduce((min,d)=>d<min?d:min,allStartDates[0])
     const backfillEnd=snapshotPoints.length?snapshotPoints[0].date.slice(0,10):null
     const daysSince=Math.max(5,Math.ceil((Date.now()-new Date(earliest).getTime())/86400000)+2)
     const rangeDays=Math.min(3650,daysSince)
-    const perSymbol=await Promise.all(withEntry.map(async h=>({symbol:h.symbol,series:await fetchDailySeries(h.symbol,rangeDays)})))
+    const symbolsNeeded=Array.from(new Set([...withEntry.map(h=>h.symbol),...closed.map(c=>c.symbol)]))
+    const perSymbol=await Promise.all(symbolsNeeded.map(async sym=>({symbol:sym,series:await fetchDailySeries(sym,rangeDays)})))
+    const closeAt=(sym:string,dateKey:string):number|null=>{
+      const s=perSymbol.find(x=>x.symbol===sym);if(!s)return null
+      let close:number|null=null
+      for(const c of s.series){if(c.date<=dateKey)close=c.close;else break}
+      return close
+    }
     const dateSet=new Set<string>()
     for(const s of perSymbol)for(const c of s.series)if(!backfillEnd||c.date<backfillEnd)dateSet.add(c.date)
     const dates=Array.from(dateSet).sort()
+    // All-time return at each date: unrealized gain on still-open positions
+    // (priced as of that date) plus realized gain already locked in from
+    // trades closed by that date, as a share of everything invested by then —
+    // so a sold position's contribution to performance never disappears.
     const backfillPoints:{date:string;returnPct:number}[]=[]
     for(const dateKey of dates){
-      let weightedSum=0,weightTotal=0
+      let gainDollar=0,costBasis=0
       for(const h of withEntry){
         if(h.added_at.slice(0,10)>dateKey)continue
-        const s=perSymbol.find(x=>x.symbol===h.symbol);if(!s)continue
-        let close:number|null=null
-        for(const c of s.series){if(c.date<=dateKey)close=c.close;else break}
+        const sh=h.shares!=null?h.shares:1
+        costBasis+=h.entry_price!*sh
+        const close=closeAt(h.symbol,dateKey)
         if(close==null)continue
-        const w=weightOf(h)
-        if(!(w>0))continue
-        weightedSum+=((close/h.entry_price!)-1)*100*w
-        weightTotal+=w
+        gainDollar+=(close-h.entry_price!)*sh
       }
-      if(weightTotal>0)backfillPoints.push({date:dateKey+'T12:00:00.000Z',returnPct:weightedSum/weightTotal})
+      for(const c of closed){
+        if(c.opened_at.slice(0,10)>dateKey)continue
+        costBasis+=c.entry_price*c.shares
+        if(dateKey>=c.closed_at.slice(0,10)){gainDollar+=c.realized_pl;continue}
+        const close=closeAt(c.symbol,dateKey)
+        if(close==null)continue
+        gainDollar+=(close-c.entry_price)*c.shares
+      }
+      if(costBasis>0)backfillPoints.push({date:dateKey+'T12:00:00.000Z',returnPct:gainDollar/costBasis*100})
     }
     setReturnSeries([...backfillPoints,...snapshotPoints])
   }
@@ -253,6 +287,15 @@ export default function Portfolios(){
   }
   async function removeHolding(h:Holding){
     if(!supabase||!selectedId)return
+    const sh=h.shares!=null?h.shares:1
+    const exitPrice=prices[h.symbol]?.last??(await fetchLastPrice(h.symbol))
+    if(h.entry_price!=null&&exitPrice!=null&&session?.user){
+      const realizedPl=(exitPrice-h.entry_price)*sh
+      await supabase.from('portfolio_realized_trades').insert({
+        portfolio_id:selectedId,user_id:session.user.id,symbol:h.symbol,shares:sh,
+        entry_price:h.entry_price,exit_price:exitPrice,realized_pl:realizedPl,opened_at:h.added_at,
+      })
+    }
     const {error}=await supabase.from('portfolio_holdings').delete().eq('id',h.id)
     if(error){setMsg(`Could not remove ${h.symbol}: ${error.message}`);return}
     await addLog(selectedId,'user','holding_removed',`Removed ${h.symbol} (was ${h.shares!=null?`${h.shares} shares`:`${h.weight}% weight`}).`,{symbol:h.symbol,weight:h.weight,shares:h.shares})
@@ -301,16 +344,17 @@ export default function Portfolios(){
   const weightOf=(h:Holding)=>{const v=holdingValue(h);return v!=null&&sharesValueTotal>0?v/sharesValueTotal*100:h.weight}
   const totalValue=sharesValueTotal
   const totalWeight=holdings.reduce((s,h)=>s+weightOf(h),0)
-  const trackedWeight=holdings.reduce((s,h)=>prices[h.symbol]&&h.entry_price?s+weightOf(h):s,0)
-  const portfolioReturn=trackedWeight?holdings.reduce((s,h)=>{
-    const p=prices[h.symbol];if(!p||!h.entry_price)return s
-    const ret=(p.last/h.entry_price-1)*100
-    return s+ret*(weightOf(h)/trackedWeight)
-  },0):null
-  const portfolioReturnDollar=holdings.reduce((s,h)=>{
-    const p=prices[h.symbol];if(!p||!h.entry_price)return s
-    return s+(p.last-h.entry_price)*effectiveShares(h)
-  },0)
+  // All-time total return: unrealized gain/loss on currently open holdings
+  // PLUS realized gain/loss already locked in from past (sold) trades, as a
+  // share of everything ever invested — so closing a position doesn't erase
+  // its contribution to the portfolio's real, all-time performance.
+  const openCostBasis=holdings.reduce((s,h)=>{const p=prices[h.symbol];return p&&h.entry_price?s+h.entry_price*effectiveShares(h):s},0)
+  const openGainDollar=holdings.reduce((s,h)=>{const p=prices[h.symbol];return p&&h.entry_price?s+(p.last-h.entry_price)*effectiveShares(h):s},0)
+  const realizedCostBasis=closedTrades.reduce((s,c)=>s+c.entry_price*c.shares,0)
+  const realizedGainDollar=closedTrades.reduce((s,c)=>s+c.realized_pl,0)
+  const portfolioCostBasis=openCostBasis+realizedCostBasis
+  const portfolioReturnDollar=openGainDollar+realizedGainDollar
+  const portfolioReturn=portfolioCostBasis>0?portfolioReturnDollar/portfolioCostBasis*100:null
   const liveReturnSeries=(()=>{
     if(portfolioReturn==null)return returnSeries
     const nowPoint={date:new Date().toISOString(),returnPct:portfolioReturn}
@@ -329,7 +373,7 @@ export default function Portfolios(){
     return s+(p.last-p.prevClose)*effectiveShares(h)
   },0)
 
-  function sumMetrics(list:Holding[]){
+  function sumMetrics(list:Holding[],closed:ClosedTrade[]=[]){
     let value=0,costBasis=0,returnDollar=0,priorValue=0,dayReturnDollar=0
     for(const h of list){
       const p=prices[h.symbol];if(!p)continue
@@ -338,6 +382,7 @@ export default function Portfolios(){
       if(h.entry_price){costBasis+=h.entry_price*sh;returnDollar+=(p.last-h.entry_price)*sh}
       if(p.prevClose){priorValue+=p.prevClose*sh;dayReturnDollar+=(p.last-p.prevClose)*sh}
     }
+    for(const c of closed){costBasis+=c.entry_price*c.shares;returnDollar+=c.realized_pl}
     return {
       holdings:list.length,
       value,
@@ -347,7 +392,7 @@ export default function Portfolios(){
       dayReturnDollar,
     }
   }
-  const overview=sumMetrics(Object.values(allHoldings).flat())
+  const overview=sumMetrics(Object.values(allHoldings).flat(),Object.values(allClosedTrades).flat())
 
   return <div className="shell portfolios-page">
     <section className="hero"><div><div className="eyebrow">AI PORTFOLIO AUTOPILOT</div><h1>Describe it. Track it. <span>Visualize it.</span></h1><p className="muted">Give the AI a plain-language description of what you want a portfolio to do. It builds and maintains a real-symbol portfolio against that description, on your command, and logs every change.</p></div></section>
@@ -375,7 +420,7 @@ export default function Portfolios(){
 
           <div className="section-label overview-label"><b>YOUR PORTFOLIOS</b></div>
           <div className="portfolio-cards">{portfolios.map(p=>{
-            const m=sumMetrics(allHoldings[p.id]||[])
+            const m=sumMetrics(allHoldings[p.id]||[],allClosedTrades[p.id]||[])
             const retUp=m.returnPct!=null&&m.returnPct>=0
             const dayUp=m.dayReturnPct!=null&&m.dayReturnPct>=0
             return <div className={`portfolio-card ${m.returnPct==null?'':retUp?'card-up':'card-down'}`} key={p.id}>
