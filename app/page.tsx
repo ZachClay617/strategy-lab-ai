@@ -294,7 +294,7 @@ export default function Home(){
  async function loadData(){
    if(!supabase||!session?.user)return
    const isJwtIssue=(e:any)=>{const m=(e?.message||'').toLowerCase();return m.includes('jwt')||m.includes('token')}
-   const fetchAll=()=>Promise.all([supabase!.from('strategies').select('*').eq('user_id',session.user.id).order('score',{ascending:false}).limit(200),supabase!.from('research_runs').select('*').eq('user_id',session.user.id).order('started_at',{ascending:false}).limit(50)])
+   const fetchAll=()=>Promise.all([supabase!.from('strategies').select('*').eq('user_id',session.user.id).order('created_at',{ascending:false}).limit(500),supabase!.from('research_runs').select('*').eq('user_id',session.user.id).order('started_at',{ascending:false}).limit(50)])
    let [{data:s,error:sErr},{data:r,error:rErr}]=await fetchAll()
    if(isJwtIssue(sErr)||isJwtIssue(rErr)){
      await supabase.auth.refreshSession()
