@@ -46,21 +46,32 @@ async function saveToDb(cookie: string | null, crumb: string) {
   } catch { /* non-fatal — in-memory cache still works for this instance */ }
 }
 
+async function attemptFetch(): Promise<boolean> {
+  const cookieRes = await fetch('https://fc.yahoo.com', { headers: { 'User-Agent': UA }, redirect: 'manual', cache: 'no-store' })
+  const setCookie = cookieRes.headers.get('set-cookie')
+  const cookie = setCookie ? setCookie.split(';')[0] : null
+  const crumbRes = await fetch('https://query2.finance.yahoo.com/v1/test/getcrumb', {
+    headers: { 'User-Agent': UA, ...(cookie ? { cookie } : {}) },
+    cache: 'no-store',
+  })
+  const crumb = (await crumbRes.text()).trim()
+  const looksValid = crumb && crumb.length < 40 && !/[\s<>{}]/.test(crumb)
+  if (!looksValid) { console.error('[yahooAuth] could not get a usable crumb (status', crumbRes.status, ') — Yahoo Finance may be temporarily rate-limiting this server.'); return false }
+  cachedCookie = cookie
+  cachedCrumb = crumb
+  await saveToDb(cookie, crumb)
+  return true
+}
+
+// A single 429 is common on shared cloud IPs, but it's often not persistent —
+// a couple of quick retries with jitter gives one user click a real shot at
+// getting through and seeding the shared Supabase cache for everyone else.
 async function fetchFreshFromYahoo() {
   try {
-    const cookieRes = await fetch('https://fc.yahoo.com', { headers: { 'User-Agent': UA }, redirect: 'manual', cache: 'no-store' })
-    const setCookie = cookieRes.headers.get('set-cookie')
-    const cookie = setCookie ? setCookie.split(';')[0] : null
-    const crumbRes = await fetch('https://query2.finance.yahoo.com/v1/test/getcrumb', {
-      headers: { 'User-Agent': UA, ...(cookie ? { cookie } : {}) },
-      cache: 'no-store',
-    })
-    const crumb = (await crumbRes.text()).trim()
-    const looksValid = crumb && crumb.length < 40 && !/[\s<>{}]/.test(crumb)
-    if (!looksValid) { console.error('[yahooAuth] could not get a usable crumb (status', crumbRes.status, ') — Yahoo Finance may be temporarily rate-limiting this server.'); return }
-    cachedCookie = cookie
-    cachedCrumb = crumb
-    await saveToDb(cookie, crumb)
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (await attemptFetch()) return
+      if (attempt < 2) await new Promise(r => setTimeout(r, 400 + Math.random() * 600))
+    }
   } catch (e) {
     console.error('[yahooAuth] refresh threw', e)
   }
