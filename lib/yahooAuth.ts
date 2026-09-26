@@ -102,7 +102,9 @@ export async function yahooFetch(url: string, opts: { forceFreshAuth?: boolean }
   const sep = url.includes('?') ? '&' : '?'
   const finalUrl = crumb ? `${url}${sep}crumb=${encodeURIComponent(crumb)}` : url
   const r = await fetch(finalUrl, { headers: { 'User-Agent': UA, ...(cookie ? { cookie } : {}) }, cache: 'no-store' })
-  const j = await r.json().catch(() => null)
+  const rawText = await r.text()
+  const j = (() => { try { return JSON.parse(rawText) } catch { return null } })()
+  if (!j) console.error('[yahooAuth] non-JSON response from', url.split('?')[0], '— status', r.status, 'body:', rawText.slice(0, 300))
   const unauthorized = j?.finance?.error?.code === 'Unauthorized' || j?.quoteSummary?.error?.code === 'Unauthorized'
   if (unauthorized && !opts.forceFreshAuth) return yahooFetch(url, { forceFreshAuth: true })
   return j
