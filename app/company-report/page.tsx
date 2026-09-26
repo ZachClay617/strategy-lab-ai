@@ -146,7 +146,7 @@ export default function CompanyReportPage() {
 
     <section className="panel">
       <div className="panel-title"><h2>SAVED REPORTS</h2></div>
-      {!session && <p className="muted">Log in on the <a href="/">Research</a> page to save reports and revisit them here later.</p>}
+      {!session && <p className="muted">Log in on the <a href="/research">Research</a> page to save reports and revisit them here later.</p>}
       {session && !savedReports.length && <div className="empty">No reports saved yet. Generate one above and it'll show up here.</div>}
       {session && savedReports.length > 0 && <>
         <div className="row row-head" style={{ gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,.7fr)' }}>

@@ -115,7 +115,7 @@ export default function HomePage(){
   const hasAnyData=holdings.length>0||closedTrades.length>0
 
   if(!supabase)return <div className="shell"><p className="msg banner">Add Supabase environment variables first.</p></div>
-  if(!session)return <div className="shell"><p className="msg banner">Log in on the <a href="/">Research</a> page first, then come back here.</p></div>
+  if(!session)return <div className="shell"><p className="msg banner">Log in on the <a href="/research">Research</a> page first, then come back here.</p></div>
 
   return <div className="shell home-page">
     <section className="hero home-hero">
@@ -129,7 +129,7 @@ export default function HomePage(){
     {msg&&<p className="msg banner">{msg}</p>}
 
     <div className="service-grid">
-      <Link href="/" className="service-card">
+      <Link href="/research" className="service-card">
         <span className="service-icon">◇</span>
         <h2>Research</h2>
         <p>Generate and backtest strategies against real historical and live market data.</p>
