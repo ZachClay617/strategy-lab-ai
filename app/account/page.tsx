@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { CURRENCIES } from '@/lib/currencies'
 
-type Profile = { id:string; email:string|null; full_name:string|null; avatar_url:string|null; currency:string; username:string|null }
+type Profile = { id:string; email:string|null; full_name:string|null; avatar_url:string|null; currency:string; username:string|null; gender:string|null }
 
 function resizeImageToDataUrl(file:File, size=160, quality=0.82):Promise<string>{
   return new Promise((resolve,reject)=>{
@@ -37,6 +37,7 @@ export default function Account(){
   const [usernameDraft,setUsernameDraft]=useState('')
   const [avatarDraft,setAvatarDraft]=useState<string|null>(null)
   const [currencyDraft,setCurrencyDraft]=useState('USD')
+  const [genderDraft,setGenderDraft]=useState('')
   const [newPassword,setNewPassword]=useState('')
   const [confirmPassword,setConfirmPassword]=useState('')
   const [showPassword,setShowPassword]=useState(false)
@@ -48,10 +49,10 @@ export default function Account(){
 
   async function loadProfile(){
     if(!supabase||!session?.user)return
-    const {data,error}=await supabase.from('profiles').select('id,email,full_name,avatar_url,currency,username').eq('id',session.user.id).maybeSingle()
-    if(error){setMsg(`Could not load your profile: ${error.message}. Run migration_v14_profile_settings.sql and migration_v17_username_login.sql in Supabase.`);return}
-    const p=(data as Profile)||{id:session.user.id,email:session.user.email,full_name:null,avatar_url:null,currency:'USD',username:null}
-    setProfile(p);setNameDraft(p.full_name||'');setAvatarDraft(p.avatar_url);setCurrencyDraft(p.currency||'USD');setUsernameDraft(p.username||'')
+    const {data,error}=await supabase.from('profiles').select('id,email,full_name,avatar_url,currency,username,gender').eq('id',session.user.id).maybeSingle()
+    if(error){setMsg(`Could not load your profile: ${error.message}. Run migration_v14_profile_settings.sql, migration_v17_username_login.sql, and migration_v20_gender.sql in Supabase.`);return}
+    const p=(data as Profile)||{id:session.user.id,email:session.user.email,full_name:null,avatar_url:null,currency:'USD',username:null,gender:null}
+    setProfile(p);setNameDraft(p.full_name||'');setAvatarDraft(p.avatar_url);setCurrencyDraft(p.currency||'USD');setUsernameDraft(p.username||'');setGenderDraft(p.gender||'')
   }
 
   async function onPickAvatar(e:React.ChangeEvent<HTMLInputElement>){
@@ -86,6 +87,13 @@ export default function Account(){
     const {error}=await supabase.from('profiles').upsert({id:session.user.id,currency:currencyDraft})
     if(error){setMsg(`Could not save currency: ${error.message}`);return}
     setMsg('Currency preference updated.');await loadProfile()
+  }
+
+  async function saveGender(){
+    if(!supabase||!session?.user)return
+    const {error}=await supabase.from('profiles').upsert({id:session.user.id,gender:genderDraft||null})
+    if(error){setMsg(`Could not save gender: ${error.message}`);return}
+    setMsg('Gender updated.');await loadProfile()
   }
 
   async function savePassword(){
@@ -124,6 +132,10 @@ export default function Account(){
         <div className="section-label">NAME</div>
         <label>Name<input value={nameDraft} onChange={e=>setNameDraft(e.target.value)} placeholder="e.g. Zach Clay"/></label>
         <button className="ghost" onClick={saveName} disabled={nameDraft===(profile?.full_name||'')}>SAVE NAME</button>
+
+        <div className="section-label">GENDER</div>
+        <label>Gender<select value={genderDraft} onChange={e=>setGenderDraft(e.target.value)}><option value="" disabled>Select…</option><option value="male">Male</option><option value="female">Female</option></select></label>
+        <button className="ghost" onClick={saveGender} disabled={genderDraft===(profile?.gender||'')}>SAVE GENDER</button>
 
         <div className="section-label">USERNAME</div>
         <label>Log in with this instead of your email<input value={usernameDraft} onChange={e=>setUsernameDraft(e.target.value.replace(/\s/g,''))} placeholder="e.g. zachclay"/></label>
