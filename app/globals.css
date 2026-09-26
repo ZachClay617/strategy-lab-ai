@@ -50,8 +50,9 @@
 .run-group-header:hover{border-color:#3a4568}
 .run-group-header .chevron{transition:transform .15s;color:#6b7690;flex-shrink:0}
 .run-group-header .chevron.open{transform:rotate(90deg)}
-.run-group-header .star{margin-left:auto;cursor:pointer;font-size:16px;color:#6b7690}
-.run-group-header .star.on{color:#ffd166}
+.star{cursor:pointer;font-size:16px;color:#6b7690}
+.star.on{color:#ffd166}
+.run-group-header .star{margin-left:auto}
 .run-group>.table{margin-top:10px}
 .run-sort{display:flex;align-items:center;gap:8px;margin-bottom:14px}
 .run-sort select{width:auto;background:#090d1a;border:1px solid #283353;border-radius:8px;padding:6px 10px;color:#f5f7ff}

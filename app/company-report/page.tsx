@@ -78,7 +78,7 @@ export default function CompanyReportPage() {
   const [narrativeLoading, setNarrativeLoading] = useState(false)
   const [error, setError] = useState('')
   const [report, setReport] = useState<any>(null)
-  const [savedReports, setSavedReports] = useState<{ id: string; symbol: string; company_name: string; created_at: string }[]>([])
+  const [savedReports, setSavedReports] = useState<{ id: string; symbol: string; company_name: string; created_at: string; favorite?: boolean }[]>([])
   const [loadingSavedId, setLoadingSavedId] = useState<string | null>(null)
 
   const PENDING_NARRATIVE = { mode: 'pending' }
@@ -88,8 +88,17 @@ export default function CompanyReportPage() {
 
   async function loadSavedReports() {
     if (!supabase || !session?.user) return
-    const { data } = await supabase.from('company_reports').select('id,symbol,company_name,created_at').eq('user_id', session.user.id).order('created_at', { ascending: false }).limit(50)
+    const { data } = await supabase.from('company_reports').select('id,symbol,company_name,created_at,favorite').eq('user_id', session.user.id).order('created_at', { ascending: false }).limit(50)
     setSavedReports((data || []) as any)
+  }
+
+  async function toggleFavoriteReport(id: string) {
+    if (!supabase) return
+    const r = savedReports.find(x => x.id === id)
+    const next = !r?.favorite
+    setSavedReports(prev => prev.map(x => x.id === id ? { ...x, favorite: next } : x))
+    const { error } = await supabase.from('company_reports').update({ favorite: next }).eq('id', id)
+    if (error) { setError(`Could not update favorite: ${error.message}. Run the latest Supabase migration.`); setSavedReports(prev => prev.map(x => x.id === id ? { ...x, favorite: !next } : x)) }
   }
 
   async function saveReport(fullReport: any) {
@@ -144,21 +153,41 @@ export default function CompanyReportPage() {
       {error && <p className="msg banner" style={{ marginTop: 16 }}>{error}</p>}
     </section>
 
+    {session && savedReports.some(r => r.favorite) && <section className="panel">
+      <div className="panel-title"><h2>FAVORITED REPORTS</h2><span className="muted">{savedReports.filter(r => r.favorite).length} favorited</span></div>
+      <div className="row row-head" style={{ gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,.5fr) minmax(0,.7fr)' }}>
+        <span>Company</span>
+        <span>Ticker</span>
+        <span>Generated</span>
+        <span></span>
+        <span></span>
+      </div>
+      <div className="table">{savedReports.filter(r => r.favorite).map(r => <div className="row" key={r.id} style={{ gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,.5fr) minmax(0,.7fr)' }}>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><b>{r.company_name}</b></span>
+        <span>{r.symbol}</span>
+        <span>{fmtDateTime(r.created_at)}</span>
+        <span className="star on" onClick={() => toggleFavoriteReport(r.id)}>★</span>
+        <button className="ghost" onClick={() => viewSavedReport(r.id)} disabled={loadingSavedId === r.id}>{loadingSavedId === r.id ? 'LOADING…' : 'VIEW'}</button>
+      </div>)}</div>
+    </section>}
+
     <section className="panel">
       <div className="panel-title"><h2>SAVED REPORTS</h2></div>
       {!session && <p className="muted">Log in on the <a href="/research">Research</a> page to save reports and revisit them here later.</p>}
       {session && !savedReports.length && <div className="empty">No reports saved yet. Generate one above and it'll show up here.</div>}
       {session && savedReports.length > 0 && <>
-        <div className="row row-head" style={{ gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,.7fr)' }}>
+        <div className="row row-head" style={{ gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,.5fr) minmax(0,.7fr)' }}>
           <span>Company</span>
           <span>Ticker</span>
           <span>Generated</span>
           <span></span>
+          <span></span>
         </div>
-        <div className="table">{savedReports.map(r => <div className="row" key={r.id} style={{ gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,.7fr)' }}>
+        <div className="table">{savedReports.map(r => <div className="row" key={r.id} style={{ gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,.5fr) minmax(0,.7fr)' }}>
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><b>{r.company_name}</b></span>
           <span>{r.symbol}</span>
           <span>{fmtDateTime(r.created_at)}</span>
+          <span className={`star ${r.favorite ? 'on' : ''}`} onClick={() => toggleFavoriteReport(r.id)}>{r.favorite ? '★' : '☆'}</span>
           <button className="ghost" onClick={() => viewSavedReport(r.id)} disabled={loadingSavedId === r.id}>{loadingSavedId === r.id ? 'LOADING…' : 'VIEW'}</button>
         </div>)}</div>
       </>}
