@@ -375,14 +375,22 @@ export default function Portfolios(){
 
   function sumMetrics(list:Holding[],closed:ClosedTrade[]=[]){
     let value=0,costBasis=0,returnDollar=0,priorValue=0,dayReturnDollar=0
+    let unrealizedCostBasis=0,unrealizedDollar=0
     for(const h of list){
       const p=prices[h.symbol];if(!p)continue
       const sh=h.shares!=null?h.shares:1
       value+=sh*p.last
-      if(h.entry_price){costBasis+=h.entry_price*sh;returnDollar+=(p.last-h.entry_price)*sh}
+      if(h.entry_price){
+        costBasis+=h.entry_price*sh;returnDollar+=(p.last-h.entry_price)*sh
+        unrealizedCostBasis+=h.entry_price*sh;unrealizedDollar+=(p.last-h.entry_price)*sh
+      }
       if(p.prevClose){priorValue+=p.prevClose*sh;dayReturnDollar+=(p.last-p.prevClose)*sh}
     }
-    for(const c of closed){costBasis+=c.entry_price*c.shares;returnDollar+=c.realized_pl}
+    let realizedCostBasis=0,realizedDollar=0
+    for(const c of closed){
+      costBasis+=c.entry_price*c.shares;returnDollar+=c.realized_pl
+      realizedCostBasis+=c.entry_price*c.shares;realizedDollar+=c.realized_pl
+    }
     return {
       holdings:list.length,
       value,
@@ -390,6 +398,10 @@ export default function Portfolios(){
       returnDollar,
       dayReturnPct:priorValue>0?dayReturnDollar/priorValue*100:null,
       dayReturnDollar,
+      unrealizedPct:unrealizedCostBasis>0?unrealizedDollar/unrealizedCostBasis*100:null,
+      unrealizedDollar,
+      realizedPct:realizedCostBasis>0?realizedDollar/realizedCostBasis*100:null,
+      realizedDollar,
     }
   }
   const overview=sumMetrics(Object.values(allHoldings).flat(),Object.values(allClosedTrades).flat())
@@ -411,10 +423,12 @@ export default function Portfolios(){
       <section className="panel">
         {view==='overview'?<>
           <div className="panel-title"><h2>OVERVIEW</h2></div>
-          <div className="metrics" style={{gridTemplateColumns:'repeat(4,1fr)'}}>
+          <div className="metrics" style={{gridTemplateColumns:'repeat(6,1fr)'}}>
             <div><span>Total holdings tracked</span><b>{overview.holdings}</b></div>
             <div><span>Total value</span><b>{overview.value>0?`$${overview.value.toFixed(2)}`:'—'}</b></div>
             <div><span>TOTAL RETURN</span><b className={overview.returnPct==null?'':overview.returnPct>=0?'up':'down'}>{overview.returnPct==null?'—':`${fmtPct(overview.returnPct)} (${fmtDollar(overview.returnDollar)})`}</b></div>
+            <div><span>UNREALIZED RETURN</span><b className={overview.unrealizedPct==null?'':overview.unrealizedPct>=0?'up':'down'}>{overview.unrealizedPct==null?'—':`${fmtPct(overview.unrealizedPct)} (${fmtDollar(overview.unrealizedDollar)})`}</b></div>
+            <div><span>REALIZED RETURN</span><b className={overview.realizedPct==null?'':overview.realizedPct>=0?'up':'down'}>{overview.realizedPct==null?'—':`${fmtPct(overview.realizedPct)} (${fmtDollar(overview.realizedDollar)})`}</b></div>
             <div><span>DAYS' RETURN</span><b className={overview.dayReturnPct==null?'':overview.dayReturnPct>=0?'up':'down'}>{overview.dayReturnPct==null?'—':`${fmtPct(overview.dayReturnPct)} (${fmtDollar(overview.dayReturnDollar)})`}</b></div>
           </div>
 
