@@ -20,7 +20,7 @@ function ReturnChart({points,title}:{points:{date:string;returnPct:number}[];tit
   const x=(i:number)=>padL+(i/(Math.max(points.length-1,1)))*(w-padL-padR)
   const y=(v:number)=>h-padB-((v-adjMin)/range)*(h-padT-padB)
   const path=points.map((p,i)=>`${i===0?'M':'L'}${x(i).toFixed(1)} ${y(p.returnPct).toFixed(1)}`).join(' ')
-  const up=points[points.length-1].returnPct>=points[0].returnPct
+  const up=points[points.length-1].returnPct>=0
   const gridLines=4
   const timeTickCount=Math.min(points.length,6)
   const timeTicks=Array.from({length:timeTickCount}).map((_,k)=>{const i=Math.round(k*(points.length-1)/Math.max(1,timeTickCount-1));return {i,label:new Date(points[i].date).toLocaleDateString('en-US',{month:'short',day:'numeric'})}})
@@ -29,8 +29,8 @@ function ReturnChart({points,title}:{points:{date:string;returnPct:number}[];tit
     <svg className="chart" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
       {Array.from({length:gridLines}).map((_,i)=>{const v=adjMin+(range*i)/(gridLines-1);const yy=y(v);return <g key={i}><line x1={padL} x2={w-padR} y1={yy} y2={yy} stroke="#ffffff" strokeOpacity=".06" strokeWidth="1"/><text x={padL-8} y={yy+4} fill="#6b7690" fontSize="11" textAnchor="end">{v.toFixed(1)}%</text></g>})}
       {adjMin<0&&adjMax>0&&<line x1={padL} x2={w-padR} y1={y(0)} y2={y(0)} stroke="#8fa0b8" strokeDasharray="4 4" strokeWidth="1"/>}
-      <path d={path} fill="none" stroke={up?'#00c805':'#ff5000'} strokeWidth="2"/>
-      {points.map((p,i)=><g key={`${p.date}-${i}`}><circle cx={x(i)} cy={y(p.returnPct)} r="10" fill="transparent"><title>{`${fmtDateTime(p.date)}\nReturn: ${fmtPct(p.returnPct)}`}</title></circle><circle cx={x(i)} cy={y(p.returnPct)} r="3.5" fill={p.returnPct>=0?'#00c805':'#ff5000'} stroke="#05070d" strokeWidth="1.3" pointerEvents="none"/></g>)}
+      <path d={path} fill="none" stroke="#4fc3f7" strokeWidth="2"/>
+      {points.map((p,i)=><g key={`${p.date}-${i}`}><circle cx={x(i)} cy={y(p.returnPct)} r="10" fill="transparent"><title>{`${fmtDateTime(p.date)}\nReturn: ${fmtPct(p.returnPct)}`}</title></circle><circle cx={x(i)} cy={y(p.returnPct)} r="3.5" fill="#ff5000" stroke="#05070d" strokeWidth="1.3" pointerEvents="none"/></g>)}
       {timeTicks.map((t,k)=><text key={k} x={x(t.i)} y={h-10} fill="#6b7690" fontSize="11" textAnchor="middle">{t.label}</text>)}
     </svg>
   </div>
