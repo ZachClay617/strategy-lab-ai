@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 
 type Profile = { full_name:string|null; gender:string|null }
-type Portfolio = { id:string }
+type Portfolio = { id:string; name:string }
 type Holding = { portfolio_id:string; symbol:string; entry_price?:number|null; shares?:number|null }
 type ClosedTrade = { portfolio_id:string; symbol:string; shares:number; entry_price:number; realized_pl:number }
 type PriceInfo = { last:number; prevClose:number|null }
@@ -41,12 +41,12 @@ export default function HomePage(){
     setLoading(true)
     const [{data:p},{data:ports,error:portsErr}]=await Promise.all([
       supabase.from('profiles').select('full_name,gender').eq('id',session.user.id).maybeSingle(),
-      supabase.from('portfolios').select('id').eq('user_id',session.user.id),
+      supabase.from('portfolios').select('id,name').eq('user_id',session.user.id),
     ])
     setProfile((p as Profile)||null)
     if(portsErr){setMsg(`Could not load portfolio overview: ${portsErr.message}`);setLoading(false);return}
     const portfolioIds=(ports||[]).map((x:any)=>x.id)
-    setPortfolios(portfolioIds.map((id:string)=>({id})))
+    setPortfolios((ports||[]) as Portfolio[])
     if(!portfolioIds.length){setHoldings([]);setClosedTrades([]);setLoading(false);return}
     const [{data:h,error:hErr},{data:c,error:cErr}]=await Promise.all([
       supabase.from('portfolio_holdings').select('portfolio_id,symbol,entry_price,shares').in('portfolio_id',portfolioIds),
@@ -107,6 +107,38 @@ export default function HomePage(){
     realizedDollar,
   }
   const hasAnyData=holdings.length>0||closedTrades.length>0
+
+  const perPortfolio:Record<string,{costBasis:number;returnDollar:number}>={}
+  for(const h of holdings){
+    const p=prices[h.symbol];if(!p||h.entry_price==null)continue
+    const sh=h.shares!=null?h.shares:1
+    const bucket=perPortfolio[h.portfolio_id]||(perPortfolio[h.portfolio_id]={costBasis:0,returnDollar:0})
+    bucket.costBasis+=h.entry_price*sh;bucket.returnDollar+=(p.last-h.entry_price)*sh
+  }
+  for(const c of closedTrades){
+    const bucket=perPortfolio[c.portfolio_id]||(perPortfolio[c.portfolio_id]={costBasis:0,returnDollar:0})
+    bucket.costBasis+=c.entry_price*c.shares;bucket.returnDollar+=c.realized_pl
+  }
+  let topPortfolio:{name:string;pct:number}|null=null
+  for(const port of portfolios){
+    const bucket=perPortfolio[port.id];if(!bucket||bucket.costBasis<=0)continue
+    const pct=bucket.returnDollar/bucket.costBasis*100
+    if(!topPortfolio||pct>topPortfolio.pct)topPortfolio={name:port.name,pct}
+  }
+
+  let topHoldingAllTime:{symbol:string;pct:number}|null=null
+  let topHoldingToday:{symbol:string;pct:number}|null=null
+  for(const h of holdings){
+    const p=prices[h.symbol];if(!p)continue
+    if(h.entry_price!=null&&h.entry_price>0){
+      const pct=(p.last-h.entry_price)/h.entry_price*100
+      if(!topHoldingAllTime||pct>topHoldingAllTime.pct)topHoldingAllTime={symbol:h.symbol,pct}
+    }
+    if(p.prevClose){
+      const pct=(p.last-p.prevClose)/p.prevClose*100
+      if(!topHoldingToday||pct>topHoldingToday.pct)topHoldingToday={symbol:h.symbol,pct}
+    }
+  }
 
   if(!supabase)return <div className="shell"><p className="msg banner">Add Supabase environment variables first.</p></div>
   if(!session)return <div className="shell"><p className="msg banner">Log in on the <a href="/research">Research</a> page first, then come back here.</p></div>
@@ -177,6 +209,11 @@ export default function HomePage(){
         <div><span>REALIZED RETURN</span><b className={overview.realizedPct==null?'':overview.realizedPct>=0?'up':'down'}>{overview.realizedPct==null?'—':`${fmtPct(overview.realizedPct)} (${fmtDollar(overview.realizedDollar)})`}</b></div>
         <div><span>UNREALIZED RETURN</span><b className={overview.unrealizedPct==null?'':overview.unrealizedPct>=0?'up':'down'}>{overview.unrealizedPct==null?'—':`${fmtPct(overview.unrealizedPct)} (${fmtDollar(overview.unrealizedDollar)})`}</b></div>
         <div><span>TOTAL RETURN</span><b className={overview.returnPct==null?'':overview.returnPct>=0?'up':'down'}>{overview.returnPct==null?'—':`${fmtPct(overview.returnPct)} (${fmtDollar(overview.returnDollar)})`}</b></div>
+      </div>}
+      {!loading&&hasAnyData&&<div className="metrics" style={{gridTemplateColumns:'repeat(3,1fr)',marginTop:14}}>
+        <div><span>TOP-PERFORMING PORTFOLIO</span><b className={!topPortfolio?'':topPortfolio.pct>=0?'up':'down'}>{topPortfolio?`${topPortfolio.name} (${fmtPct(topPortfolio.pct)})`:'—'}</b></div>
+        <div><span>TOP HOLDING · ALL TIME</span><b className={!topHoldingAllTime?'':topHoldingAllTime.pct>=0?'up':'down'}>{topHoldingAllTime?`${topHoldingAllTime.symbol} (${fmtPct(topHoldingAllTime.pct)})`:'—'}</b></div>
+        <div><span>TOP HOLDING · TODAY</span><b className={!topHoldingToday?'':topHoldingToday.pct>=0?'up':'down'}>{topHoldingToday?`${topHoldingToday.symbol} (${fmtPct(topHoldingToday.pct)})`:'—'}</b></div>
       </div>}
     </section>
   </div>
