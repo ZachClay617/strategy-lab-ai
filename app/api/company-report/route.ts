@@ -222,15 +222,38 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ ...bundle, narrative })
 }
 
+// Caps the data actually sent to the AI so cost stays flat regardless of how
+// much news/insider activity a given company happens to have. The full,
+// uncapped data is still fetched and shown in the report UI — only the AI
+// prompt is trimmed, since that's the part billed per token.
+function buildAiInputBundle(bundle: any) {
+  const truncate = (s: string, n: number) => (typeof s === 'string' && s.length > n ? s.slice(0, n) + '…' : s)
+  return {
+    ...bundle,
+    overview: { ...bundle.overview, businessSummary: truncate(bundle.overview.businessSummary, 700) },
+    competitors: bundle.competitors.slice(0, 5),
+    news: bundle.news.slice(0, 4).map((n: any) => ({ ...n, description: truncate(n.description, 140) })),
+    analystRevisions: bundle.analystRevisions.slice(0, 5),
+    earningsSurprises: bundle.earningsSurprises.slice(-4),
+    management: {
+      ...bundle.management,
+      officers: bundle.management.officers.slice(0, 5),
+      recentInsiderHolders: bundle.management.recentInsiderHolders.slice(0, 5),
+      recentInsiderTransactions: bundle.management.recentInsiderTransactions.slice(0, 5),
+    },
+  }
+}
+
 async function generateNarrative(bundle: any): Promise<any> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   const fallback = buildFallbackNarrative(bundle)
   if (!apiKey) return { mode: 'template', ...fallback }
   try {
-    const prompt = `You are writing sections of an equity research report on ${bundle.overview.name} (${bundle.symbol}) using ONLY the real data JSON below. This data was pulled from Yahoo Finance and computed directly from real historical prices — do not invent any numbers, competitors, customers, executives, or events that are not present in this JSON. If something needed for a section is missing from the data, say so explicitly using the exact phrase "Not publicly reported" or "Data unavailable" rather than guessing.
+    const aiInput = buildAiInputBundle(bundle)
+    const prompt = `You are writing sections of an equity research report on ${bundle.overview.name} (${bundle.symbol}) using ONLY the real data JSON below (it has been trimmed to the most relevant recent items, not the full history). This data was pulled from Yahoo Finance and computed directly from real historical prices — do not invent any numbers, competitors, customers, executives, or events that are not present in this JSON. If something needed for a section is missing from the data, say so explicitly using the exact phrase "Not publicly reported" or "Data unavailable" rather than guessing. Be concise and do not exceed the requested lengths below — this keeps the report consistent in size across different companies.
 
 DATA:
-${JSON.stringify(bundle)}
+${JSON.stringify(aiInput)}
 
 Respond with ONLY strict JSON (no markdown, no prose outside the JSON) in exactly this shape:
 {
@@ -254,7 +277,7 @@ Respond with ONLY strict JSON (no markdown, no prose outside the JSON) in exactl
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 4000, messages: [{ role: 'user', content: prompt }] }),
+      body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 2200, messages: [{ role: 'user', content: prompt }] }),
     })
     const j = await r.json()
     const text = Array.isArray(j?.content) ? j.content.find((b: any) => b?.type === 'text')?.text : undefined
