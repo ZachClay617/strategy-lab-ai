@@ -72,7 +72,13 @@ export default function Portfolios(){
     const symbols=holdings.map(h=>h.symbol).filter(sym=>!(sym in names))
     if(symbols.length)loadNames(symbols)
   },[holdings.map(h=>h.symbol).join(',')])
-  useEffect(()=>{if(holdings.length)loadReturnSeries(holdings);else setReturnSeries([])},[holdings,prices])
+  useEffect(()=>{if(holdings.length)loadReturnSeries(holdings);else setReturnSeries([])},[holdings])
+  useEffect(()=>{
+    if(!(view==='detail'&&selectedId&&holdings.length))return
+    const symbols=holdings.map(h=>h.symbol)
+    const id=setInterval(()=>loadPrices(symbols),30000)
+    return ()=>clearInterval(id)
+  },[view,selectedId,holdings.map(h=>h.symbol).join(',')])
   useEffect(()=>{if(portfolios.length)loadAllHoldings();else setAllHoldings({})},[portfolios.map(p=>p.id).join(',')])
   useEffect(()=>{
     const symbols=Array.from(new Set(Object.values(allHoldings).flat().map(h=>h.symbol)))
@@ -305,6 +311,13 @@ export default function Portfolios(){
     const p=prices[h.symbol];if(!p||!h.entry_price)return s
     return s+(p.last-h.entry_price)*effectiveShares(h)
   },0)
+  const liveReturnSeries=(()=>{
+    if(portfolioReturn==null)return returnSeries
+    const nowPoint={date:new Date().toISOString(),returnPct:portfolioReturn}
+    const last=returnSeries[returnSeries.length-1]
+    if(last&&new Date(last.date).getTime()>=new Date(nowPoint.date).getTime())return returnSeries
+    return [...returnSeries,nowPoint]
+  })()
   const dayTrackedWeight=holdings.reduce((s,h)=>{const p=prices[h.symbol];return p&&p.prevClose?s+weightOf(h):s},0)
   const dayReturn=dayTrackedWeight?holdings.reduce((s,h)=>{
     const p=prices[h.symbol];if(!p||!p.prevClose)return s
@@ -449,7 +462,7 @@ export default function Portfolios(){
           {!holdings.length&&<div className="empty">No holdings yet. Add one manually or let the AI research the portfolio.</div>}
 
           <div className="section-label">RETURN OVER TIME</div>
-          <ReturnChart points={returnSeries} title={`${selected.name.toUpperCase()} · TOTAL RETURN`}/>
+          <ReturnChart points={liveReturnSeries} title={`${selected.name.toUpperCase()} · TOTAL RETURN`}/>
 
           <div className="section-label">ADD A STOCK</div>
           <form onSubmit={addHolding}>
