@@ -130,19 +130,44 @@ export default function HomePage(){
 
     <div className="service-grid">
       <Link href="/research" className="service-card">
-        <span className="service-icon">◇</span>
+        <span className="service-icon">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs><linearGradient id="ic-research" x1="0" y1="0" x2="24" y2="24"><stop offset="0" stopColor="#8ff3ff"/><stop offset="1" stopColor="#8b72ff"/></linearGradient></defs>
+            <circle cx="11" cy="11" r="7" stroke="url(#ic-research)" strokeWidth="1.6"/>
+            <circle cx="11" cy="11" r="3.4" stroke="url(#ic-research)" strokeWidth="1.2" opacity=".7"/>
+            <circle cx="11" cy="11" r="1.1" fill="url(#ic-research)"/>
+            <path d="M16.2 16.2L21 21" stroke="url(#ic-research)" strokeWidth="1.8" strokeLinecap="round"/>
+            <path d="M11 4.4V2.6M17.6 11h1.8M11 17.6v1.8M4.4 11H2.6" stroke="url(#ic-research)" strokeWidth="1.1" strokeLinecap="round" opacity=".55"/>
+          </svg>
+        </span>
         <h2>Research</h2>
         <p>Generate and backtest strategies against real historical and live market data.</p>
         <span className="service-cta">ENTER RESEARCH →</span>
       </Link>
       <Link href="/portfolios" className="service-card">
-        <span className="service-icon">◈</span>
+        <span className="service-icon">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs><linearGradient id="ic-portfolios" x1="0" y1="0" x2="24" y2="24"><stop offset="0" stopColor="#8ff3ff"/><stop offset="1" stopColor="#8b72ff"/></linearGradient></defs>
+            <rect x="3.2" y="13.2" width="4.2" height="7.4" rx="1" fill="url(#ic-portfolios)" opacity=".85"/>
+            <rect x="9.9" y="8.4" width="4.2" height="12.2" rx="1" fill="url(#ic-portfolios)"/>
+            <rect x="16.6" y="4.4" width="4.2" height="16.2" rx="1" fill="url(#ic-portfolios)" opacity=".85"/>
+            <path d="M3 9.6L9 5l4.5 3 7.5-5.6" stroke="url(#ic-portfolios)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M17 2.4h4v4" stroke="url(#ic-portfolios)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </span>
         <h2>Portfolios</h2>
         <p>Describe a portfolio in plain language and track real holdings and returns.</p>
         <span className="service-cta">ENTER PORTFOLIOS →</span>
       </Link>
       <Link href="/company-report" className="service-card">
-        <span className="service-icon">◆</span>
+        <span className="service-icon">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs><linearGradient id="ic-reports" x1="0" y1="0" x2="24" y2="24"><stop offset="0" stopColor="#8ff3ff"/><stop offset="1" stopColor="#8b72ff"/></linearGradient></defs>
+            <path d="M6 2.6h8.4L19 7.2V21a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3.6a1 1 0 0 1 1-1Z" stroke="url(#ic-reports)" strokeWidth="1.5" strokeLinejoin="round"/>
+            <path d="M14.2 2.6V6.4a1 1 0 0 0 1 1H19" stroke="url(#ic-reports)" strokeWidth="1.5" strokeLinejoin="round"/>
+            <path d="M7.6 17.4v-3.2M11 17.4v-5.6M14.4 17.4v-2.3M17.8 17.4V9.8" stroke="url(#ic-reports)" strokeWidth="1.5" strokeLinecap="round"/>
+          </svg>
+        </span>
         <h2>Reports</h2>
         <p>Generate a full equity research report on any publicly traded company.</p>
         <span className="service-cta">ENTER REPORTS →</span>
