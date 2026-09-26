@@ -122,7 +122,7 @@ export default function Account(){
         <button className="run" onClick={saveAvatar} disabled={avatarDraft===profile?.avatar_url}>SAVE PICTURE</button>
 
         <div className="section-label">NAME</div>
-        <label>Display name<input value={nameDraft} onChange={e=>setNameDraft(e.target.value)} placeholder="e.g. Zach Clay"/></label>
+        <label>Name<input value={nameDraft} onChange={e=>setNameDraft(e.target.value)} placeholder="e.g. Zach Clay"/></label>
         <button className="ghost" onClick={saveName} disabled={nameDraft===(profile?.full_name||'')}>SAVE NAME</button>
 
         <div className="section-label">USERNAME</div>
