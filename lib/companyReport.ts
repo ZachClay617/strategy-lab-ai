@@ -34,7 +34,7 @@ export async function fetchQuoteSummary(symbol: string): Promise<any | null> {
   const url = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=${MODULES}`
   const j = await yahooFetch(url)
   const result = j?.quoteSummary?.result?.[0] || null
-  if (!result) console.error('[companyReport] quoteSummary returned no result for', symbol, '— raw response:', JSON.stringify(j).slice(0, 500))
+  if (!result) console.error('[PRIMARY_QS_FAILURE]', symbol, JSON.stringify(j).slice(0, 800))
   return result
 }
 
