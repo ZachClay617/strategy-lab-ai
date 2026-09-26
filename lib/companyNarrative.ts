@@ -55,13 +55,19 @@ Respond with ONLY strict JSON (no markdown, no prose outside the JSON) in exactl
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 3500, messages: [{ role: 'user', content: prompt }] }),
+      body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 6000, messages: [{ role: 'user', content: prompt }] }),
     })
     const j = await r.json()
+    if (j?.stop_reason === 'max_tokens') console.error('company-report AI response hit max_tokens before finishing')
     const text = Array.isArray(j?.content) ? j.content.find((b: any) => b?.type === 'text')?.text : undefined
-    if (!text) { console.error('company-report AI response had no text', JSON.stringify(j).slice(0, 1000)); return { mode: 'template', ...fallback } }
-    const parsed = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1))
-    return { mode: 'ai', ...parsed }
+    if (!text || text.indexOf('{') === -1) { console.error('company-report AI response had no usable text', JSON.stringify(j).slice(0, 1500)); return { mode: 'template', ...fallback } }
+    try {
+      const parsed = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1))
+      return { mode: 'ai', ...parsed }
+    } catch (parseErr) {
+      console.error('company-report AI JSON.parse failed on text:', text.slice(0, 2000))
+      return { mode: 'template', ...fallback }
+    }
   } catch (e) {
     console.error('company-report AI call failed, using template fallback', e)
     return { mode: 'template', ...fallback }
