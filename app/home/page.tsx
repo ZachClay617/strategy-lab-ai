@@ -18,6 +18,7 @@ function fmtMoney(n:number){const abs=Math.abs(n);const sign=n<0?'-':''
   return `${sign}$${abs.toFixed(2)}`
 }
 function fmtDollar(n:number){return `${n>=0?'+':'-'}${fmtMoney(Math.abs(n)).replace('$','$')}`}
+function fmtExact(n:number){const sign=n<0?'-':'';return `${sign}$${Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`}
 
 function greeting(profile:Profile|null,fallbackEmail?:string|null){
   const hour=new Date().getHours()
@@ -179,7 +180,7 @@ export default function HomePage(){
       {loading?<div className="empty">Loading your portfolio overview…</div>:!hasAnyData?<div className="empty">No portfolio holdings yet. <Link href="/portfolios">Create a portfolio</Link> to see your overview here.</div>:
       <div className="metrics" style={{gridTemplateColumns:'repeat(5,1fr)'}}>
         <div><span>DAY'S RETURN</span><b className={overview.dayReturnPct==null?'':overview.dayReturnPct>=0?'up':'down'}>{overview.dayReturnPct==null?'—':`${fmtPct(overview.dayReturnPct)} (${fmtDollar(overview.dayReturnDollar)})`}</b></div>
-        <div><span>TOTAL VALUE</span><b>{fmtMoney(overview.value)}</b></div>
+        <div><span>TOTAL VALUE</span><b>{fmtExact(overview.value)}</b></div>
         <div><span>REALIZED RETURN</span><b className={overview.realizedPct==null?'':overview.realizedPct>=0?'up':'down'}>{overview.realizedPct==null?'—':`${fmtPct(overview.realizedPct)} (${fmtDollar(overview.realizedDollar)})`}</b></div>
         <div><span>UNREALIZED RETURN</span><b className={overview.unrealizedPct==null?'':overview.unrealizedPct>=0?'up':'down'}>{overview.unrealizedPct==null?'—':`${fmtPct(overview.unrealizedPct)} (${fmtDollar(overview.unrealizedDollar)})`}</b></div>
         <div><span>TOTAL RETURN</span><b className={overview.returnPct==null?'':overview.returnPct>=0?'up':'down'}>{overview.returnPct==null?'—':`${fmtPct(overview.returnPct)} (${fmtDollar(overview.returnDollar)})`}</b></div>
