@@ -93,3 +93,16 @@
 .portfolio-card::after{content:'';position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,transparent,#57e8ff99,transparent);background-size:200% 100%;animation:cardPulse 3s ease-in-out infinite}
 .portfolio-card.card-down::after{background:linear-gradient(90deg,transparent,#ff500099,transparent)}
 @media(max-width:900px){.portfolio-cards{grid-template-columns:1fr}}
+.home-hero{margin-bottom:26px}
+.home-greeting{font-size:clamp(30px,4.6vw,52px);margin:12px 0 6px}
+.home-tagline{font-size:15px;color:var(--cyan);letter-spacing:.02em;margin:0}
+.service-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-bottom:22px}
+.service-card{position:relative;display:block;padding:26px;border-radius:20px;border:1px solid var(--line);background:linear-gradient(180deg,rgba(16,23,45,.94),rgba(8,11,22,.94));text-decoration:none;color:var(--text);overflow:hidden;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
+.service-card::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 20% -10%,#57e8ff22,transparent 60%);opacity:0;transition:opacity .18s ease}
+.service-card:hover{transform:translateY(-3px);border-color:#3a4a7a;box-shadow:0 20px 50px #0006}
+.service-card:hover::before{opacity:1}
+.service-icon{display:inline-block;font-size:26px;color:var(--cyan);margin-bottom:10px}
+.service-card h2{margin:0 0 8px;font-size:18px;letter-spacing:.03em}
+.service-card p{margin:0 0 18px;color:var(--muted);font-size:13px;line-height:1.6}
+.service-cta{display:block;font-size:12px;font-weight:800;letter-spacing:.08em;color:var(--cyan)}
+@media(max-width:900px){.service-grid{grid-template-columns:1fr}.home-page .metrics{grid-template-columns:1fr 1fr!important}}

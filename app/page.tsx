@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
 const STARTING_CAPITAL = 10_000_000_000
@@ -279,6 +280,7 @@ async function waitWhilePaused(){
 }
 
 export default function Home(){
+ const router=useRouter()
  const [session,setSession]=useState<any>(null),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[mode,setMode]=useState<'login'|'signup'>('login'),[msg,setMsg]=useState(''),[showPassword,setShowPassword]=useState(false),[strategies,setStrategies]=useState<Strategy[]>([]),[runs,setRuns]=useState<Run[]>([]),[selected,setSelected]=useState<Strategy|null>(null),[variations,setVariations]=useState(25000),[minTrades,setMinTrades]=useState(1),[idea,setIdea]=useState(''),[liveCandles,setLiveCandles]=useState<Candle[]>([]),[liveStatus,setLiveStatus]=useState('Waiting for live market data'),[watchLive,setWatchLive]=useState(true),[chartWindow,setChartWindow]=useState<number>(14),[runSort,setRunSort]=useState<'newest'|'oldest'|'qualified'|'bestScore'>('newest'),[expandedRuns,setExpandedRuns]=useState<Record<string,boolean>>({}),[symbolNames,setSymbolNames]=useState<Record<string,string>>({}),[avatarUrl,setAvatarUrl]=useState<string|null>(null),[signupUsername,setSignupUsername]=useState('')
  const rs=useSyncExternalStore(subscribeRun,getRunSnapshot,getRunSnapshot)
  const {running,paused,progress,feed,testLog,activeCandidate,researchCandles,activeIndex,activeTrades,rejectionCounts,tickerError,selectedRun,balance,symbol,market,runMode,speedKey:speed,completedCount,qualifiedCount}=rs
@@ -336,13 +338,15 @@ export default function Home(){
        const {error:unameErr}=await supabase.from('profiles').upsert({id:res.data.user.id,username:signupUsername.trim()})
        if(unameErr){setMsg(`Account created, but that username could not be saved (${unameErr.message}). You can set one later in Account settings.`);return}
      }
+     if(res.data.session){router.push('/home');return}
      setMsg('Account created. Check your email if confirmation is enabled.')
      return
    }
    const resolved=await resolveLoginEmail(email)
    if(resolved.error){setMsg(resolved.error);return}
    const res=await supabase.auth.signInWithPassword({email:resolved.email!,password})
-   if(res.error)setMsg(res.error.message)
+   if(res.error){setMsg(res.error.message);return}
+   router.push('/home')
  }
  async function forgotPassword(){
    setMsg('')
