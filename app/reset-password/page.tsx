@@ -33,7 +33,6 @@ export default function ResetPassword(){
   if(!supabase)return <div className="shell"><p className="msg banner">Add Supabase environment variables first.</p></div>
 
   return <main className="shell auth">
-    <div className="brand">◈ STRATEGY LAB <em>AI</em></div>
     <section className="auth-card">
       <div className="eyebrow">ACCOUNT RECOVERY</div>
       <h1>Set a <span>new password.</span></h1>

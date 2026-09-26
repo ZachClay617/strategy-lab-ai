@@ -5,8 +5,11 @@ import { usePathname } from 'next/navigation'
 export default function NavBar(){
   const pathname=usePathname()
   return <nav className="topnav">
-    <Link href="/" className={pathname==='/'?'active':''}>Research</Link>
-    <Link href="/portfolios" className={pathname?.startsWith('/portfolios')?'active':''}>Portfolios</Link>
-    <Link href="/company-report" className={pathname?.startsWith('/company-report')?'active':''}>Reports</Link>
+    <Link href="/" className="topnav-brand">◈ STRATEGY LAB <em>AI</em></Link>
+    <div className="topnav-links">
+      <Link href="/" className={pathname==='/'?'active':''}>Research</Link>
+      <Link href="/portfolios" className={pathname?.startsWith('/portfolios')?'active':''}>Portfolios</Link>
+      <Link href="/company-report" className={pathname?.startsWith('/company-report')?'active':''}>Reports</Link>
+    </div>
   </nav>
 }
