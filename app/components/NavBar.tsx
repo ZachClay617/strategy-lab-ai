@@ -7,5 +7,6 @@ export default function NavBar(){
   return <nav className="topnav">
     <Link href="/" className={pathname==='/'?'active':''}>Research</Link>
     <Link href="/portfolios" className={pathname?.startsWith('/portfolios')?'active':''}>Portfolios</Link>
+    <Link href="/company-report" className={pathname?.startsWith('/company-report')?'active':''}>Reports</Link>
   </nav>
 }
