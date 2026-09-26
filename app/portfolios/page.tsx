@@ -569,9 +569,10 @@ export default function Portfolios(){
           <ReturnChart points={liveReturnSeries} title={`${selected.name.toUpperCase()} · TOTAL RETURN`}/>
 
           <div className="section-label">ADD A STOCK</div>
+          <p className="tiny">Crypto works too — use Yahoo Finance's format, symbol + "-USD" (e.g. BTC-USD, ETH-USD, SOL-USD).</p>
           <form onSubmit={addHolding}>
             <div className="add-holding-grid" style={{marginBottom:10}}>
-              <label>Symbol<input value={addSymbol} onChange={e=>setAddSymbol(e.target.value.toUpperCase())} placeholder="AAPL" required/></label>
+              <label>Symbol<input value={addSymbol} onChange={e=>setAddSymbol(e.target.value.toUpperCase())} placeholder="AAPL or BTC-USD" required/></label>
               <label>Shares owned<input type="number" min={0} step="0.0001" value={addShares} onChange={e=>setAddShares(e.target.value)} placeholder="e.g. 10" required/></label>
               <label>Average cost (optional)<input type="number" min={0} step="0.01" value={addAvgCost} onChange={e=>setAddAvgCost(e.target.value)} placeholder="Live price if blank"/></label>
             </div>

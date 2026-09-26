@@ -10,10 +10,11 @@ export async function GET(req:NextRequest){
   }
   const symbol=req.nextUrl.searchParams.get('symbol')||'AAPL'
   const live=req.nextUrl.searchParams.get('live')==='1'
-  const market=req.nextUrl.searchParams.get('market')||'Stocks'
   const interval=req.nextUrl.searchParams.get('interval')||undefined
   const rangeDays=Number(req.nextUrl.searchParams.get('days')||req.nextUrl.searchParams.get('rangeDays')||3650)
-  if(market!=='Stocks') return NextResponse.json([])
+  // Yahoo's chart endpoint serves crypto (e.g. BTC-USD) through the exact same
+  // API as stocks, so no separate code path is needed — the "market" param is
+  // kept for the caller's own labeling but no longer gates what data loads.
   const result=await fetchCandles(symbol,{live,interval,rangeDays})
   if('error' in result){
     if(result.error==='invalid_ticker')return NextResponse.json({error:'invalid_ticker',message:result.message||`"${symbol}" is not a recognized ticker symbol.`},{status:404})

@@ -38,9 +38,15 @@ async function buildCompetitor(sym: string) {
   }
 }
 
+const CRYPTO_NOT_SUPPORTED = (symbol: string) =>
+  `Company Analysis Reports aren't available for cryptocurrencies. This report is built from real SEC filings, earnings, insider activity, and analyst estimates — none of that exists for "${symbol}", since it isn't a publicly traded company. Try a stock or ETF ticker instead.`
+
 export async function GET(req: NextRequest) {
   const symbol = (req.nextUrl.searchParams.get('symbol') || '').trim().toUpperCase()
   if (!symbol) return NextResponse.json({ error: 'Provide a ticker symbol.' }, { status: 400 })
+  // Yahoo lists every crypto pair as SYMBOL-USD (BTC-USD, ETH-USD, ...) — catch
+  // the obvious case up front so we don't burn a quoteSummary fetch on it.
+  if (/-(USD|USDT|USDC|EUR|GBP|BTC|ETH)$/i.test(symbol)) return NextResponse.json({ error: CRYPTO_NOT_SUPPORTED(symbol) }, { status: 400 })
 
   const [qs, candles5y, spyCandles5y, competitorSymbols, news] = await Promise.all([
     fetchQuoteSummary(symbol),
@@ -50,6 +56,7 @@ export async function GET(req: NextRequest) {
     fetchNews(symbol),
   ])
   if (!qs) return NextResponse.json({ error: `Could not retrieve data for "${symbol}" right now. Either this isn't a recognized ticker, or the free Yahoo Finance data source is temporarily rate-limiting requests — wait a minute and try again.` }, { status: 404 })
+  if (qs.price?.quoteType === 'CRYPTOCURRENCY') return NextResponse.json({ error: CRYPTO_NOT_SUPPORTED(symbol) }, { status: 400 })
 
   const competitors = (await Promise.all(competitorSymbols.map(buildCompetitor))).filter((c): c is NonNullable<typeof c> => c != null)
 
