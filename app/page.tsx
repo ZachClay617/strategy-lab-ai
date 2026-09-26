@@ -12,7 +12,7 @@ const speeds = [
   { key:'normal', label:'Normal · 1 test / s', ms:1000 },
   { key:'fast', label:'Fast · 10 tests / s', ms:100 },
   { key:'turbo', label:'Turbo · 50 tests / s', ms:20 },
-  { key:'ultraTurbo', label:'Ultra Turbo · 150 tests / s', ms:Math.round(1000/150) },
+  { key:'ultraTurbo', label:'Ultra Turbo · 115 tests / s', ms:Math.round(1000/115) },
   { key:'god', label:'God Speed · 500 tests / s', ms:Math.round(1000/500) },
 ] as const
 const MAX_VARIATIONS = 100000
