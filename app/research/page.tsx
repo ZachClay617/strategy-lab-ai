@@ -281,7 +281,7 @@ async function waitWhilePaused(){
 
 export default function Home(){
  const router=useRouter()
- const [session,setSession]=useState<any>(null),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[mode,setMode]=useState<'login'|'signup'>('login'),[msg,setMsg]=useState(''),[showPassword,setShowPassword]=useState(false),[strategies,setStrategies]=useState<Strategy[]>([]),[runs,setRuns]=useState<Run[]>([]),[selected,setSelected]=useState<Strategy|null>(null),[variations,setVariations]=useState(25000),[minTrades,setMinTrades]=useState(1),[idea,setIdea]=useState(''),[liveCandles,setLiveCandles]=useState<Candle[]>([]),[liveStatus,setLiveStatus]=useState('Waiting for live market data'),[watchLive,setWatchLive]=useState(true),[chartWindow,setChartWindow]=useState<number>(14),[runSort,setRunSort]=useState<'newest'|'oldest'|'qualified'|'bestScore'>('newest'),[expandedRuns,setExpandedRuns]=useState<Record<string,boolean>>({}),[symbolNames,setSymbolNames]=useState<Record<string,string>>({}),[avatarUrl,setAvatarUrl]=useState<string|null>(null),[signupUsername,setSignupUsername]=useState('')
+ const [session,setSession]=useState<any>(null),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[mode,setMode]=useState<'login'|'signup'>('login'),[msg,setMsg]=useState(''),[showPassword,setShowPassword]=useState(false),[strategies,setStrategies]=useState<Strategy[]>([]),[runs,setRuns]=useState<Run[]>([]),[selected,setSelected]=useState<Strategy|null>(null),[variations,setVariations]=useState(25000),[minTrades,setMinTrades]=useState(1),[idea,setIdea]=useState(''),[liveCandles,setLiveCandles]=useState<Candle[]>([]),[liveStatus,setLiveStatus]=useState('Waiting for live market data'),[watchLive,setWatchLive]=useState(true),[chartWindow,setChartWindow]=useState<number>(14),[runSort,setRunSort]=useState<'newest'|'oldest'|'qualified'|'bestScore'>('newest'),[expandedRuns,setExpandedRuns]=useState<Record<string,boolean>>({}),[favLogsOpen,setFavLogsOpen]=useState(false),[symbolNames,setSymbolNames]=useState<Record<string,string>>({}),[avatarUrl,setAvatarUrl]=useState<string|null>(null),[signupUsername,setSignupUsername]=useState('')
  const rs=useSyncExternalStore(subscribeRun,getRunSnapshot,getRunSnapshot)
  const {running,paused,progress,feed,testLog,activeCandidate,researchCandles,activeIndex,activeTrades,rejectionCounts,tickerError,selectedRun,balance,symbol,market,runMode,speedKey:speed,completedCount,qualifiedCount}=rs
  useEffect(()=>{if(!supabase)return;supabase.auth.getSession().then(({data})=>setSession(data.session));const {data}=supabase.auth.onAuthStateChange((_e,s)=>setSession(s));return()=>data.subscription.unsubscribe()},[])
@@ -471,8 +471,29 @@ export default function Home(){
      const when=run?.started_at||list[0]?.created_at
      return {runId,run,list:list.slice().sort((a,b)=>b.score-a.score),when}
    }).filter(e=>e.run?.favorite).sort((a,b)=>new Date(b.when||0).getTime()-new Date(a.when||0).getTime())
-   const renderFavGroup=(g:typeof favEntries[number])=>{const key=`fav-${g.runId}`;const isOpen=!!expandedRuns[key];return <div className="run-group" key={g.runId}><button className="run-group-header" onClick={()=>setExpandedRuns(prev=>({...prev,[key]:!prev[key]}))}><span className={`chevron ${isOpen?'open':''}`}>▸</span><b>{g.run?`${g.run.symbol} · ${g.run.market}`:g.list[0]?.symbol}</b><span>{fmtDateTime(g.when)}</span><span>{g.list.length} qualified</span>{g.run&&<span>{(g.run.tested_count||g.run.variations_requested).toLocaleString()} tested</span>}{g.run&&<span>{fmtMoney(g.run.starting_balance)} → {fmtMoney(g.run.current_balance)}</span>}<span className="star on" onClick={e=>{e.stopPropagation();toggleFavoriteRun(g.runId)}}>★</span></button>{isOpen&&<div className="table">{g.list.map(s=><button className="row" key={s.id} onClick={()=>openStrategy(s)}><div><strong>{s.name}</strong><span>{s.family} · completed {fmtDateTime(s.created_at)}</span><span className="how-it-works">{describeFamily(s.family,s.parameters)}</span></div><span>{s.metrics?.winRate?.toFixed(1)}% WR</span><span>{s.metrics?.returnPct?.toFixed(1)}% return</span><span>{s.metrics?.maxDrawdownPct?.toFixed(1)}% DD</span><span>{s.metrics?.sharpe?.toFixed(2)} Sharpe</span><span>{s.metrics?.trades} trades</span></button>)}</div>}</div>}
-   return <section className="panel"><div className="panel-title"><h2>FAVORITED STRATEGY LOGS</h2><span className="muted">{favEntries.length} favorited</span></div>{favEntries.length===0?<div className="empty">Star a run in the Successful Strategy Log below to pin it here.</div>:<div className="run-groups">{favEntries.map(renderFavGroup)}</div>}</section>
+   const renderFavCard=(g:typeof favEntries[number])=>{const key=`fav-${g.runId}`;const isOpen=!!expandedRuns[key];return <div className={`fav-card ${isOpen?'open':''}`} key={g.runId}>
+     <button className="fav-card-star" title="Unpin" onClick={()=>toggleFavoriteRun(g.runId)}>★</button>
+     <button className="fav-card-body" onClick={()=>setExpandedRuns(prev=>({...prev,[key]:!prev[key]}))}>
+       <b>{g.run?`${g.run.symbol} · ${g.run.market}`:g.list[0]?.symbol}</b>
+       <span>{fmtDateTime(g.when)}</span>
+       <span>{g.list.length} qualified{g.run?` · ${(g.run.tested_count||g.run.variations_requested).toLocaleString()} tested`:''}</span>
+       {g.run&&<span>{fmtMoney(g.run.starting_balance)} → {fmtMoney(g.run.current_balance)}</span>}
+       <span className={`fav-card-chevron ${isOpen?'open':''}`}>▾ {isOpen?'HIDE':'STRATEGIES'}</span>
+     </button>
+     {isOpen&&<div className="fav-card-list">{g.list.map(s=><button className="fav-card-strategy" key={s.id} onClick={()=>openStrategy(s)}><b>{s.name}</b><span>{s.metrics?.winRate?.toFixed(1)}% WR · {s.metrics?.returnPct?.toFixed(1)}% return</span></button>)}</div>}
+   </div>}
+   return <div className="fav-orbit-wrap">
+     <button className="fav-orbit-trigger" onClick={()=>setFavLogsOpen(o=>!o)}>
+       <span className="fav-orbit-ring"><span className="fav-orbit-core">{favEntries.length}</span></span>
+       <span className="fav-orbit-label">FAVORITED STRATEGY LOGS</span>
+       <span className="fav-orbit-hint">{favLogsOpen?'Tap to collapse':favEntries.length?'Tap to reveal':'Star a run to begin'}</span>
+       <span className={`fav-orbit-arrow ${favLogsOpen?'open':''}`}>▾</span>
+     </button>
+     {favLogsOpen&&<div className="fav-tray">
+       {favEntries.length===0?<div className="empty">Star a run in the Successful Strategy Log below to pin it here.</div>:
+       <div className="fav-tray-scroll">{favEntries.map(renderFavCard)}</div>}
+     </div>}
+   </div>
  })()}
  <section className="panel"><div className="panel-title"><h2>SUCCESSFUL STRATEGY LOG</h2><span className="muted">Saved to Supabase · grouped by run</span></div><div className="metrics"><div><span>Approval rule</span><b>≥45% WR + ≥0.025% return</b></div><div><span>Research capital</span><b>{fmtMoney(balance)}</b></div><div><span>Position mode</span><b>Long only, max 2% risk per trade</b></div><div><span>Market feed</span><b>Live chart</b></div></div>
  {strategies.length>0&&<label className="inline-select run-sort"><span>Sort runs by</span><select value={runSort} onChange={e=>setRunSort(e.target.value as typeof runSort)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="qualified">Most successful overall (qualified count)</option><option value="bestScore">Best single strategy score</option></select></label>}
