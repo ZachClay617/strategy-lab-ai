@@ -33,7 +33,9 @@ const MODULES = [
 export async function fetchQuoteSummary(symbol: string): Promise<any | null> {
   const url = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=${MODULES}`
   const j = await yahooFetch(url)
-  return j?.quoteSummary?.result?.[0] || null
+  const result = j?.quoteSummary?.result?.[0] || null
+  if (!result) console.error('[companyReport] quoteSummary returned no result for', symbol, '— raw response:', JSON.stringify(j).slice(0, 500))
+  return result
 }
 
 // Lighter-weight fetch used for competitor comparisons (fewer modules, faster).
