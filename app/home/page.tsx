@@ -156,7 +156,7 @@ export default function HomePage(){
           </svg>
         </span>
         <h2>Portfolios</h2>
-        <p>Describe a portfolio in plain language and track real holdings and returns.</p>
+        <p>Speak your intent to A-TAMP in plain language and watch it materialize a live portfolio — real holdings, real returns, tracked in real time.</p>
         <span className="service-cta">ENTER PORTFOLIOS →</span>
       </Link>
       <Link href="/company-report" className="service-card">
