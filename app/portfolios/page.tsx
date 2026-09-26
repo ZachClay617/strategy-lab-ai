@@ -425,7 +425,7 @@ export default function Portfolios(){
           </div>
 
           <div className="section-label">HOLDINGS</div>
-          {holdings.length>0&&<div className="row row-head" style={{gridTemplateColumns:'minmax(0,.8fr) minmax(0,.55fr) minmax(0,.55fr) minmax(0,.7fr) minmax(0,.8fr) minmax(0,.75fr) minmax(0,.65fr) minmax(0,.85fr) minmax(0,.85fr) minmax(0,1.3fr)'}}>
+          {holdings.length>0&&<div className="row row-head" style={{gridTemplateColumns:'minmax(0,.8fr) minmax(0,.55fr) minmax(0,.55fr) minmax(0,.7fr) minmax(0,.7fr) minmax(0,.75fr) minmax(0,.65fr) minmax(0,1.1fr) minmax(0,1.1fr) minmax(0,1fr)'}}>
             <span>Symbol</span>
             <span>Shares</span>
             <span>Weight</span>
@@ -446,7 +446,7 @@ export default function Portfolios(){
             const dayRet=p&&p.prevClose?(p.last/p.prevClose-1)*100:null
             const dayRetDollar=p&&p.prevClose?(p.last-p.prevClose)*sh:null
             const isEditing=editingId===h.id
-            return <div className="row" key={h.id} style={{gridTemplateColumns:'minmax(0,.8fr) minmax(0,.55fr) minmax(0,.55fr) minmax(0,.7fr) minmax(0,.8fr) minmax(0,.75fr) minmax(0,.65fr) minmax(0,.85fr) minmax(0,.85fr) minmax(0,1.3fr)'}}>
+            return <div className="row" key={h.id} style={{gridTemplateColumns:'minmax(0,.8fr) minmax(0,.55fr) minmax(0,.55fr) minmax(0,.7fr) minmax(0,.7fr) minmax(0,.75fr) minmax(0,.65fr) minmax(0,1.1fr) minmax(0,1.1fr) minmax(0,1fr)'}}>
               <span style={{minWidth:0}}><b>{h.symbol}</b>{names[h.symbol]&&<span className="how-it-works" style={{marginTop:2,whiteSpace:'normal',wordBreak:'break-word'}}>{names[h.symbol]}</span>}</span>
               <span>{isEditing?<input type="number" min={0} step="0.0001" value={editShares} onChange={e=>setEditShares(e.target.value)} placeholder="1"/>:(h.shares!=null?h.shares:'1 (default)')}</span>
               <span>{weightOf(h).toFixed(1)}%</span>
