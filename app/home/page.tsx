@@ -10,15 +10,8 @@ type ClosedTrade = { portfolio_id:string; symbol:string; shares:number; entry_pr
 type PriceInfo = { last:number; prevClose:number|null }
 
 function fmtPct(n:number|null){if(n==null)return '—';return `${n>=0?'+':''}${n.toFixed(2)}%`}
-function fmtMoney(n:number){const abs=Math.abs(n);const sign=n<0?'-':''
-  if(abs>=1e12)return `${sign}$${(abs/1e12).toFixed(2)}T`
-  if(abs>=1e9)return `${sign}$${(abs/1e9).toFixed(2)}B`
-  if(abs>=1e6)return `${sign}$${(abs/1e6).toFixed(2)}M`
-  if(abs>=1e3)return `${sign}$${(abs/1e3).toFixed(1)}K`
-  return `${sign}$${abs.toFixed(2)}`
-}
-function fmtDollar(n:number){return `${n>=0?'+':'-'}${fmtMoney(Math.abs(n)).replace('$','$')}`}
 function fmtExact(n:number){const sign=n<0?'-':'';return `${sign}$${Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`}
+function fmtDollar(n:number){return `${n>=0?'+':'-'}${fmtExact(Math.abs(n))}`}
 
 function greeting(profile:Profile|null,fallbackEmail?:string|null){
   const hour=new Date().getHours()
