@@ -120,7 +120,7 @@ export default function HomePage(){
   return <div className="shell home-page">
     <section className="hero home-hero">
       <div>
-        <div className="eyebrow">A-TAMP ONLINE</div>
+        <div className="online-badge"><span className="online-dot"></span>A-TAMP ONLINE</div>
         <h1 className="home-greeting">{greeting(profile,session.user.email)}</h1>
         <p className="muted home-tagline">A-TAMP is online and ready to be at your service.</p>
       </div>
