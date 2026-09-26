@@ -80,6 +80,9 @@ export default function CompanyReportPage() {
   const [report, setReport] = useState<any>(null)
   const [savedReports, setSavedReports] = useState<{ id: string; symbol: string; company_name: string; created_at: string; favorite?: boolean }[]>([])
   const [loadingSavedId, setLoadingSavedId] = useState<string | null>(null)
+  const [reportsOpen, setReportsOpen] = useState(false)
+  const [reportsTab, setReportsTab] = useState<'all' | 'favorites'>('all')
+  const [reportsQuery, setReportsQuery] = useState('')
 
   const PENDING_NARRATIVE = { mode: 'pending' }
 
@@ -141,8 +144,48 @@ export default function CompanyReportPage() {
     setLoading(false)
   }
 
+  const filteredReports = savedReports
+    .filter(r => reportsTab === 'all' || r.favorite)
+    .filter(r => !reportsQuery.trim() || `${r.company_name} ${r.symbol}`.toLowerCase().includes(reportsQuery.trim().toLowerCase()))
+  const favCount = savedReports.filter(r => r.favorite).length
+
   return <div className="shell">
-    <section className="hero"><div><div className="eyebrow">EQUITY RESEARCH</div><h1>Company <span>Analysis Report.</span></h1><p className="muted">Enter a publicly traded ticker to generate a comprehensive report built entirely from real, free market data — nothing is invented, and any metric a company doesn't publicly report is labeled as such.</p></div></section>
+    <section className="hero">
+      <div><div className="eyebrow">EQUITY RESEARCH</div><h1>Company <span>Analysis Report.</span></h1><p className="muted">Enter a publicly traded ticker to generate a comprehensive report built entirely from real, free market data — nothing is invented, and any metric a company doesn't publicly report is labeled as such.</p></div>
+      {session && <div className="vault-wrap">
+        <button className="vault-trigger" onClick={() => setReportsOpen(o => !o)}>
+          <span className="vault-trigger-icon">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.4" opacity=".5"/><circle cx="12" cy="12" r="9" stroke="url(#vault-grad)" strokeWidth="1.4" strokeDasharray="8 46" strokeLinecap="round"/><defs><linearGradient id="vault-grad" x1="0" y1="0" x2="24" y2="24"><stop offset="0" stopColor="#8ff3ff"/><stop offset="1" stopColor="#8b72ff"/></linearGradient></defs><path d="M8.5 12.5l2.2 2.2L16 9.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </span>
+          SAVED REPORTS
+          <span className="vault-trigger-count">{savedReports.length}</span>
+          <span className={`vault-trigger-chevron ${reportsOpen ? 'open' : ''}`}>▾</span>
+        </button>
+        {reportsOpen && <>
+          <div className="vault-backdrop" onClick={() => setReportsOpen(false)} />
+          <div className="vault-panel">
+            <div className="vault-panel-head">
+              <div className="vault-tabs">
+                <button className={reportsTab === 'all' ? 'active' : ''} onClick={() => setReportsTab('all')}>All <span>{savedReports.length}</span></button>
+                <button className={reportsTab === 'favorites' ? 'active' : ''} onClick={() => setReportsTab('favorites')}>★ Favorites <span>{favCount}</span></button>
+              </div>
+            </div>
+            <input className="vault-search" value={reportsQuery} onChange={e => setReportsQuery(e.target.value)} placeholder="Search saved reports…" />
+            <div className="vault-list">
+              {!filteredReports.length && <div className="vault-empty">{reportsQuery.trim() ? 'No saved reports match your search.' : reportsTab === 'favorites' ? 'No favorited reports yet. Star one to pin it here.' : 'No reports saved yet. Generate one and it\'ll show up here.'}</div>}
+              {filteredReports.map(r => <div className="vault-item" key={r.id}>
+                <button className="vault-item-star" onClick={() => toggleFavoriteReport(r.id)}>{r.favorite ? '★' : '☆'}</button>
+                <button className="vault-item-main" onClick={() => { viewSavedReport(r.id); setReportsOpen(false) }} disabled={loadingSavedId === r.id}>
+                  <span className="vault-item-name">{r.company_name}</span>
+                  <span className="vault-item-meta"><b>{r.symbol}</b> · {fmtDateTime(r.created_at)}</span>
+                </button>
+                <span className="vault-item-go">{loadingSavedId === r.id ? '…' : '→'}</span>
+              </div>)}
+            </div>
+          </div>
+        </>}
+      </div>}
+    </section>
 
     <section className="panel">
       <form onSubmit={generate} className="add-holding-grid" style={{ gridTemplateColumns: '2fr 1fr', alignItems: 'end' }}>
@@ -150,47 +193,8 @@ export default function CompanyReportPage() {
         <button className="run" type="submit" disabled={loading} style={{ marginTop: 0 }}>{loading ? 'GENERATING…' : 'MAKE A-TAMP GENERATE COMPANY REPORT'}</button>
       </form>
       <p className="field-warning">Running this costs real money — it calls a paid AI model to write the analysis sections of the report.</p>
+      {!session && <p className="muted" style={{ marginTop: 12 }}>Log in on the <a href="/research">Research</a> page to save reports and revisit them here later.</p>}
       {error && <p className="msg banner" style={{ marginTop: 16 }}>{error}</p>}
-    </section>
-
-    {session && savedReports.some(r => r.favorite) && <section className="panel">
-      <div className="panel-title"><h2>FAVORITED REPORTS</h2><span className="muted">{savedReports.filter(r => r.favorite).length} favorited</span></div>
-      <div className="row row-head" style={{ gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,.5fr) minmax(0,.7fr)' }}>
-        <span>Company</span>
-        <span>Ticker</span>
-        <span>Generated</span>
-        <span></span>
-        <span></span>
-      </div>
-      <div className="table">{savedReports.filter(r => r.favorite).map(r => <div className="row" key={r.id} style={{ gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,.5fr) minmax(0,.7fr)' }}>
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><b>{r.company_name}</b></span>
-        <span>{r.symbol}</span>
-        <span>{fmtDateTime(r.created_at)}</span>
-        <span className="star on" onClick={() => toggleFavoriteReport(r.id)}>★</span>
-        <button className="ghost" onClick={() => viewSavedReport(r.id)} disabled={loadingSavedId === r.id}>{loadingSavedId === r.id ? 'LOADING…' : 'VIEW'}</button>
-      </div>)}</div>
-    </section>}
-
-    <section className="panel">
-      <div className="panel-title"><h2>SAVED REPORTS</h2></div>
-      {!session && <p className="muted">Log in on the <a href="/research">Research</a> page to save reports and revisit them here later.</p>}
-      {session && !savedReports.length && <div className="empty">No reports saved yet. Generate one above and it'll show up here.</div>}
-      {session && savedReports.length > 0 && <>
-        <div className="row row-head" style={{ gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,.5fr) minmax(0,.7fr)' }}>
-          <span>Company</span>
-          <span>Ticker</span>
-          <span>Generated</span>
-          <span></span>
-          <span></span>
-        </div>
-        <div className="table">{savedReports.map(r => <div className="row" key={r.id} style={{ gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,.5fr) minmax(0,.7fr)' }}>
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><b>{r.company_name}</b></span>
-          <span>{r.symbol}</span>
-          <span>{fmtDateTime(r.created_at)}</span>
-          <span className={`star ${r.favorite ? 'on' : ''}`} onClick={() => toggleFavoriteReport(r.id)}>{r.favorite ? '★' : '☆'}</span>
-          <button className="ghost" onClick={() => viewSavedReport(r.id)} disabled={loadingSavedId === r.id}>{loadingSavedId === r.id ? 'LOADING…' : 'VIEW'}</button>
-        </div>)}</div>
-      </>}
     </section>
 
     {report && <>
