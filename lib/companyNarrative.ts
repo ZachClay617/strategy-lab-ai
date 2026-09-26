@@ -55,7 +55,7 @@ Respond with ONLY strict JSON (no markdown, no prose outside the JSON) in exactl
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 6000, messages: [{ role: 'user', content: prompt }] }),
+      body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 12000, messages: [{ role: 'user', content: prompt }] }),
     })
     const j = await r.json()
     if (j?.stop_reason === 'max_tokens') console.error('company-report AI response hit max_tokens before finishing')
