@@ -177,13 +177,11 @@
 .fav-card-strategy b{font-size:12px;color:var(--text)}
 .fav-card-strategy span{font-size:10px;color:var(--muted)}
 
-.cta-glow{position:relative;background:#0a0e1d;overflow:hidden;isolation:isolate;color:#fff;text-shadow:0 1px 3px #000a;box-shadow:0 0 0 1px #ffffff1a inset,0 8px 30px -10px #57e8ff66;transition:transform .15s ease,box-shadow .2s ease}
-.cta-glow::before{content:'';position:absolute;inset:-75%;background:conic-gradient(from 0deg,#54dcff,#8d73ff,#ff6fae,#ffd166,#54dcff,#8d73ff,#54dcff);animation:cta-spin 7s linear infinite,cta-hue 12s linear infinite;z-index:-2}
-.cta-glow::after{content:'';position:absolute;inset:-30%;background:radial-gradient(circle,#ffffffb0,transparent 60%);mix-blend-mode:overlay;animation:cta-drift 4.5s ease-in-out infinite;z-index:-1}
-.cta-glow:hover{transform:translateY(-2px);box-shadow:0 0 0 1px #ffffff2e inset,0 14px 36px -8px #8b72ff88}
+.cta-glow{position:relative;overflow:hidden;isolation:isolate;color:#050713;background:linear-gradient(120deg,#6ee7ff,#8d73ff,#ffb4d8,#ffd166,#6ee7ff);background-size:400% 400%;animation:cta-aurora 9s ease-in-out infinite;box-shadow:0 0 0 1px #ffffff26 inset,0 10px 32px -12px #8b72ff77;transition:transform .15s ease,box-shadow .2s ease}
+.cta-glow::before{content:'';position:absolute;inset:0;background:linear-gradient(115deg,transparent 25%,#ffffff70 50%,transparent 75%);background-size:250% 100%;animation:cta-sheen 3.6s ease-in-out infinite;pointer-events:none}
+.cta-glow:hover{transform:translateY(-2px);box-shadow:0 0 0 1px #ffffff3a inset,0 16px 38px -10px #8b72ff99}
 .cta-glow:active{transform:translateY(0)}
 .cta-glow:disabled{box-shadow:none;transform:none}
-@keyframes cta-spin{to{transform:rotate(360deg)}}
-@keyframes cta-hue{to{filter:hue-rotate(360deg)}}
-@keyframes cta-drift{0%{transform:translate(-20%,-15%) scale(1)}25%{transform:translate(18%,-12%) scale(1.15)}50%{transform:translate(12%,18%) scale(1)}75%{transform:translate(-15%,12%) scale(1.1)}100%{transform:translate(-20%,-15%) scale(1)}}
-@media(prefers-reduced-motion:reduce){.cta-glow::before,.cta-glow::after{animation:none}}
+@keyframes cta-aurora{0%,100%{background-position:0% 50%}25%{background-position:100% 20%}50%{background-position:100% 100%}75%{background-position:0% 80%}}
+@keyframes cta-sheen{0%{background-position:150% 0}60%,100%{background-position:-60% 0}}
+@media(prefers-reduced-motion:reduce){.cta-glow,.cta-glow::before{animation:none}}
