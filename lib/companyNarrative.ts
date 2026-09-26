@@ -7,18 +7,20 @@ import { NOT_REPORTED, UNAVAILABLE } from './companyReport'
 function buildAiInputBundle(bundle: any) {
   const truncate = (s: string, n: number) => (typeof s === 'string' && s.length > n ? s.slice(0, n) + '…' : s)
   return {
-    ...bundle,
-    overview: { ...bundle.overview, businessSummary: truncate(bundle.overview.businessSummary, 700) },
-    competitors: bundle.competitors.slice(0, 5),
-    news: bundle.news.slice(0, 4).map((n: any) => ({ ...n, description: truncate(n.description, 140) })),
-    analystRevisions: bundle.analystRevisions.slice(0, 5),
-    earningsSurprises: bundle.earningsSurprises.slice(-4),
+    symbol: bundle.symbol,
+    overview: { ...bundle.overview, businessSummary: truncate(bundle.overview.businessSummary, 400) },
+    competitors: bundle.competitors.slice(0, 4),
+    customerGrowth: bundle.customerGrowth,
+    financialHealth: { ...bundle.financialHealth, income: { ...bundle.financialHealth.income, revenueHistory: Array.isArray(bundle.financialHealth.income.revenueHistory) ? bundle.financialHealth.income.revenueHistory.slice(-3) : bundle.financialHealth.income.revenueHistory } },
     management: {
-      ...bundle.management,
-      officers: bundle.management.officers.slice(0, 5),
-      recentInsiderHolders: bundle.management.recentInsiderHolders.slice(0, 5),
-      recentInsiderTransactions: bundle.management.recentInsiderTransactions.slice(0, 5),
+      ceo: bundle.management.ceo, cfo: bundle.management.cfo,
+      insiderOwnershipPct: bundle.management.insiderOwnershipPct, institutionalOwnershipPct: bundle.management.institutionalOwnershipPct,
+      recentInsiderTransactions: bundle.management.recentInsiderTransactions.slice(0, 3),
     },
+    news: bundle.news.slice(0, 2).map((n: any) => ({ title: n.title, description: truncate(n.description, 100) })),
+    catalysts: bundle.catalysts,
+    technicals: bundle.technicals,
+    shareholderReturns: bundle.shareholderReturns,
   }
 }
 
@@ -28,29 +30,29 @@ export async function generateNarrative(bundle: any): Promise<any> {
   if (!apiKey) return { mode: 'template', ...fallback }
   try {
     const aiInput = buildAiInputBundle(bundle)
-    const prompt = `You are writing sections of an equity research report on ${bundle.overview.name} (${bundle.symbol}) using ONLY the real data JSON below (it has been trimmed to the most relevant recent items, not the full history). This data was pulled from Yahoo Finance and computed directly from real historical prices — do not invent any numbers, competitors, customers, executives, or events that are not present in this JSON. If something needed for a section is missing from the data, say so explicitly using the exact phrase "Not publicly reported" or "Data unavailable" rather than guessing. Be concise and do not exceed the requested lengths below — this keeps the report consistent in size across different companies.
+    const prompt = `Equity research notes on ${bundle.overview.name} (${bundle.symbol}). Use ONLY the JSON data below (already trimmed to the essentials) — never invent numbers, competitors, customers, executives, or events not present in it. If something is missing, write exactly "Not publicly reported" or "Data unavailable". Be extremely concise — short sentences, no filler, no restating numbers you already showed elsewhere. Do not exceed the word/bullet limits given.
 
 DATA:
 ${JSON.stringify(aiInput)}
 
-Respond with ONLY strict JSON (no markdown, no prose outside the JSON) in exactly this shape:
+Return ONLY strict JSON, no markdown, in exactly this shape (keep every field within its stated limit):
 {
-  "businessExplanation": "2-4 sentences explaining in plain language, for someone unfamiliar with the company, what it does, based on the businessSummary and segments in the data.",
-  "competitiveAnalysis": "A few sentences comparing the company to the competitors array on the metrics actually present (revenue, margins, growth, market cap, FCF, debt, cash, 1yr return). State advantages and disadvantages you can see in the numbers, and whether the position looks like it is strengthening, weakening, or stable based only on the documented figures. Do not declare a single 'winner' or give arbitrary scores.",
-  "customerGrowthAnalysis": "If customerGrowth.status is 'Not publicly reported', just state that this company does not publicly report customer/user metrics and briefly note that growth quality here should be inferred only from revenue growth in financialHealth. Do not estimate a customer count.",
-  "brandStrengthFacts": ["bullet points of DOCUMENTED facts relevant to brand strength, e.g. margins implying pricing power, analyst sentiment, dividend consistency — cite the actual numbers from the data"],
-  "brandStrengthInference": ["bullet points explicitly labeled as AI analysis/inference about brand strength that go beyond the raw numbers — keep these clearly speculative in tone"],
+  "businessExplanation": "1 short sentence: what the company does, plain language.",
+  "competitiveAnalysis": "2 short sentences on how it stacks up vs the competitors array on margins/growth/cap. No winner declared.",
+  "customerGrowthAnalysis": "1 short sentence.",
+  "brandStrengthFacts": ["1 short documented-fact bullet"],
+  "brandStrengthInference": ["1 short bullet, clearly speculative"],
   "swot": {
-    "strengths": ["3-5 bullets grounded in the data"],
-    "weaknesses": ["3-5 bullets grounded in the data"],
-    "opportunities": ["3-5 bullets, label inference-heavy ones as (AI inference)"],
-    "threats": ["3-5 bullets, label inference-heavy ones as (AI inference)"]
+    "strengths": ["2 short bullets"],
+    "weaknesses": ["2 short bullets"],
+    "opportunities": ["2 short bullets, mark inference-heavy ones (AI inference)"],
+    "threats": ["2 short bullets, mark inference-heavy ones (AI inference)"]
   },
-  "executiveSummary": "A concise, scannable paragraph (5-8 sentences) covering what the company does, business condition, growth trajectory, competitive position, brand strength, financial condition, opportunities, risks, and what to monitor next — using only the provided data.",
-  "newsCommentary": [{"title":"(copy exact title from a news item)","whyItMatters":"1-2 sentences on why it matters and potential implications, staying grounded in what the headline/description actually says"}],
-  "catalystCommentary": "1-3 sentences on what investors will likely watch at the next earnings date given the analyst estimates in the data, with no prediction of the outcome.",
-  "technicalsCommentary": "2-4 sentences explaining what the moving averages, RSI, MACD, and relative performance vs SPY in the data show about the current technical picture, with no price prediction.",
-  "finalAnalysis": "A closing 5-8 sentence synthesis connecting revenue growth, margins, free cash flow, competitive position, management/insider activity, news, catalysts, technicals, and shareholder returns from the data — answering 'what actually matters about this company' without inventing facts."
+  "executiveSummary": "3 short sentences covering condition, trajectory, and what to watch.",
+  "newsCommentary": [{"title":"(exact title of at most the top 2 news items)","whyItMatters":"1 short sentence"}],
+  "catalystCommentary": "1 short sentence, no outcome prediction.",
+  "technicalsCommentary": "1 short sentence on what the indicators show, no prediction.",
+  "finalAnalysis": "3 short sentences synthesizing what matters most."
 }`
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -58,6 +60,7 @@ Respond with ONLY strict JSON (no markdown, no prose outside the JSON) in exactl
       body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 12000, messages: [{ role: 'user', content: prompt }] }),
     })
     const j = await r.json()
+    if (j?.usage) console.error('company-report AI usage', JSON.stringify(j.usage))
     if (j?.stop_reason === 'max_tokens') console.error('company-report AI response hit max_tokens before finishing')
     const text = Array.isArray(j?.content) ? j.content.find((b: any) => b?.type === 'text')?.text : undefined
     if (!text || text.indexOf('{') === -1) { console.error('company-report AI response had no usable text', JSON.stringify(j).slice(0, 1500)); return { mode: 'template', ...fallback } }
