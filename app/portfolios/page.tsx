@@ -431,7 +431,7 @@ export default function Portfolios(){
         <form onSubmit={createPortfolio}>
           <label>Portfolio name<input value={newName} onChange={e=>setNewName(e.target.value)} placeholder="e.g. Dividend Compounders" required/></label>
           <label>Description — tell the AI what this portfolio should do<textarea value={newDesc} onChange={e=>setNewDesc(e.target.value)} placeholder="e.g. Aggressive growth tech and AI names, willing to accept high volatility for upside."/></label>
-          <button className="run" type="submit">+ CREATE PORTFOLIO</button>
+          <button className="run" type="submit">+ MAKE A-TAMP GENERATE PORTFOLIO</button>
         </form>
       </section>
       <section className="panel">
