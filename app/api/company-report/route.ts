@@ -5,6 +5,13 @@ import {
 } from '@/lib/companyReport'
 
 export const dynamic = 'force-dynamic'
+// Vercel's regular serverless functions run on AWS Lambda IPs that Yahoo
+// Finance's quoteSummary endpoint is blocking outright (confirmed via
+// production logs: a valid crumb still gets a plain-text 429 "Too Many
+// Requests" on the actual data request, not just the crumb endpoint). The
+// Edge runtime egresses through a different network path that may not be
+// on the same blocklist.
+export const runtime = 'edge'
 
 function last<T>(arr: T[]): T | null { return arr.length ? arr[arr.length - 1] : null }
 
