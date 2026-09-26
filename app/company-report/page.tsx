@@ -94,8 +94,9 @@ export default function CompanyReportPage() {
 
   async function saveReport(fullReport: any) {
     if (!supabase || !session?.user) return
-    const { error } = await supabase.from('company_reports').insert({ user_id: session.user.id, symbol: fullReport.symbol, company_name: fullReport.overview?.name || fullReport.symbol, report: fullReport })
-    if (!error) loadSavedReports()
+    const { data, error } = await supabase.from('company_reports').insert({ user_id: session.user.id, symbol: fullReport.symbol, company_name: fullReport.overview?.name || fullReport.symbol, report: fullReport }).select('id,symbol,company_name,created_at').maybeSingle()
+    if (!error && data) setSavedReports(prev => [data as any, ...prev])
+    else if (!error) loadSavedReports()
   }
 
   async function viewSavedReport(id: string) {
@@ -166,7 +167,7 @@ export default function CompanyReportPage() {
     {report && <>
       {/* 1. COMPANY & BUSINESS OVERVIEW */}
       <section className="panel">
-        <div className="panel-title"><h2>1. COMPANY &amp; BUSINESS OVERVIEW</h2><span className="muted">Price as of {report.overview.priceAsOf}</span></div>
+        <div className="panel-title"><h2>1. COMPANY &amp; BUSINESS OVERVIEW</h2><span className="muted">Price as of {report.overview.priceAsOf}</span><button className="ghost" onClick={() => setReport(null)} style={{ marginLeft: 'auto' }}>✕ CLOSE REPORT</button></div>
         <div className="metrics" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
           <div><span>Company</span><b>{report.overview.name}</b></div>
           <div><span>Ticker</span><b>{report.overview.ticker} · {report.overview.exchange}</b></div>
