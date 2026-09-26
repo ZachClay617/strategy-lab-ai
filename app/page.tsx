@@ -278,7 +278,7 @@ async function waitWhilePaused(){
 }
 
 export default function Home(){
- const [session,setSession]=useState<any>(null),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[mode,setMode]=useState<'login'|'signup'>('login'),[msg,setMsg]=useState(''),[showPassword,setShowPassword]=useState(false),[strategies,setStrategies]=useState<Strategy[]>([]),[runs,setRuns]=useState<Run[]>([]),[selected,setSelected]=useState<Strategy|null>(null),[variations,setVariations]=useState(25000),[minTrades,setMinTrades]=useState(1),[idea,setIdea]=useState(''),[liveCandles,setLiveCandles]=useState<Candle[]>([]),[liveStatus,setLiveStatus]=useState('Waiting for live market data'),[watchLive,setWatchLive]=useState(true),[chartWindow,setChartWindow]=useState<number>(14),[runSort,setRunSort]=useState<'newest'|'oldest'|'qualified'|'bestScore'>('newest'),[expandedRuns,setExpandedRuns]=useState<Record<string,boolean>>({}),[symbolNames,setSymbolNames]=useState<Record<string,string>>({}),[avatarUrl,setAvatarUrl]=useState<string|null>(null)
+ const [session,setSession]=useState<any>(null),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[mode,setMode]=useState<'login'|'signup'>('login'),[msg,setMsg]=useState(''),[showPassword,setShowPassword]=useState(false),[strategies,setStrategies]=useState<Strategy[]>([]),[runs,setRuns]=useState<Run[]>([]),[selected,setSelected]=useState<Strategy|null>(null),[variations,setVariations]=useState(25000),[minTrades,setMinTrades]=useState(1),[idea,setIdea]=useState(''),[liveCandles,setLiveCandles]=useState<Candle[]>([]),[liveStatus,setLiveStatus]=useState('Waiting for live market data'),[watchLive,setWatchLive]=useState(true),[chartWindow,setChartWindow]=useState<number>(14),[runSort,setRunSort]=useState<'newest'|'oldest'|'qualified'|'bestScore'>('newest'),[expandedRuns,setExpandedRuns]=useState<Record<string,boolean>>({}),[symbolNames,setSymbolNames]=useState<Record<string,string>>({}),[avatarUrl,setAvatarUrl]=useState<string|null>(null),[signupUsername,setSignupUsername]=useState('')
  const rs=useSyncExternalStore(subscribeRun,getRunSnapshot,getRunSnapshot)
  const {running,paused,progress,feed,testLog,activeCandidate,researchCandles,activeIndex,activeTrades,rejectionCounts,tickerError,selectedRun,balance,symbol,market,runMode,speedKey:speed}=rs
  useEffect(()=>{if(!supabase)return;supabase.auth.getSession().then(({data})=>setSession(data.session));const {data}=supabase.auth.onAuthStateChange((_e,s)=>setSession(s));return()=>data.subscription.unsubscribe()},[])
@@ -310,12 +310,39 @@ export default function Home(){
    }
    setMsg('');setStrategies((s||[]) as Strategy[]);setRuns((r||[]) as Run[]);const {data:p}=await supabase.from('profiles').select('current_balance,avatar_url').eq('id',session.user.id).maybeSingle();if(p?.current_balance!=null&&!runSnapshot.running)patchRun({balance:Number(p.current_balance)});setAvatarUrl(p?.avatar_url||null)
  }
- async function auth(e:React.FormEvent){e.preventDefault();setMsg('');if(!supabase){setMsg('Add Supabase environment variables first.');return}const res=mode==='signup'?await supabase.auth.signUp({email,password}):await supabase.auth.signInWithPassword({email,password});if(res.error)setMsg(res.error.message);else if(mode==='signup')setMsg('Account created. Check your email if confirmation is enabled.')}
+ async function resolveLoginEmail(identifier:string):Promise<{email?:string;error?:string}>{
+   const id=identifier.trim()
+   if(id.includes('@'))return {email:id}
+   const {data,error}=await supabase!.rpc('get_email_for_username',{uname:id})
+   if(error)return {error:error.message}
+   if(!data)return {error:'No account found with that username.'}
+   return {email:data as string}
+ }
+ async function auth(e:React.FormEvent){
+   e.preventDefault();setMsg('')
+   if(!supabase){setMsg('Add Supabase environment variables first.');return}
+   if(mode==='signup'){
+     const res=await supabase.auth.signUp({email,password})
+     if(res.error){setMsg(res.error.message);return}
+     if(signupUsername.trim()&&res.data.user){
+       const {error:unameErr}=await supabase.from('profiles').upsert({id:res.data.user.id,username:signupUsername.trim()})
+       if(unameErr){setMsg(`Account created, but that username could not be saved (${unameErr.message}). You can set one later in Account settings.`);return}
+     }
+     setMsg('Account created. Check your email if confirmation is enabled.')
+     return
+   }
+   const resolved=await resolveLoginEmail(email)
+   if(resolved.error){setMsg(resolved.error);return}
+   const res=await supabase.auth.signInWithPassword({email:resolved.email!,password})
+   if(res.error)setMsg(res.error.message)
+ }
  async function forgotPassword(){
    setMsg('')
    if(!supabase){setMsg('Add Supabase environment variables first.');return}
-   if(!email.trim()){setMsg('Enter your email above first, then click "Forgot password?" again.');return}
-   const {error}=await supabase.auth.resetPasswordForEmail(email.trim(),{redirectTo:`${window.location.origin}/reset-password`})
+   if(!email.trim()){setMsg('Enter your email or username above first, then click "Forgot password?" again.');return}
+   const resolved=await resolveLoginEmail(email)
+   if(resolved.error){setMsg(resolved.error);return}
+   const {error}=await supabase.auth.resetPasswordForEmail(resolved.email!,{redirectTo:`${window.location.origin}/reset-password`})
    if(error){setMsg(error.message);return}
    setMsg('Password reset email sent. Check your inbox for a link to set a new password.')
  }
@@ -412,7 +439,7 @@ export default function Home(){
  }
  async function resetBalance(){if(!supabase||!session?.user)return;await supabase.from('capital_events').insert({user_id:session.user.id,event_type:'reset',amount_before:balance,amount_after:STARTING_CAPITAL});const {error}=await supabase.from('profiles').upsert({id:session.user.id,current_balance:STARTING_CAPITAL,starting_balance:STARTING_CAPITAL});if(error){setMsg(`Could not save the reset: ${error.message}`);return}patchRun({balance:STARTING_CAPITAL})}
  async function toggleFavoriteRun(runId:string){if(!supabase)return;const run=runs.find(r=>r.id===runId);const next=!run?.favorite;setRuns(prev=>prev.map(r=>r.id===runId?{...r,favorite:next}:r));const {error}=await supabase.from('research_runs').update({favorite:next}).eq('id',runId);if(error){setMsg(`Could not update favorite: ${error.message}. Run the latest Supabase migration.`);setRuns(prev=>prev.map(r=>r.id===runId?{...r,favorite:!next}:r))}}
- if(!session)return <main className="shell auth"><div className="brand">◈ STRATEGY LAB <em>AI</em></div><section className="auth-card"><div className="eyebrow">PERSISTENT RESEARCH PLATFORM</div><h1>Find strategies. <span>Test everything.</span></h1><p className="muted">Accounts and research data are stored in Supabase. Sessions persist across reloads and devices.</p><form onSubmit={auth} className="auth-form"><input type="email" placeholder="you@example.com" value={email} onChange={e=>setEmail(e.target.value)} required/><div className="password-field"><input type={showPassword?'text':'password'} placeholder="Password (8+ characters)" value={password} onChange={e=>setPassword(e.target.value)} minLength={8} required/><button type="button" className="password-toggle" onClick={()=>setShowPassword(s=>!s)}>{showPassword?'HIDE':'SHOW'}</button></div><button className="primary">{mode==='login'?'ENTER LAB':'CREATE ACCOUNT'}</button></form><div className="auth-links"><button className="link" onClick={()=>setMode(mode==='login'?'signup':'login')}>{mode==='login'?'Need an account? Create one':'Already have an account? Sign in'}</button>{mode==='login'&&<button className="link" onClick={forgotPassword}>Forgot password?</button>}</div>{msg&&<div className="msg">{msg}</div>}</section></main>
+ if(!session)return <main className="shell auth"><div className="brand">◈ STRATEGY LAB <em>AI</em></div><section className="auth-card"><div className="eyebrow">PERSISTENT RESEARCH PLATFORM</div><h1>Find strategies. <span>Test everything.</span></h1><p className="muted">Accounts and research data are stored in Supabase. Sessions persist across reloads and devices.</p><form onSubmit={auth} className="auth-form"><input type={mode==='signup'?'email':'text'} placeholder={mode==='signup'?'you@example.com':'Email or username'} value={email} onChange={e=>setEmail(e.target.value)} required/>{mode==='signup'&&<input type="text" placeholder="Username (optional)" value={signupUsername} onChange={e=>setSignupUsername(e.target.value)}/>}<div className="password-field"><input type={showPassword?'text':'password'} placeholder="Password (8+ characters)" value={password} onChange={e=>setPassword(e.target.value)} minLength={8} required/><button type="button" className="password-toggle" onClick={()=>setShowPassword(s=>!s)}>{showPassword?'HIDE':'SHOW'}</button></div><button className="primary">{mode==='login'?'ENTER LAB':'CREATE ACCOUNT'}</button></form><div className="auth-links"><button className="link" onClick={()=>setMode(mode==='login'?'signup':'login')}>{mode==='login'?'Need an account? Create one':'Already have an account? Sign in'}</button>{mode==='login'&&<button className="link" onClick={forgotPassword}>Forgot password?</button>}</div>{msg&&<div className="msg">{msg}</div>}</section></main>
  return <main className="shell"><header className="topbar"><div className="brand">◈ STRATEGY LAB <em>AI</em></div><div className="top-actions"><Link href="/account" className="account-pill" title="Account settings">{avatarUrl?<img src={avatarUrl} alt="Account"/>:<span>{(session.user.email||'?').charAt(0).toUpperCase()}</span>}</Link></div></header>
  {msg&&<div className="msg banner">{msg}</div>}
  <section className="hero"><div><div className="eyebrow">AI STRATEGY RESEARCH ENGINE</div><h1>Build. Break. <span>Repeat.</span></h1><p className="muted">Watch the engine generate, test, buy and sell, reject weak ideas, and save the strategies that pass the rules.</p></div><div className="balance"><small>AI RESEARCH CAPITAL</small><strong>{fmtMoney(balance)}</strong>{(()=>{const pl=balance-STARTING_CAPITAL;const plPct=pl/STARTING_CAPITAL*100;const up=pl>=0;return <div className={`pl ${up?'up':'down'}`}>{up?'▲':'▼'} {fmtMoney(Math.abs(pl))} ({up?'+':'-'}{Math.abs(plPct).toFixed(2)}%)</div>})()}<button onClick={resetBalance}>RESET TO {fmtMoney(STARTING_CAPITAL)}</button></div></section>

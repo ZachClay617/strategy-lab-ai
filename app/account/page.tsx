@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { CURRENCIES } from '@/lib/currencies'
 
-type Profile = { id:string; email:string|null; full_name:string|null; avatar_url:string|null; currency:string }
+type Profile = { id:string; email:string|null; full_name:string|null; avatar_url:string|null; currency:string; username:string|null }
 
 function resizeImageToDataUrl(file:File, size=160, quality=0.82):Promise<string>{
   return new Promise((resolve,reject)=>{
@@ -34,6 +34,7 @@ export default function Account(){
   const [session,setSession]=useState<any>(null)
   const [profile,setProfile]=useState<Profile|null>(null)
   const [nameDraft,setNameDraft]=useState('')
+  const [usernameDraft,setUsernameDraft]=useState('')
   const [avatarDraft,setAvatarDraft]=useState<string|null>(null)
   const [currencyDraft,setCurrencyDraft]=useState('USD')
   const [newPassword,setNewPassword]=useState('')
@@ -47,10 +48,10 @@ export default function Account(){
 
   async function loadProfile(){
     if(!supabase||!session?.user)return
-    const {data,error}=await supabase.from('profiles').select('id,email,full_name,avatar_url,currency').eq('id',session.user.id).maybeSingle()
-    if(error){setMsg(`Could not load your profile: ${error.message}. Run migration_v14_profile_settings.sql in Supabase.`);return}
-    const p=(data as Profile)||{id:session.user.id,email:session.user.email,full_name:null,avatar_url:null,currency:'USD'}
-    setProfile(p);setNameDraft(p.full_name||'');setAvatarDraft(p.avatar_url);setCurrencyDraft(p.currency||'USD')
+    const {data,error}=await supabase.from('profiles').select('id,email,full_name,avatar_url,currency,username').eq('id',session.user.id).maybeSingle()
+    if(error){setMsg(`Could not load your profile: ${error.message}. Run migration_v14_profile_settings.sql and migration_v17_username_login.sql in Supabase.`);return}
+    const p=(data as Profile)||{id:session.user.id,email:session.user.email,full_name:null,avatar_url:null,currency:'USD',username:null}
+    setProfile(p);setNameDraft(p.full_name||'');setAvatarDraft(p.avatar_url);setCurrencyDraft(p.currency||'USD');setUsernameDraft(p.username||'')
   }
 
   async function onPickAvatar(e:React.ChangeEvent<HTMLInputElement>){
@@ -71,6 +72,13 @@ export default function Account(){
     const {error}=await supabase.from('profiles').upsert({id:session.user.id,full_name:nameDraft.trim()||null})
     if(error){setMsg(`Could not save name: ${error.message}`);return}
     setMsg('Name updated.');await loadProfile()
+  }
+
+  async function saveUsername(){
+    if(!supabase||!session?.user)return
+    const {error}=await supabase.from('profiles').upsert({id:session.user.id,username:usernameDraft.trim()||null})
+    if(error){setMsg(error.code==='23505'?'That username is already taken.':`Could not save username: ${error.message}`);return}
+    setMsg('Username updated.');await loadProfile()
   }
 
   async function saveCurrency(){
@@ -116,6 +124,10 @@ export default function Account(){
         <div className="section-label">NAME</div>
         <label>Display name<input value={nameDraft} onChange={e=>setNameDraft(e.target.value)} placeholder="e.g. Zach Clay"/></label>
         <button className="ghost" onClick={saveName} disabled={nameDraft===(profile?.full_name||'')}>SAVE NAME</button>
+
+        <div className="section-label">USERNAME</div>
+        <label>Log in with this instead of your email<input value={usernameDraft} onChange={e=>setUsernameDraft(e.target.value.replace(/\s/g,''))} placeholder="e.g. zachclay"/></label>
+        <button className="ghost" onClick={saveUsername} disabled={usernameDraft===(profile?.username||'')}>SAVE USERNAME</button>
       </section>
 
       <section className="panel">
