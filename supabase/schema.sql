@@ -65,6 +65,7 @@ create table if not exists public.capital_events (
 );
 
 create index if not exists strategies_user_score_idx on public.strategies(user_id, approved, score desc);
+create index if not exists strategies_user_created_idx on public.strategies(user_id, created_at desc);
 create index if not exists runs_user_started_idx on public.research_runs(user_id, started_at desc);
 
 alter table public.profiles enable row level security;
