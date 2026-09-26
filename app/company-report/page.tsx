@@ -68,8 +68,11 @@ function Table({ head, rows }: { head: string[]; rows: (string | number)[][] }) 
 export default function CompanyReportPage() {
   const [symbol, setSymbol] = useState('')
   const [loading, setLoading] = useState(false)
+  const [narrativeLoading, setNarrativeLoading] = useState(false)
   const [error, setError] = useState('')
   const [report, setReport] = useState<any>(null)
+
+  const PENDING_NARRATIVE = { mode: 'pending' }
 
   async function generate(e: React.FormEvent) {
     e.preventDefault()
@@ -79,7 +82,16 @@ export default function CompanyReportPage() {
       const r = await fetch(`/api/company-report?symbol=${encodeURIComponent(symbol.trim().toUpperCase())}`)
       const j = await r.json()
       if (!r.ok) { setError(j.error || 'Could not generate report.'); setLoading(false); return }
-      setReport(j)
+      setReport({ ...j, narrative: PENDING_NARRATIVE })
+      setLoading(false)
+      setNarrativeLoading(true)
+      try {
+        const nr = await fetch('/api/company-report/narrative', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(j) })
+        const nj = await nr.json()
+        setReport((prev: any) => prev ? { ...prev, narrative: nj.narrative } : prev)
+      } catch { /* data report still stands on its own without the written analysis */ }
+      setNarrativeLoading(false)
+      return
     } catch (e: any) { setError(`Request failed: ${e.message}`) }
     setLoading(false)
   }
@@ -114,7 +126,7 @@ export default function CompanyReportPage() {
           <div><span>Website</span><b><Val v={report.overview.website} /></b></div>
         </div>
         <div className="section-label"><b>WHAT THE COMPANY DOES</b></div>
-        <p className="muted" style={{ lineHeight: 1.6 }}>{report.narrative.businessExplanation}</p>
+        <p className="muted" style={{ lineHeight: 1.6 }}>{report.narrative.businessExplanation ?? (report.narrative.mode==='pending' ? 'Generating analysis…' : '')}</p>
         <div className="section-label"><b>MAIN PRODUCTS, REVENUE SOURCES, SEGMENTS &amp; GEOGRAPHIC EXPOSURE</b></div>
         <p className="tiny">This tool's free data sources do not provide a structured breakdown of business segments or geographic revenue mix. The explanation above is drawn from the company's own public business description; a structured segment/geography split is <b>Not publicly reported</b> through this tool.</p>
       </section>
@@ -131,14 +143,14 @@ export default function CompanyReportPage() {
           ])}
         /> : <p className="muted">No comparable publicly traded competitors could be identified through this tool's free data sources.</p>}
         <div className="section-label"><b>ANALYSIS</b></div>
-        <p className="muted" style={{ lineHeight: 1.6 }}>{report.narrative.competitiveAnalysis}</p>
+        <p className="muted" style={{ lineHeight: 1.6 }}>{report.narrative.competitiveAnalysis ?? (report.narrative.mode==='pending' ? 'Generating analysis…' : '')}</p>
       </section>
 
       {/* 3. CUSTOMER GROWTH ANALYSIS */}
       <section className="panel">
         <div className="panel-title"><h2>3. CUSTOMER GROWTH ANALYSIS</h2></div>
         <p className="muted">{report.customerGrowth.status}</p>
-        <p className="tiny">{report.narrative.customerGrowthAnalysis}</p>
+        <p className="tiny">{report.narrative.customerGrowthAnalysis ?? (report.narrative.mode==='pending' ? 'Generating analysis…' : '')}</p>
       </section>
 
       {/* 4. BRAND STRENGTH ANALYSIS */}
@@ -171,7 +183,7 @@ export default function CompanyReportPage() {
       {/* 6. EXECUTIVE SUMMARY */}
       <section className="panel">
         <div className="panel-title"><h2>6. EXECUTIVE SUMMARY</h2></div>
-        <p className="muted" style={{ lineHeight: 1.7 }}>{report.narrative.executiveSummary}</p>
+        <p className="muted" style={{ lineHeight: 1.7 }}>{report.narrative.executiveSummary ?? (report.narrative.mode==='pending' ? 'Generating analysis…' : '')}</p>
       </section>
 
       {/* 7. FINANCIAL HEALTH */}
@@ -256,7 +268,7 @@ export default function CompanyReportPage() {
           <div><span>Revenue estimate (avg)</span><b><Val v={report.catalysts.revenueEstimateAvg} money /></b></div>
           <div><span>Analyst price target (mean)</span><b>{report.catalysts.analystTargetMean != null ? `$${report.catalysts.analystTargetMean} (${report.catalysts.numberOfAnalysts} analysts)` : 'Data unavailable'}</b></div>
         </div>
-        <p className="muted" style={{ lineHeight: 1.6 }}>{report.narrative.catalystCommentary}</p>
+        <p className="muted" style={{ lineHeight: 1.6 }}>{report.narrative.catalystCommentary ?? (report.narrative.mode==='pending' ? 'Generating analysis…' : '')}</p>
         <p className="tiny">No outcome is predicted for any upcoming event — figures above are analyst consensus estimates, not forecasts by this tool.</p>
       </section>
 
@@ -284,7 +296,7 @@ export default function CompanyReportPage() {
           ['3 years', fmtPct(report.technicals.perfVsSpy.threeYear.stock, true), fmtPct(report.technicals.perfVsSpy.threeYear.spy, true)],
           ['5 years', fmtPct(report.technicals.perfVsSpy.fiveYear.stock, true), fmtPct(report.technicals.perfVsSpy.fiveYear.spy, true)],
         ]} />
-        <p className="muted" style={{ lineHeight: 1.6 }}>{report.narrative.technicalsCommentary}</p>
+        <p className="muted" style={{ lineHeight: 1.6 }}>{report.narrative.technicalsCommentary ?? (report.narrative.mode==='pending' ? 'Generating analysis…' : '')}</p>
       </section>
 
       {/* 12. SHAREHOLDER RETURNS */}
@@ -308,7 +320,7 @@ export default function CompanyReportPage() {
       {/* 13. ANALYSIS */}
       <section className="panel">
         <div className="panel-title"><h2>13. ANALYSIS</h2></div>
-        <p className="muted" style={{ lineHeight: 1.7 }}>{report.narrative.finalAnalysis}</p>
+        <p className="muted" style={{ lineHeight: 1.7 }}>{report.narrative.finalAnalysis ?? (report.narrative.mode==='pending' ? 'Generating analysis…' : '')}</p>
         {report.narrative.mode === 'template' && <p className="tiny" style={{ marginTop: 12 }}>Written synthesis sections use a plain template because no ANTHROPIC_API_KEY is configured for this deployment — every number shown throughout this report is still real and independently sourced/computed.</p>}
       </section>
     </>}
