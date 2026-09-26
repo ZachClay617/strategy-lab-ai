@@ -177,11 +177,13 @@
 .fav-card-strategy b{font-size:12px;color:var(--text)}
 .fav-card-strategy span{font-size:10px;color:var(--muted)}
 
-.cta-glow{position:relative;background:linear-gradient(90deg,#54dcff,#8d73ff,#ffd166,#8d73ff,#54dcff);background-size:300% 100%;animation:cta-flow 6s linear infinite;overflow:hidden;isolation:isolate;box-shadow:0 0 0 1px #ffffff1a inset,0 8px 30px -10px #57e8ff66;transition:transform .15s ease,box-shadow .2s ease}
-.cta-glow::before{content:'';position:absolute;inset:0;background:linear-gradient(115deg,transparent 20%,#ffffff85 50%,transparent 80%);background-size:250% 100%;background-position:150% 0;animation:cta-sheen 3.2s ease-in-out infinite;mix-blend-mode:overlay;pointer-events:none}
+.cta-glow{position:relative;background:#0a0e1d;overflow:hidden;isolation:isolate;color:#fff;text-shadow:0 1px 3px #000a;box-shadow:0 0 0 1px #ffffff1a inset,0 8px 30px -10px #57e8ff66;transition:transform .15s ease,box-shadow .2s ease}
+.cta-glow::before{content:'';position:absolute;inset:-75%;background:conic-gradient(from 0deg,#54dcff,#8d73ff,#ff6fae,#ffd166,#54dcff,#8d73ff,#54dcff);animation:cta-spin 7s linear infinite,cta-hue 12s linear infinite;z-index:-2}
+.cta-glow::after{content:'';position:absolute;inset:-30%;background:radial-gradient(circle,#ffffffb0,transparent 60%);mix-blend-mode:overlay;animation:cta-drift 4.5s ease-in-out infinite;z-index:-1}
 .cta-glow:hover{transform:translateY(-2px);box-shadow:0 0 0 1px #ffffff2e inset,0 14px 36px -8px #8b72ff88}
 .cta-glow:active{transform:translateY(0)}
-.cta-glow:disabled{animation:cta-flow 6s linear infinite;box-shadow:none;transform:none}
-@keyframes cta-flow{0%{background-position:0% 50%}100%{background-position:300% 50%}}
-@keyframes cta-sheen{0%{background-position:150% 0}55%,100%{background-position:-50% 0}}
-@media(prefers-reduced-motion:reduce){.cta-glow,.cta-glow::before{animation:none}}
+.cta-glow:disabled{box-shadow:none;transform:none}
+@keyframes cta-spin{to{transform:rotate(360deg)}}
+@keyframes cta-hue{to{filter:hue-rotate(360deg)}}
+@keyframes cta-drift{0%{transform:translate(-20%,-15%) scale(1)}25%{transform:translate(18%,-12%) scale(1.15)}50%{transform:translate(12%,18%) scale(1)}75%{transform:translate(-15%,12%) scale(1.1)}100%{transform:translate(-20%,-15%) scale(1)}}
+@media(prefers-reduced-motion:reduce){.cta-glow::before,.cta-glow::after{animation:none}}
