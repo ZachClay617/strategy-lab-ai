@@ -1,5 +1,11 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase'
+
+function fmtDateTime(iso?: string): string {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+}
 
 function fmtMoney(n: number | null | undefined): string {
   if (n == null) return 'Data unavailable'
@@ -66,13 +72,40 @@ function Table({ head, rows }: { head: string[]; rows: (string | number)[][] }) 
 }
 
 export default function CompanyReportPage() {
+  const [session, setSession] = useState<any>(null)
   const [symbol, setSymbol] = useState('')
   const [loading, setLoading] = useState(false)
   const [narrativeLoading, setNarrativeLoading] = useState(false)
   const [error, setError] = useState('')
   const [report, setReport] = useState<any>(null)
+  const [savedReports, setSavedReports] = useState<{ id: string; symbol: string; company_name: string; created_at: string }[]>([])
+  const [loadingSavedId, setLoadingSavedId] = useState<string | null>(null)
 
   const PENDING_NARRATIVE = { mode: 'pending' }
+
+  useEffect(() => { if (!supabase) return; supabase.auth.getSession().then(({ data }) => setSession(data.session)); const { data } = supabase.auth.onAuthStateChange((_e, s) => setSession(s)); return () => data.subscription.unsubscribe() }, [])
+  useEffect(() => { if (session?.user) loadSavedReports() }, [session?.user?.id])
+
+  async function loadSavedReports() {
+    if (!supabase || !session?.user) return
+    const { data } = await supabase.from('company_reports').select('id,symbol,company_name,created_at').eq('user_id', session.user.id).order('created_at', { ascending: false }).limit(50)
+    setSavedReports((data || []) as any)
+  }
+
+  async function saveReport(fullReport: any) {
+    if (!supabase || !session?.user) return
+    const { error } = await supabase.from('company_reports').insert({ user_id: session.user.id, symbol: fullReport.symbol, company_name: fullReport.overview?.name || fullReport.symbol, report: fullReport })
+    if (!error) loadSavedReports()
+  }
+
+  async function viewSavedReport(id: string) {
+    if (!supabase) return
+    setLoadingSavedId(id); setError('')
+    const { data, error: err } = await supabase.from('company_reports').select('report').eq('id', id).maybeSingle()
+    setLoadingSavedId(null)
+    if (err || !data) { setError('Could not load that saved report.'); return }
+    setReport(data.report)
+  }
 
   async function generate(e: React.FormEvent) {
     e.preventDefault()
@@ -88,7 +121,9 @@ export default function CompanyReportPage() {
       try {
         const nr = await fetch('/api/company-report/narrative', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(j) })
         const nj = await nr.json()
-        setReport((prev: any) => prev ? { ...prev, narrative: nj.narrative } : prev)
+        const finalReport = { ...j, narrative: nj.narrative }
+        setReport((prev: any) => prev ? finalReport : prev)
+        await saveReport(finalReport)
       } catch { /* data report still stands on its own without the written analysis */ }
       setNarrativeLoading(false)
       return
@@ -106,6 +141,26 @@ export default function CompanyReportPage() {
       </form>
       <p className="field-warning">Running this costs real money — it calls a paid AI model to write the analysis sections of the report.</p>
       {error && <p className="msg banner" style={{ marginTop: 16 }}>{error}</p>}
+    </section>
+
+    <section className="panel">
+      <div className="panel-title"><h2>SAVED REPORTS</h2></div>
+      {!session && <p className="muted">Log in on the <a href="/">Research</a> page to save reports and revisit them here later.</p>}
+      {session && !savedReports.length && <div className="empty">No reports saved yet. Generate one above and it'll show up here.</div>}
+      {session && savedReports.length > 0 && <>
+        <div className="row row-head" style={{ gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,.7fr)' }}>
+          <span>Company</span>
+          <span>Ticker</span>
+          <span>Generated</span>
+          <span></span>
+        </div>
+        <div className="table">{savedReports.map(r => <div className="row" key={r.id} style={{ gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,.7fr)' }}>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><b>{r.company_name}</b></span>
+          <span>{r.symbol}</span>
+          <span>{fmtDateTime(r.created_at)}</span>
+          <button className="ghost" onClick={() => viewSavedReport(r.id)} disabled={loadingSavedId === r.id}>{loadingSavedId === r.id ? 'LOADING…' : 'VIEW'}</button>
+        </div>)}</div>
+      </>}
     </section>
 
     {report && <>
