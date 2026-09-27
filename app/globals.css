@@ -231,6 +231,7 @@
 .fav-card-chevron{color:var(--cyan)!important;font-weight:800;letter-spacing:.05em;margin-top:4px;transition:transform .15s}
 .fav-card-list{margin-top:10px;padding-top:10px;border-top:1px solid #18213a;display:flex;flex-direction:column;gap:6px;max-height:160px;overflow-y:auto}
 .fav-card-strategy{position:relative;background:#080d1a;border:1px solid #18213a;border-radius:9px;padding:8px 28px 8px 10px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:2px}
+.strategy-id{display:inline-block;margin-right:6px;padding:1px 7px;border-radius:999px;background:#132043;border:1px solid #3a4d85;color:var(--cyan);font-size:11px;font-weight:900;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.02em;vertical-align:1px}
 .fav-card-strategy:hover{border-color:#44517a}
 .fav-card-strategy b{font-size:12px;color:var(--text)}
 .fav-card-strategy span.star{position:absolute;top:6px;right:8px;font-size:13px}
