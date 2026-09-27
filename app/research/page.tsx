@@ -9,6 +9,7 @@ import {
   describeFamily, backtestSession, combineMetrics, hardSafetyCheck, evaluateQualification,
   rankScore, dedupeKey, paramsPlausible, randomParams, clampParamsToSession, validateDataset,
   splitChronological, makeWalkForwardFolds, EXECUTION, clamp, seeded, Metrics, DataSource,
+  SESSION_START_MIN, SESSION_END_MIN, SESSION_RANGE_DAYS,
 } from './engine'
 
 const markets = ['Stocks','Crypto']
@@ -22,9 +23,6 @@ const speeds = [
 ] as const
 const MAX_VARIATIONS = 1000000
 const MAX_MIN_TRADES = 3000
-const CANDLE_MINUTES = 15
-const SESSION_START_MIN=9*60, SESSION_END_MIN=12*60
-const SESSION_RANGE_DAYS = 55
 // Real historical depth from the free data feed is limited by bar size: 15-minute
 // bars are only retained for ~55 days, hourly for ~2 years, daily for 10+ years.
 // To give the AI a genuinely real 10-year testing pool, each test's date decides
@@ -166,13 +164,17 @@ function extractMorningSessions(data:Candle[]):Record<string,Candle[]>{
   return byDay
 }
 function randomWindow(data:Candle[], r:()=>number, minutesPerBar:number=15){
-  const weekCapBars=Math.max(1,Math.floor(MAX_CHART_SPAN_MS/(minutesPerBar*60000)))
-  const minLen=Math.min(data.length,60,weekCapBars)
+  // MAX_CHART_SPAN_MS bounds sub-daily bar counts to a sane display/backtest span
+  // (e.g. ~168 hourly bars). It's a wall-clock span, so applying it to daily bars
+  // (1440 min/bar) collapsed every daily-tier window to exactly 7 bars — far too
+  // short to ever accumulate enough trades. Daily bars get their own bar-count cap.
+  const barCap=minutesPerBar>=1440?260:Math.max(1,Math.floor(MAX_CHART_SPAN_MS/(minutesPerBar*60000)))
+  const minLen=Math.min(data.length,60,barCap)
   if(data.length<=minLen)return data
   const maxStart=data.length-minLen
   const start=Math.floor(r()*maxStart)
   const remaining=data.length-start
-  const maxExtra=Math.min(remaining-minLen,200,weekCapBars-minLen)
+  const maxExtra=Math.min(remaining-minLen,200,barCap-minLen)
   const len=Math.max(minLen,Math.floor(minLen+r()*Math.max(0,maxExtra)))
   return data.slice(start,Math.min(data.length,start+len))
 }
