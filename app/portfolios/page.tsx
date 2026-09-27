@@ -512,12 +512,11 @@ export default function Portfolios(){
           </div>
 
           <div className="section-label">HOLDINGS</div>
-          {holdings.length>0&&<div className="row row-head" style={{gridTemplateColumns:'minmax(0,.8fr) minmax(0,.55fr) minmax(0,.55fr) minmax(0,.7fr) minmax(0,.7fr) minmax(0,.75fr) minmax(0,.65fr) minmax(0,1.1fr) minmax(0,1.1fr) minmax(0,1fr)'}}>
+          {holdings.length>0&&<div className="row row-head" style={{gridTemplateColumns:'minmax(0,.8fr) minmax(0,.55fr) minmax(0,.55fr) minmax(0,.7fr) minmax(0,.75fr) minmax(0,.65fr) minmax(0,1.1fr) minmax(0,1.1fr) minmax(0,1fr)'}}>
             <span>Symbol</span>
             <span>Shares</span>
             <span>Weight</span>
             <span>Equity</span>
-            <span>Added</span>
             <span>Average Cost</span>
             <span>Current Price</span>
             <span>TOTAL RETURN</span>
@@ -533,12 +532,11 @@ export default function Portfolios(){
             const dayRet=p&&p.prevClose?(p.last/p.prevClose-1)*100:null
             const dayRetDollar=p&&p.prevClose?(p.last-p.prevClose)*sh:null
             const isEditing=editingId===h.id
-            return <div className="row" key={h.id} style={{gridTemplateColumns:'minmax(0,.8fr) minmax(0,.55fr) minmax(0,.55fr) minmax(0,.7fr) minmax(0,.7fr) minmax(0,.75fr) minmax(0,.65fr) minmax(0,1.1fr) minmax(0,1.1fr) minmax(0,1fr)'}}>
+            return <div className="row" key={h.id} style={{gridTemplateColumns:'minmax(0,.8fr) minmax(0,.55fr) minmax(0,.55fr) minmax(0,.7fr) minmax(0,.75fr) minmax(0,.65fr) minmax(0,1.1fr) minmax(0,1.1fr) minmax(0,1fr)'}}>
               <span style={{minWidth:0}}><b>{h.symbol}</b>{names[h.symbol]&&<span className="how-it-works" style={{marginTop:2,whiteSpace:'normal',wordBreak:'break-word'}}>{names[h.symbol]}</span>}</span>
               <span>{isEditing?<input type="number" min={0} step="0.0001" value={editShares} onChange={e=>setEditShares(e.target.value)} placeholder="1"/>:(h.shares!=null?h.shares:'1 (default)')}</span>
               <span>{weightOf(h).toFixed(1)}%</span>
               <span>{equity!=null?`$${equity.toFixed(2)}`:'—'}</span>
-              <span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{h.added_by==='ai'?'Added by AI':'Added by you'} · {fmtDateTime(h.added_at)}</span>
               <span>{isEditing?<input type="number" min={0} step="0.01" value={editAvgCost} onChange={e=>setEditAvgCost(e.target.value)} placeholder="not set"/>:(h.entry_price?`$${h.entry_price.toFixed(2)}`:'not set')}</span>
               <span>{p?`$${p.last.toFixed(2)}`:'loading…'}</span>
               <span className={ret!=null?(ret>=0?'up':'down'):''} style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ret!=null?`${fmtPct(ret)} (${fmtDollar(retDollar!)})`:'—'}</span>
