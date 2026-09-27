@@ -212,6 +212,15 @@ function aggregateMetrics(list:any[]){
 }
 function randomParams(r:()=>number){return{fast:Math.floor(5+r()*55),slow:Math.floor(30+r()*120),lookback:Math.floor(10+r()*80),threshold:.001+r()*.03,rsi:25+Math.floor(r()*35),vol:r()*.8}}
 function fmtDateTime(iso?:string){if(!iso)return '—';return new Date(iso).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'})}
+function downloadJSON(filename:string,data:any){
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'})
+  const url=URL.createObjectURL(blob)
+  const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove()
+  URL.revokeObjectURL(url)
+}
+function strategyExportRow(s:Strategy){
+  return {name:s.name,symbol:s.symbol,market:s.market,family:s.family,parameters:s.parameters,score:s.score,approved:s.approved,metrics:s.metrics,explanation:s.explanation,test_start_at:s.test_start_at,test_end_at:s.test_end_at,created_at:s.created_at}
+}
 function fmtClock(iso?:string){if(!iso)return '—';return new Date(iso).toLocaleTimeString('en-US',{timeZone:'America/New_York',hour:'numeric',minute:'2-digit'})}
 function etParts(iso:string){
   const d=new Date(iso)
@@ -605,8 +614,9 @@ export default function Home(){
        <span className={`fav-orbit-arrow ${favLogsOpen?'open':''}`}>▾</span>
      </button>
      {favLogsOpen&&<div className="fav-tray">
-       {favEntries.length===0?<div className="empty">Star a run in the Successful Strategy Log below to pin it here.</div>:
-       <div className="fav-tray-scroll">{favEntries.map(renderFavCard)}</div>}
+       {favEntries.length===0?<div className="empty">Star a run in the Successful Strategy Log below to pin it here.</div>:<>
+       <button className="ghost fav-download" onClick={()=>downloadJSON(`favorited-strategy-logs-${new Date().toISOString().slice(0,10)}.json`,favEntries.map(g=>({run:g.run?{symbol:g.run.symbol,market:g.run.market,started_at:g.run.started_at,finished_at:g.run.finished_at,tested:g.run.tested_count??g.run.variations_requested,qualified:g.run.qualified_count,summary:g.run.summary}:null,strategies:g.list.map(strategyExportRow)})))}>⬇ DOWNLOAD FAVORITED LOGS</button>
+       <div className="fav-tray-scroll">{favEntries.map(renderFavCard)}</div></>}
      </div>}
    </div>
  })()}
@@ -630,8 +640,9 @@ export default function Home(){
        <span className={`fav-orbit-arrow ${favStrategiesOpen?'open':''}`}>▾</span>
      </button>
      {favStrategiesOpen&&<div className="fav-tray">
-       {favStrategies.length===0?<div className="empty">Star an individual strategy in the Successful Strategy Log below to pin it here.</div>:
-       <div className="fav-tray-scroll">{favStrategies.map(renderFavStrategyCard)}</div>}
+       {favStrategies.length===0?<div className="empty">Star an individual strategy in the Successful Strategy Log below to pin it here.</div>:<>
+       <button className="ghost fav-download" onClick={()=>downloadJSON(`favorited-strategies-${new Date().toISOString().slice(0,10)}.json`,favStrategies.map(strategyExportRow))}>⬇ DOWNLOAD FAVORITED STRATEGIES</button>
+       <div className="fav-tray-scroll">{favStrategies.map(renderFavStrategyCard)}</div></>}
      </div>}
    </div>
  })()}

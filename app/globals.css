@@ -218,6 +218,7 @@
 .fav-orbit-arrow{color:#6b7690;transition:transform .2s}
 .fav-orbit-arrow.open{transform:rotate(180deg);color:var(--cyan)}
 .fav-tray{margin-top:12px;animation:fav-tray-in .2s ease}
+.fav-download{margin-bottom:10px;font-size:11px;letter-spacing:.04em}
 @keyframes fav-tray-in{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
 .fav-tray-scroll{display:flex;gap:12px;overflow-x:auto;padding-bottom:8px;scroll-snap-type:x mandatory}
 .fav-card{position:relative;scroll-snap-align:start;flex:0 0 230px;background:#0a0e1d;border:1px solid #202b49;border-radius:14px;padding:14px;transition:border-color .15s,flex-basis .15s}
