@@ -136,11 +136,11 @@ export default function HomePage(){
     const bucket=perPortfolio[c.portfolio_id]||(perPortfolio[c.portfolio_id]={costBasis:0,returnDollar:0})
     bucket.costBasis+=c.entry_price*c.shares;bucket.returnDollar+=c.realized_pl
   }
-  let topPortfolio:{name:string;pct:number}|null=null
+  let topPortfolio:{name:string;pct:number;dollar:number}|null=null
   for(const port of portfolios){
     const bucket=perPortfolio[port.id];if(!bucket||bucket.costBasis<=0)continue
     const pct=bucket.returnDollar/bucket.costBasis*100
-    if(!topPortfolio||pct>topPortfolio.pct)topPortfolio={name:port.name,pct}
+    if(!topPortfolio||pct>topPortfolio.pct)topPortfolio={name:port.name,pct,dollar:bucket.returnDollar}
   }
 
   let topHoldingAllTime:{symbol:string;pct:number;dollar:number}|null=null
@@ -266,7 +266,7 @@ export default function HomePage(){
         <div><span>TOTAL RETURN</span><b className={overview.returnPct==null?'':overview.returnPct>=0?'up':'down'}>{overview.returnPct==null?'—':`${fmtPct(overview.returnPct)} (${fmtDollar(overview.returnDollar)})`}</b></div>
       </div>}
       {!loading&&hasAnyData&&<div className="metrics" style={{gridTemplateColumns:'repeat(3,1fr)',marginTop:14}}>
-        <div><span>TOP-PERFORMING PORTFOLIO</span><b className={!topPortfolio?'':topPortfolio.pct>=0?'up':'down'}>{topPortfolio?`${topPortfolio.name} (${fmtPct(topPortfolio.pct)})`:'—'}</b></div>
+        <div><span>TOP-PERFORMING PORTFOLIO</span><b className={!topPortfolio?'':topPortfolio.pct>=0?'up':'down'}>{topPortfolio?`${topPortfolio.name} (${fmtPct(topPortfolio.pct)}, ${fmtDollar(topPortfolio.dollar)})`:'—'}</b></div>
         <div><span>TOP HOLDING · ALL TIME</span><b className={!topHoldingAllTime?'':topHoldingAllTime.pct>=0?'up':'down'}>{topHoldingAllTime?`${topHoldingAllTime.symbol} (${fmtPct(topHoldingAllTime.pct)}, ${fmtDollar(topHoldingAllTime.dollar)})`:'—'}</b></div>
         <div><span>TOP HOLDING · TODAY</span><b className={!topHoldingToday?'':topHoldingToday.pct>=0?'up':'down'}>{topHoldingToday?`${topHoldingToday.symbol} (${fmtPct(topHoldingToday.pct)}, ${fmtDollar(topHoldingToday.dollar)})`:'—'}</b></div>
       </div>}
