@@ -16,7 +16,7 @@ const speeds = [
   { key:'ultraTurbo', label:'Ultra Turbo · 115 tests / s', ms:Math.round(1000/115) },
   { key:'god', label:'God Speed · 500 tests / s', ms:Math.round(1000/500) },
 ] as const
-const MAX_VARIATIONS = 100000
+const MAX_VARIATIONS = 1000000
 const MAX_MIN_TRADES = 3000
 const CANDLE_MINUTES = 15
 const SESSION_START_MIN=9*60, SESSION_END_MIN=12*60
@@ -62,7 +62,34 @@ function fmtMoney(n:number){
 function fmtPrice(n:number){return new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:2}).format(n)}
 function clamp(n:number,a:number,b:number){return Math.max(a,Math.min(b,n))}
 function seeded(seed:number){let x=seed|0;return()=>{x=(x*1664525+1013904223)|0;return(x>>>0)/4294967296}}
-function sleep(ms:number){return new Promise(r=>setTimeout(r,ms))}
+let timerWorker:Worker|null=null
+let timerSeq=0
+const timerResolvers=new Map<number,()=>void>()
+function getTimerWorker():Worker|null{
+  if(typeof window==='undefined')return null
+  if(!timerWorker){
+    try{
+      timerWorker=new Worker(new URL('./timerWorker.ts',import.meta.url))
+      timerWorker.onmessage=(e:MessageEvent<{id:number}>)=>{
+        const resolve=timerResolvers.get(e.data.id)
+        if(resolve){timerResolvers.delete(e.data.id);resolve()}
+      }
+    }catch{timerWorker=null}
+  }
+  return timerWorker
+}
+// Backed by a worker so pacing keeps running at full speed even while the
+// browser tab is in the background (main-thread setTimeout gets throttled
+// or paused once a tab loses focus; a worker's timers are not).
+function sleep(ms:number){
+  return new Promise<void>(resolve=>{
+    const worker=getTimerWorker()
+    if(!worker){setTimeout(resolve,ms);return}
+    const id=++timerSeq
+    timerResolvers.set(id,resolve)
+    worker.postMessage({id,ms})
+  })
+}
 function makeSynthetic(symbol:string, days:number):Candle[]{const r=seeded(symbol.split('').reduce((a,c)=>a+c.charCodeAt(0),0));let p=100;const out:Candle[]=[];for(let i=0;i<Math.min(days,2500);i++){const ret=(r()-.49)*.04;const open=p;p*=Math.exp(ret);const close=p;const high=Math.max(open,close)*(1+r()*.012);const low=Math.min(open,close)*(1-r()*.012);out.push({date:new Date(Date.now()-(days-i)*86400000).toISOString(),open,high,low,close,volume:500000+r()*4500000})}return out}
 
 function signalFor(data:Candle[], i:number, family:string, p:any){
