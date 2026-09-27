@@ -466,6 +466,7 @@ export default function Home(){
  }
  patchRun({researchCandles:data,activeIndex:0,activeTrades:[]})
  const best:any[]=[];let completed=0,qualified=0;const batch=100;const total=Math.max(50,variations);let capital=startingCapitalForRun;const rejections:Record<string,number>={}
+ let lastProgressSave=Date.now()
  outer: for(let b=0;b<total;b+=batch){if(stopFlag)break;const r=seeded(b+symbol.length*999+Date.now()%10000);for(let j=0;j<Math.min(batch,total-b);j++){
    await waitWhilePaused();if(stopFlag)break outer
    const index=completed+1;const family=families[Math.floor(r()*families.length)];const params=randomParams(r)
@@ -513,7 +514,7 @@ export default function Home(){
    if(index===1||index%250===0||passed){patchRun(s=>({feed:[`TEST #${index.toLocaleString()} · ${family} · ${passed?'QUALIFIED':'REJECTED'} · ${candidate.reason}`,...s.feed].slice(0,80)}));await saveEvent(runId,`Test #${index.toLocaleString()} · ${family} · ${passed?'qualified':'rejected'} · ${candidate.reason}`,passed?'success':'info',index/total*100)}
    completed++
    if(completed%uiStride===0||completed===total)patchRun({progress:completed/total*100})
-   if(completed%500===0||completed===total){const {error}=await supabase.from('research_runs').update({tested_count:completed,qualified_count:qualified,current_balance:capital}).eq('id',runId);if(error)console.error('run progress update failed',error)}
+   if(completed===total||Date.now()-lastProgressSave>=2000){lastProgressSave=Date.now();const {error}=await supabase.from('research_runs').update({tested_count:completed,qualified_count:qualified,current_balance:capital}).eq('id',runId);if(error)console.error('run progress update failed',error)}
    if(stopFlag)break outer
    await sleepSkippable()
  }
@@ -578,7 +579,7 @@ export default function Home(){
      <button className="fav-card-body" onClick={()=>setExpandedRuns(prev=>({...prev,[key]:!prev[key]}))}>
        <b>{g.run?`${g.run.symbol} · ${g.run.market}`:g.list[0]?.symbol}</b>
        <span>{fmtDateTime(g.when)}</span>
-       <span>{g.list.length} qualified{g.run?` · ${(g.run.tested_count||g.run.variations_requested).toLocaleString()} tested`:''}</span>
+       <span>{g.list.length} qualified{g.run?` · ${(g.run.tested_count??g.run.variations_requested).toLocaleString()} tested`:''}</span>
        {g.run&&<span>{fmtMoney(g.run.starting_balance)} → {fmtMoney(g.run.current_balance)}</span>}
        <span className={`fav-card-chevron ${isOpen?'open':''}`}>▾ {isOpen?'HIDE':'STRATEGIES'}</span>
      </button>
@@ -639,7 +640,7 @@ export default function Home(){
      if(runSort==='qualified')return b.list.length-a.list.length
      return b.bestScore-a.bestScore
    })
-   const renderGroup=(g:typeof entries[number])=>{const isOpen=!!expandedRuns[g.runId];const runLabel=g.run?`${g.run.symbol} · ${g.run.market} · ${fmtDateTime(g.when)}`:`${g.list[0]?.symbol} · ${fmtDateTime(g.when)}`;return <div className="run-group" key={g.runId}><button className="run-group-header" onClick={()=>setExpandedRuns(prev=>({...prev,[g.runId]:!prev[g.runId]}))}><span className={`chevron ${isOpen?'open':''}`}>▸</span><b>{g.run?`${g.run.symbol} · ${g.run.market}`:g.list[0]?.symbol}</b><span>{fmtDateTime(g.when)}</span><span>{g.list.length} qualified</span>{g.run&&<span>{(g.run.tested_count||g.run.variations_requested).toLocaleString()} tested</span>}{g.run&&<span>{fmtMoney(g.run.starting_balance)} → {fmtMoney(g.run.current_balance)}</span>}<span className={`star ${g.run?.favorite?'on':''}`} onClick={e=>{e.stopPropagation();g.run&&toggleFavoriteRun(g.runId)}}>{g.run?.favorite?'★':'☆'}</span><span className="run-delete" title="Delete this run" onClick={e=>{e.stopPropagation();setPendingDelete({kind:'run',runId:g.runId,label:runLabel})}}>🗑</span></button>{isOpen&&<div className="table">{g.list.map(s=><button className="row" key={s.id} style={{gridTemplateColumns:'2fr .6fr .8fr .8fr .8fr .8fr .4fr'}} onClick={()=>openStrategy(s)}><div><strong>{s.name}</strong><span>{s.family} · completed {fmtDateTime(s.created_at)}</span><span className="how-it-works">{describeFamily(s.family,s.parameters)}</span></div><span>{s.metrics?.winRate?.toFixed(1)}% WR</span><span>{s.metrics?.returnPct?.toFixed(1)}% return</span><span>{s.metrics?.maxDrawdownPct?.toFixed(1)}% DD</span><span>{s.metrics?.sharpe?.toFixed(2)} Sharpe</span><span>{s.metrics?.trades} trades</span><span className={`star ${s.favorite?'on':''}`} onClick={e=>{e.stopPropagation();toggleFavoriteStrategy(s.id)}}>{s.favorite?'★':'☆'}</span></button>)}</div>}</div>}
+   const renderGroup=(g:typeof entries[number])=>{const isOpen=!!expandedRuns[g.runId];const runLabel=g.run?`${g.run.symbol} · ${g.run.market} · ${fmtDateTime(g.when)}`:`${g.list[0]?.symbol} · ${fmtDateTime(g.when)}`;return <div className="run-group" key={g.runId}><button className="run-group-header" onClick={()=>setExpandedRuns(prev=>({...prev,[g.runId]:!prev[g.runId]}))}><span className={`chevron ${isOpen?'open':''}`}>▸</span><b>{g.run?`${g.run.symbol} · ${g.run.market}`:g.list[0]?.symbol}</b><span>{fmtDateTime(g.when)}</span><span>{g.list.length} qualified</span>{g.run&&<span>{(g.run.tested_count??g.run.variations_requested).toLocaleString()} tested</span>}{g.run&&<span>{fmtMoney(g.run.starting_balance)} → {fmtMoney(g.run.current_balance)}</span>}<span className={`star ${g.run?.favorite?'on':''}`} onClick={e=>{e.stopPropagation();g.run&&toggleFavoriteRun(g.runId)}}>{g.run?.favorite?'★':'☆'}</span><span className="run-delete" title="Delete this run" onClick={e=>{e.stopPropagation();setPendingDelete({kind:'run',runId:g.runId,label:runLabel})}}>🗑</span></button>{isOpen&&<div className="table">{g.list.map(s=><button className="row" key={s.id} style={{gridTemplateColumns:'2fr .6fr .8fr .8fr .8fr .8fr .4fr'}} onClick={()=>openStrategy(s)}><div><strong>{s.name}</strong><span>{s.family} · completed {fmtDateTime(s.created_at)}</span><span className="how-it-works">{describeFamily(s.family,s.parameters)}</span></div><span>{s.metrics?.winRate?.toFixed(1)}% WR</span><span>{s.metrics?.returnPct?.toFixed(1)}% return</span><span>{s.metrics?.maxDrawdownPct?.toFixed(1)}% DD</span><span>{s.metrics?.sharpe?.toFixed(2)} Sharpe</span><span>{s.metrics?.trades} trades</span><span className={`star ${s.favorite?'on':''}`} onClick={e=>{e.stopPropagation();toggleFavoriteStrategy(s.id)}}>{s.favorite?'★':'☆'}</span></button>)}</div>}</div>}
    const rest=entries.slice(6)
    return <div className="run-groups">{entries.slice(0,6).map(renderGroup)}{rest.length>0&&<details className="history-more"><summary>Show {rest.length} more run{rest.length>1?'s':''}</summary>{rest.map(renderGroup)}</details>}</div>
  })()}
@@ -648,7 +649,7 @@ export default function Home(){
    <span className="run-node-rail"><span className="run-node-pulse"></span></span>
    <span className="run-node-id">{r.symbol}<em>{r.market}</em></span>
    <span className="run-node-time">{new Date(r.started_at).toLocaleString()}</span>
-   <span className="run-node-stat"><b>{(r.tested_count||r.variations_requested).toLocaleString()}</b><small>tested</small></span>
+   <span className="run-node-stat"><b>{(r.tested_count??r.variations_requested).toLocaleString()}</b><small>tested</small></span>
    <span className="run-node-stat"><b>{(r.qualified_count||0).toLocaleString()}</b><small>qualified</small></span>
    <span className="run-node-score"><b>{r.best_score?.toFixed(1)??'—'}</b><small>score</small></span>
    <span className={`run-node-status status-${r.status}`}>{r.status}</span>
