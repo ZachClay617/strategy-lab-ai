@@ -143,17 +143,18 @@ export default function HomePage(){
     if(!topPortfolio||pct>topPortfolio.pct)topPortfolio={name:port.name,pct}
   }
 
-  let topHoldingAllTime:{symbol:string;pct:number}|null=null
-  let topHoldingToday:{symbol:string;pct:number}|null=null
+  let topHoldingAllTime:{symbol:string;pct:number;dollar:number}|null=null
+  let topHoldingToday:{symbol:string;pct:number;dollar:number}|null=null
   for(const h of holdings){
     const p=prices[h.symbol];if(!p)continue
+    const sh=h.shares!=null?h.shares:1
     if(h.entry_price!=null&&h.entry_price>0){
       const pct=(p.last-h.entry_price)/h.entry_price*100
-      if(!topHoldingAllTime||pct>topHoldingAllTime.pct)topHoldingAllTime={symbol:h.symbol,pct}
+      if(!topHoldingAllTime||pct>topHoldingAllTime.pct)topHoldingAllTime={symbol:h.symbol,pct,dollar:(p.last-h.entry_price)*sh}
     }
     if(p.prevClose){
       const pct=(p.last-p.prevClose)/p.prevClose*100
-      if(!topHoldingToday||pct>topHoldingToday.pct)topHoldingToday={symbol:h.symbol,pct}
+      if(!topHoldingToday||pct>topHoldingToday.pct)topHoldingToday={symbol:h.symbol,pct,dollar:(p.last-p.prevClose)*sh}
     }
   }
 
@@ -255,7 +256,7 @@ export default function HomePage(){
     </div>
 
     <section className="panel">
-      <div className="panel-title"><h2>PORTFOLIO OVERVIEW</h2><span className="muted">Across all portfolios</span></div>
+      <div className="panel-title"><h2>ALL PORTFOLIOS OVERVIEW</h2><span className="muted">Across all portfolios</span></div>
       {loading?<div className="empty">Loading your portfolio overview…</div>:!hasAnyData?<div className="empty">No portfolio holdings yet. <Link href="/portfolios">Create a portfolio</Link> to see your overview here.</div>:
       <div className="metrics" style={{gridTemplateColumns:'repeat(5,1fr)'}}>
         <div><span>DAY'S RETURN</span><b className={overview.dayReturnPct==null?'':overview.dayReturnPct>=0?'up':'down'}>{overview.dayReturnPct==null?'—':`${fmtPct(overview.dayReturnPct)} (${fmtDollar(overview.dayReturnDollar)})`}</b></div>
@@ -266,8 +267,8 @@ export default function HomePage(){
       </div>}
       {!loading&&hasAnyData&&<div className="metrics" style={{gridTemplateColumns:'repeat(3,1fr)',marginTop:14}}>
         <div><span>TOP-PERFORMING PORTFOLIO</span><b className={!topPortfolio?'':topPortfolio.pct>=0?'up':'down'}>{topPortfolio?`${topPortfolio.name} (${fmtPct(topPortfolio.pct)})`:'—'}</b></div>
-        <div><span>TOP HOLDING · ALL TIME</span><b className={!topHoldingAllTime?'':topHoldingAllTime.pct>=0?'up':'down'}>{topHoldingAllTime?`${topHoldingAllTime.symbol} (${fmtPct(topHoldingAllTime.pct)})`:'—'}</b></div>
-        <div><span>TOP HOLDING · TODAY</span><b className={!topHoldingToday?'':topHoldingToday.pct>=0?'up':'down'}>{topHoldingToday?`${topHoldingToday.symbol} (${fmtPct(topHoldingToday.pct)})`:'—'}</b></div>
+        <div><span>TOP HOLDING · ALL TIME</span><b className={!topHoldingAllTime?'':topHoldingAllTime.pct>=0?'up':'down'}>{topHoldingAllTime?`${topHoldingAllTime.symbol} (${fmtPct(topHoldingAllTime.pct)}, ${fmtDollar(topHoldingAllTime.dollar)})`:'—'}</b></div>
+        <div><span>TOP HOLDING · TODAY</span><b className={!topHoldingToday?'':topHoldingToday.pct>=0?'up':'down'}>{topHoldingToday?`${topHoldingToday.symbol} (${fmtPct(topHoldingToday.pct)}, ${fmtDollar(topHoldingToday.dollar)})`:'—'}</b></div>
       </div>}
     </section>
   </div>
