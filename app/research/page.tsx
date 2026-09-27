@@ -100,6 +100,41 @@ function sleep(ms:number){
   })
 }
 function wakeSleep(){if(pendingWake){const wake=pendingWake;pendingWake=null;wake()}}
+
+// Chrome (and other engines) don't just clamp background-tab timers — once a
+// tab has been hidden for a while, the whole renderer process gets scheduled
+// at a lower CPU priority, and modern Chrome versions extended timer
+// throttling to cover Worker timers owned by a hidden page too, so the
+// worker-based clock above isn't enough on its own. The one broadly
+// supported, documented exemption from all of that is a tab that's actively
+// playing audio. This starts a silent (inaudible) oscillator for the
+// duration of a run so the tab stays classified as active and keeps testing
+// at full speed no matter which tab has focus.
+let keepAliveCtx:AudioContext|null=null
+let keepAliveOsc:OscillatorNode|null=null
+function startBackgroundKeepAlive(){
+  if(typeof window==='undefined')return
+  try{
+    const Ctx:typeof AudioContext|undefined=(window as any).AudioContext||(window as any).webkitAudioContext
+    if(!Ctx)return
+    if(!keepAliveCtx)keepAliveCtx=new Ctx()
+    if(keepAliveCtx.state==='suspended')keepAliveCtx.resume()
+    if(keepAliveOsc)return
+    const gain=keepAliveCtx.createGain()
+    gain.gain.value=0.00001
+    keepAliveOsc=keepAliveCtx.createOscillator()
+    keepAliveOsc.frequency.value=20
+    keepAliveOsc.connect(gain).connect(keepAliveCtx.destination)
+    keepAliveOsc.start()
+  }catch{}
+}
+function stopBackgroundKeepAlive(){
+  try{keepAliveOsc?.stop()}catch{}
+  try{keepAliveOsc?.disconnect()}catch{}
+  keepAliveOsc=null
+  try{keepAliveCtx?.close()}catch{}
+  keepAliveCtx=null
+}
 function makeSynthetic(symbol:string, days:number):Candle[]{const r=seeded(symbol.split('').reduce((a,c)=>a+c.charCodeAt(0),0));let p=100;const out:Candle[]=[];for(let i=0;i<Math.min(days,2500);i++){const ret=(r()-.49)*.04;const open=p;p*=Math.exp(ret);const close=p;const high=Math.max(open,close)*(1+r()*.012);const low=Math.min(open,close)*(1-r()*.012);out.push({date:new Date(Date.now()-(days-i)*86400000).toISOString(),open,high,low,close,volume:500000+r()*4500000})}return out}
 
 function signalFor(data:Candle[], i:number, family:string, p:any){
@@ -404,25 +439,25 @@ export default function Home(){
    setMsg('Password reset email sent. Check your inbox for a link to set a new password.')
  }
  async function saveEvent(runId:string,message:string,level='info',pct=0){if(!supabase||!session?.user)return;const {error}=await supabase.from('run_events').insert({run_id:runId,user_id:session.user.id,message,level,progress:pct});if(error)console.error('saveEvent failed',error)}
- async function runResearch(){if(!supabase||!session?.user||runSnapshot.running)return;stopFlag=false;pauseFlag=false;skipFlag=false;speedMsFlag=speeds.find(s=>s.key===runSnapshot.speedKey)?.ms??1000;patchRun({paused:false,running:true,progress:0,feed:[],testLog:[],selectedRun:null,activeCandidate:null,rejectionCounts:{},completedCount:0,qualifiedCount:0});const runId=crypto.randomUUID();patchRun({currentRunId:runId});const started=new Date().toISOString();const startingCapitalForRun=balance;const {error:runInsertError}=await supabase.from('research_runs').insert({id:runId,user_id:session.user.id,symbol:symbol.toUpperCase(),market,modes:[runMode],variations_requested:variations,status:'running',started_at:started,starting_balance:startingCapitalForRun,current_balance:startingCapitalForRun,tested_count:0,qualified_count:0,summary:'AI research started.',capital_events:[]});
- if(runInsertError){setMsg(`Could not start the run: ${runInsertError.message}`);patchRun({running:false,currentRunId:null});return}
+ async function runResearch(){if(!supabase||!session?.user||runSnapshot.running)return;startBackgroundKeepAlive();stopFlag=false;pauseFlag=false;skipFlag=false;speedMsFlag=speeds.find(s=>s.key===runSnapshot.speedKey)?.ms??1000;patchRun({paused:false,running:true,progress:0,feed:[],testLog:[],selectedRun:null,activeCandidate:null,rejectionCounts:{},completedCount:0,qualifiedCount:0});const runId=crypto.randomUUID();patchRun({currentRunId:runId});const started=new Date().toISOString();const startingCapitalForRun=balance;const {error:runInsertError}=await supabase.from('research_runs').insert({id:runId,user_id:session.user.id,symbol:symbol.toUpperCase(),market,modes:[runMode],variations_requested:variations,status:'running',started_at:started,starting_balance:startingCapitalForRun,current_balance:startingCapitalForRun,tested_count:0,qualified_count:0,summary:'AI research started.',capital_events:[]});
+ if(runInsertError){setMsg(`Could not start the run: ${runInsertError.message}`);patchRun({running:false,currentRunId:null});stopBackgroundKeepAlive();return}
  setMsg('')
  let data:Candle[]=[];const live=runMode==='live'
  let sessionDayMap:Record<string,Candle[]>={};let sessionDayKeys:string[]=[]
  let hourlyData:Candle[]=[];let dailyData:Candle[]=[]
  if(live){
-   try{const res=await fetch(`/api/market?symbol=${encodeURIComponent(symbol)}&live=1&market=${encodeURIComponent(market)}`);const j=await res.json();if(j?.error==='invalid_ticker'){patchRun({tickerError:j.message,running:false,currentRunId:null});setMsg(`Could not start the run: ${j.message}`);await supabase.from('research_runs').delete().eq('id',runId);return}if(!Array.isArray(j)||j.length<40)throw new Error('insufficient live data');data=j;setLiveCandles(j);setLiveStatus(`Updated ${new Date().toLocaleTimeString()}`);patchRun(s=>({tickerError:null,feed:['Live execution: testing against real-time market data instead of historical bars.',...s.feed]}))}
+   try{const res=await fetch(`/api/market?symbol=${encodeURIComponent(symbol)}&live=1&market=${encodeURIComponent(market)}`);const j=await res.json();if(j?.error==='invalid_ticker'){patchRun({tickerError:j.message,running:false,currentRunId:null});setMsg(`Could not start the run: ${j.message}`);await supabase.from('research_runs').delete().eq('id',runId);stopBackgroundKeepAlive();return}if(!Array.isArray(j)||j.length<40)throw new Error('insufficient live data');data=j;setLiveCandles(j);setLiveStatus(`Updated ${new Date().toLocaleTimeString()}`);patchRun(s=>({tickerError:null,feed:['Live execution: testing against real-time market data instead of historical bars.',...s.feed]}))}
    catch{data=makeSynthetic(symbol,5); patchRun(s=>({feed:['Live feed unavailable right now; falling back to simulated data for this run.',...s.feed]}))}
  } else {
    const fetchTier=(interval:string,rangeDays:number)=>fetch(`/api/market?symbol=${encodeURIComponent(symbol)}&market=${encodeURIComponent(market)}&interval=${interval}&rangeDays=${rangeDays}`).then(r=>r.json()).catch(()=>null)
    const [d15,d1h,d1d]=await Promise.all([fetchTier('15m',SESSION_RANGE_DAYS),fetchTier('1h',730),fetchTier('1d',3650)])
    const invalid=[d15,d1h,d1d].find((d:any)=>d?.error==='invalid_ticker') as any
-   if(invalid){patchRun({tickerError:invalid.message,running:false,currentRunId:null});setMsg(`Could not start the run: ${invalid.message}`);await supabase.from('research_runs').delete().eq('id',runId);return}
+   if(invalid){patchRun({tickerError:invalid.message,running:false,currentRunId:null});setMsg(`Could not start the run: ${invalid.message}`);await supabase.from('research_runs').delete().eq('id',runId);stopBackgroundKeepAlive();return}
    if(Array.isArray(d15)&&d15.length){data=d15;sessionDayMap=extractMorningSessions(d15);sessionDayKeys=Object.keys(sessionDayMap).filter(k=>sessionDayMap[k].length>=4).sort()}
    if(Array.isArray(d1h)&&d1h.length)hourlyData=d1h
    if(Array.isArray(d1d)&&d1d.length)dailyData=d1d
    if(!data.length)data=dailyData.length?dailyData:(hourlyData.length?hourlyData:makeSynthetic(symbol,60))
-   if(!sessionDayKeys.length&&!hourlyData.length&&!dailyData.length){setMsg('Could not load any real historical data for this ticker. Try a different symbol.');patchRun({running:false,currentRunId:null});await supabase.from('research_runs').delete().eq('id',runId);return}
+   if(!sessionDayKeys.length&&!hourlyData.length&&!dailyData.length){setMsg('Could not load any real historical data for this ticker. Try a different symbol.');patchRun({running:false,currentRunId:null});await supabase.from('research_runs').delete().eq('id',runId);stopBackgroundKeepAlive();return}
    patchRun(s=>({tickerError:null,feed:[`Real historical data loaded — 15-Minute: ${sessionDayKeys.length} sessions (~${SESSION_RANGE_DAYS}d), Hourly: ${hourlyData.length?`${hourlyData.length} bars (~2y)`:'unavailable'}, Daily: ${dailyData.length?`${dailyData.length} bars (~10y)`:'unavailable'}. Each test's date decides which real bar size and max hold rule applies.`,...s.feed]}))
  }
  const pickTier=(r:()=>number)=>{
@@ -492,7 +527,7 @@ export default function Home(){
  else if(strategySaveError)setMsg(`Run finished, but qualified strategies could not be saved: ${strategySaveError}. Run the latest Supabase migration and try again.`)
  const {error:balanceError}=await supabase.from('profiles').upsert({id:session.user.id,current_balance:capital})
  if(balanceError)setMsg(`Run finished, but capital could not be saved: ${balanceError.message}`)
- await saveEvent(runId,summary,'success',100);patchRun(s=>({feed:[summary,...s.feed],running:false,paused:false,progress:100,rejectionCounts:{...rejections},completedCount:completed,qualifiedCount:qualified,balance:capital,currentRunId:null}));await loadData()
+ await saveEvent(runId,summary,'success',100);patchRun(s=>({feed:[summary,...s.feed],running:false,paused:false,progress:100,rejectionCounts:{...rejections},completedCount:completed,qualifiedCount:qualified,balance:capital,currentRunId:null}));stopBackgroundKeepAlive();await loadData()
  }
  async function resetBalance(){if(!supabase||!session?.user)return;await supabase.from('capital_events').insert({user_id:session.user.id,event_type:'reset',amount_before:balance,amount_after:STARTING_CAPITAL});const {error}=await supabase.from('profiles').upsert({id:session.user.id,current_balance:STARTING_CAPITAL,starting_balance:STARTING_CAPITAL});if(error){setMsg(`Could not save the reset: ${error.message}`);return}patchRun({balance:STARTING_CAPITAL})}
  async function toggleFavoriteRun(runId:string){if(!supabase)return;const run=runs.find(r=>r.id===runId);const next=!run?.favorite;setRuns(prev=>prev.map(r=>r.id===runId?{...r,favorite:next}:r));const {error}=await supabase.from('research_runs').update({favorite:next}).eq('id',runId);if(error){setMsg(`Could not update favorite: ${error.message}. Run the latest Supabase migration.`);setRuns(prev=>prev.map(r=>r.id===runId?{...r,favorite:!next}:r))}}
