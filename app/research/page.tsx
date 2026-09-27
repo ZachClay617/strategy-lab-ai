@@ -50,7 +50,7 @@ function fmtDuration(ms:number){
 type Candle = { date:string; open:number; high:number; low:number; close:number; volume:number }
 type Trade = { side:'LONG'; entryIndex:number; exitIndex:number; entry:number; exit:number; qty:number; pnl:number; reason:string }
 type Session = { candles:Candle[]; trades:Trade[]; metrics:any; startDate?:string; endDate?:string; tier?:string }
-type Strategy = { id:string; run_id?:string; name:string; family:string; symbol:string; market:string; score:number; approved:boolean; metrics:any; explanation:string; parameters:any; equity?:any; trades?:Trade[]; candles?:Candle[]; test_start_at?:string|null; test_end_at?:string|null; sessions?:Session[]; created_at:string }
+type Strategy = { id:string; run_id?:string; name:string; family:string; symbol:string; market:string; score:number; approved:boolean; metrics:any; explanation:string; parameters:any; equity?:any; trades?:Trade[]; candles?:Candle[]; test_start_at?:string|null; test_end_at?:string|null; sessions?:Session[]; created_at:string; favorite?:boolean }
 type Run = { id:string; symbol:string; market:string; status:string; variations_requested:number; best_score:number|null; started_at:string; finished_at:string|null; starting_balance:number; current_balance:number; summary:string|null; best_strategy_name:string|null; best_reason:string|null; failure_reason:string|null; tested_count:number; qualified_count:number; favorite?:boolean }
 
 type Candidate = { family:string; params:any; result:any; passed:boolean; reason:string; index:number; candles:Candle[]; startDate?:string; endDate?:string; sessions:Session[]; testedAt:string }
@@ -281,7 +281,7 @@ async function waitWhilePaused(){
 
 export default function Home(){
  const router=useRouter()
- const [session,setSession]=useState<any>(null),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[mode,setMode]=useState<'login'|'signup'>('login'),[msg,setMsg]=useState(''),[showPassword,setShowPassword]=useState(false),[strategies,setStrategies]=useState<Strategy[]>([]),[runs,setRuns]=useState<Run[]>([]),[selected,setSelected]=useState<Strategy|null>(null),[variations,setVariations]=useState(25000),[minTrades,setMinTrades]=useState(1),[idea,setIdea]=useState(''),[liveCandles,setLiveCandles]=useState<Candle[]>([]),[liveStatus,setLiveStatus]=useState('Waiting for live market data'),[watchLive,setWatchLive]=useState(true),[chartWindow,setChartWindow]=useState<number>(14),[runSort,setRunSort]=useState<'newest'|'oldest'|'qualified'|'bestScore'>('newest'),[expandedRuns,setExpandedRuns]=useState<Record<string,boolean>>({}),[favLogsOpen,setFavLogsOpen]=useState(false),[symbolNames,setSymbolNames]=useState<Record<string,string>>({}),[avatarUrl,setAvatarUrl]=useState<string|null>(null),[signupUsername,setSignupUsername]=useState(''),[signupName,setSignupName]=useState(''),[signupGender,setSignupGender]=useState('')
+ const [session,setSession]=useState<any>(null),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[mode,setMode]=useState<'login'|'signup'>('login'),[msg,setMsg]=useState(''),[showPassword,setShowPassword]=useState(false),[strategies,setStrategies]=useState<Strategy[]>([]),[runs,setRuns]=useState<Run[]>([]),[selected,setSelected]=useState<Strategy|null>(null),[variations,setVariations]=useState(25000),[minTrades,setMinTrades]=useState(1),[idea,setIdea]=useState(''),[liveCandles,setLiveCandles]=useState<Candle[]>([]),[liveStatus,setLiveStatus]=useState('Waiting for live market data'),[watchLive,setWatchLive]=useState(true),[chartWindow,setChartWindow]=useState<number>(14),[runSort,setRunSort]=useState<'newest'|'oldest'|'qualified'|'bestScore'>('newest'),[expandedRuns,setExpandedRuns]=useState<Record<string,boolean>>({}),[favLogsOpen,setFavLogsOpen]=useState(false),[favStrategiesOpen,setFavStrategiesOpen]=useState(false),[symbolNames,setSymbolNames]=useState<Record<string,string>>({}),[avatarUrl,setAvatarUrl]=useState<string|null>(null),[signupUsername,setSignupUsername]=useState(''),[signupName,setSignupName]=useState(''),[signupGender,setSignupGender]=useState('')
  const rs=useSyncExternalStore(subscribeRun,getRunSnapshot,getRunSnapshot)
  const {running,paused,progress,feed,testLog,activeCandidate,researchCandles,activeIndex,activeTrades,rejectionCounts,tickerError,selectedRun,balance,symbol,market,runMode,speedKey:speed,completedCount,qualifiedCount}=rs
  useEffect(()=>{if(!supabase)return;supabase.auth.getSession().then(({data})=>setSession(data.session));const {data}=supabase.auth.onAuthStateChange((_e,s)=>setSession(s));return()=>data.subscription.unsubscribe()},[])
@@ -296,7 +296,7 @@ export default function Home(){
  async function loadData(){
    if(!supabase||!session?.user)return
    const isJwtIssue=(e:any)=>{const m=(e?.message||'').toLowerCase();return m.includes('jwt')||m.includes('token')}
-   const fetchAll=()=>Promise.all([supabase!.from('strategies').select('id,run_id,user_id,symbol,market,name,family,parameters,source,approved,score,metrics,explanation,test_start_at,test_end_at,created_at').eq('user_id',session.user.id).order('created_at',{ascending:false}).limit(500),supabase!.from('research_runs').select('*').eq('user_id',session.user.id).order('started_at',{ascending:false}).limit(50)])
+   const fetchAll=()=>Promise.all([supabase!.from('strategies').select('id,run_id,user_id,symbol,market,name,family,parameters,source,approved,score,metrics,explanation,test_start_at,test_end_at,created_at,favorite').eq('user_id',session.user.id).order('created_at',{ascending:false}).limit(500),supabase!.from('research_runs').select('*').eq('user_id',session.user.id).order('started_at',{ascending:false}).limit(50)])
    let [{data:s,error:sErr},{data:r,error:rErr}]=await fetchAll()
    if(isJwtIssue(sErr)||isJwtIssue(rErr)){
      await supabase.auth.refreshSession()
@@ -454,6 +454,7 @@ export default function Home(){
  }
  async function resetBalance(){if(!supabase||!session?.user)return;await supabase.from('capital_events').insert({user_id:session.user.id,event_type:'reset',amount_before:balance,amount_after:STARTING_CAPITAL});const {error}=await supabase.from('profiles').upsert({id:session.user.id,current_balance:STARTING_CAPITAL,starting_balance:STARTING_CAPITAL});if(error){setMsg(`Could not save the reset: ${error.message}`);return}patchRun({balance:STARTING_CAPITAL})}
  async function toggleFavoriteRun(runId:string){if(!supabase)return;const run=runs.find(r=>r.id===runId);const next=!run?.favorite;setRuns(prev=>prev.map(r=>r.id===runId?{...r,favorite:next}:r));const {error}=await supabase.from('research_runs').update({favorite:next}).eq('id',runId);if(error){setMsg(`Could not update favorite: ${error.message}. Run the latest Supabase migration.`);setRuns(prev=>prev.map(r=>r.id===runId?{...r,favorite:!next}:r))}}
+ async function toggleFavoriteStrategy(strategyId:string){if(!supabase)return;const s=strategies.find(x=>x.id===strategyId);const next=!s?.favorite;setStrategies(prev=>prev.map(x=>x.id===strategyId?{...x,favorite:next}:x));const {error}=await supabase.from('strategies').update({favorite:next}).eq('id',strategyId);if(error){setMsg(`Could not update favorite: ${error.message}. Run the latest Supabase migration.`);setStrategies(prev=>prev.map(x=>x.id===strategyId?{...x,favorite:!next}:x))}}
  if(!session)return <main className="shell auth"><section className="auth-card"><div className="eyebrow">PERSISTENT RESEARCH PLATFORM</div><h1>Find strategies. <span>Test everything.</span></h1><p className="muted">Accounts and research data are stored in Supabase. Sessions persist across reloads and devices.</p><form onSubmit={auth} className="auth-form"><input type={mode==='signup'?'email':'text'} placeholder={mode==='signup'?'you@example.com':'Email or username'} value={email} onChange={e=>setEmail(e.target.value)} required/>{mode==='signup'&&<><input type="text" placeholder="Name" value={signupName} onChange={e=>setSignupName(e.target.value)} required/><input type="text" placeholder="Username" value={signupUsername} onChange={e=>setSignupUsername(e.target.value.replace(/\s/g,''))} required/><select value={signupGender} onChange={e=>setSignupGender(e.target.value)} required><option value="" disabled>Gender…</option><option value="male">Male</option><option value="female">Female</option></select></>}<div className="password-field"><input type={showPassword?'text':'password'} placeholder="Password (8+ characters)" value={password} onChange={e=>setPassword(e.target.value)} minLength={8} required/><button type="button" className="password-toggle" onClick={()=>setShowPassword(s=>!s)}>{showPassword?'HIDE':'SHOW'}</button></div><button className="primary">{mode==='login'?'ENTER LAB':'CREATE ACCOUNT'}</button></form><div className="auth-links"><button className="link" onClick={()=>setMode(mode==='login'?'signup':'login')}>{mode==='login'?'Need an account? Create one':'Already have an account? Sign in'}</button>{mode==='login'&&<button className="link" onClick={forgotPassword}>Forgot password?</button>}</div>{msg&&<div className="msg">{msg}</div>}</section></main>
  return <main className="shell">
  {msg&&<div className="msg banner">{msg}</div>}
@@ -483,7 +484,7 @@ export default function Home(){
        {g.run&&<span>{fmtMoney(g.run.starting_balance)} → {fmtMoney(g.run.current_balance)}</span>}
        <span className={`fav-card-chevron ${isOpen?'open':''}`}>▾ {isOpen?'HIDE':'STRATEGIES'}</span>
      </button>
-     {isOpen&&<div className="fav-card-list">{g.list.map(s=><button className="fav-card-strategy" key={s.id} onClick={()=>openStrategy(s)}><b>{s.name}</b><span>{s.metrics?.winRate?.toFixed(1)}% WR · {s.metrics?.returnPct?.toFixed(1)}% return</span></button>)}</div>}
+     {isOpen&&<div className="fav-card-list">{g.list.map(s=><button className="fav-card-strategy" key={s.id} onClick={()=>openStrategy(s)}><b>{s.name}</b><span>{s.metrics?.winRate?.toFixed(1)}% WR · {s.metrics?.returnPct?.toFixed(1)}% return</span><span className={`star ${s.favorite?'on':''}`} onClick={e=>{e.stopPropagation();toggleFavoriteStrategy(s.id)}}>{s.favorite?'★':'☆'}</span></button>)}</div>}
    </div>}
    return <div className="fav-orbit-wrap">
      <button className="fav-orbit-trigger" onClick={()=>setFavLogsOpen(o=>!o)}>
@@ -495,6 +496,31 @@ export default function Home(){
      {favLogsOpen&&<div className="fav-tray">
        {favEntries.length===0?<div className="empty">Star a run in the Successful Strategy Log below to pin it here.</div>:
        <div className="fav-tray-scroll">{favEntries.map(renderFavCard)}</div>}
+     </div>}
+   </div>
+ })()}
+ {strategies.length>0&&(()=>{
+   const favStrategies=strategies.filter(s=>s.favorite).sort((a,b)=>new Date(b.created_at).getTime()-new Date(a.created_at).getTime())
+   const renderFavStrategyCard=(s:Strategy)=><div className="fav-card" key={s.id}>
+     <button className="fav-card-star" title="Unpin" onClick={()=>toggleFavoriteStrategy(s.id)}>★</button>
+     <button className="fav-card-body" onClick={()=>openStrategy(s)}>
+       <b>{s.name}</b>
+       <span>{s.symbol} · {s.market}</span>
+       <span>{s.metrics?.winRate?.toFixed(1)}% WR · {s.metrics?.returnPct?.toFixed(1)}% return</span>
+       <span>{s.metrics?.maxDrawdownPct?.toFixed(1)}% DD · {s.metrics?.sharpe?.toFixed(2)} Sharpe</span>
+       <span className="fav-card-chevron">VIEW REPLAY →</span>
+     </button>
+   </div>
+   return <div className="fav-orbit-wrap">
+     <button className="fav-orbit-trigger" onClick={()=>setFavStrategiesOpen(o=>!o)}>
+       <span className="fav-orbit-ring"><span className="fav-orbit-core">{favStrategies.length}</span></span>
+       <span className="fav-orbit-label">FAVORITED STRATEGIES</span>
+       <span className="fav-orbit-hint">{favStrategiesOpen?'Tap to collapse':favStrategies.length?'Tap to reveal':'Star a strategy to begin'}</span>
+       <span className={`fav-orbit-arrow ${favStrategiesOpen?'open':''}`}>▾</span>
+     </button>
+     {favStrategiesOpen&&<div className="fav-tray">
+       {favStrategies.length===0?<div className="empty">Star an individual strategy in the Successful Strategy Log below to pin it here.</div>:
+       <div className="fav-tray-scroll">{favStrategies.map(renderFavStrategyCard)}</div>}
      </div>}
    </div>
  })()}
@@ -515,7 +541,7 @@ export default function Home(){
      if(runSort==='qualified')return b.list.length-a.list.length
      return b.bestScore-a.bestScore
    })
-   const renderGroup=(g:typeof entries[number])=>{const isOpen=!!expandedRuns[g.runId];return <div className="run-group" key={g.runId}><button className="run-group-header" onClick={()=>setExpandedRuns(prev=>({...prev,[g.runId]:!prev[g.runId]}))}><span className={`chevron ${isOpen?'open':''}`}>▸</span><b>{g.run?`${g.run.symbol} · ${g.run.market}`:g.list[0]?.symbol}</b><span>{fmtDateTime(g.when)}</span><span>{g.list.length} qualified</span>{g.run&&<span>{(g.run.tested_count||g.run.variations_requested).toLocaleString()} tested</span>}{g.run&&<span>{fmtMoney(g.run.starting_balance)} → {fmtMoney(g.run.current_balance)}</span>}<span className={`star ${g.run?.favorite?'on':''}`} onClick={e=>{e.stopPropagation();g.run&&toggleFavoriteRun(g.runId)}}>{g.run?.favorite?'★':'☆'}</span></button>{isOpen&&<div className="table">{g.list.map(s=><button className="row" key={s.id} onClick={()=>openStrategy(s)}><div><strong>{s.name}</strong><span>{s.family} · completed {fmtDateTime(s.created_at)}</span><span className="how-it-works">{describeFamily(s.family,s.parameters)}</span></div><span>{s.metrics?.winRate?.toFixed(1)}% WR</span><span>{s.metrics?.returnPct?.toFixed(1)}% return</span><span>{s.metrics?.maxDrawdownPct?.toFixed(1)}% DD</span><span>{s.metrics?.sharpe?.toFixed(2)} Sharpe</span><span>{s.metrics?.trades} trades</span></button>)}</div>}</div>}
+   const renderGroup=(g:typeof entries[number])=>{const isOpen=!!expandedRuns[g.runId];return <div className="run-group" key={g.runId}><button className="run-group-header" onClick={()=>setExpandedRuns(prev=>({...prev,[g.runId]:!prev[g.runId]}))}><span className={`chevron ${isOpen?'open':''}`}>▸</span><b>{g.run?`${g.run.symbol} · ${g.run.market}`:g.list[0]?.symbol}</b><span>{fmtDateTime(g.when)}</span><span>{g.list.length} qualified</span>{g.run&&<span>{(g.run.tested_count||g.run.variations_requested).toLocaleString()} tested</span>}{g.run&&<span>{fmtMoney(g.run.starting_balance)} → {fmtMoney(g.run.current_balance)}</span>}<span className={`star ${g.run?.favorite?'on':''}`} onClick={e=>{e.stopPropagation();g.run&&toggleFavoriteRun(g.runId)}}>{g.run?.favorite?'★':'☆'}</span></button>{isOpen&&<div className="table">{g.list.map(s=><button className="row" key={s.id} style={{gridTemplateColumns:'2fr .6fr .8fr .8fr .8fr .8fr .4fr'}} onClick={()=>openStrategy(s)}><div><strong>{s.name}</strong><span>{s.family} · completed {fmtDateTime(s.created_at)}</span><span className="how-it-works">{describeFamily(s.family,s.parameters)}</span></div><span>{s.metrics?.winRate?.toFixed(1)}% WR</span><span>{s.metrics?.returnPct?.toFixed(1)}% return</span><span>{s.metrics?.maxDrawdownPct?.toFixed(1)}% DD</span><span>{s.metrics?.sharpe?.toFixed(2)} Sharpe</span><span>{s.metrics?.trades} trades</span><span className={`star ${s.favorite?'on':''}`} onClick={e=>{e.stopPropagation();toggleFavoriteStrategy(s.id)}}>{s.favorite?'★':'☆'}</span></button>)}</div>}</div>}
    const rest=entries.slice(6)
    return <div className="run-groups">{entries.slice(0,6).map(renderGroup)}{rest.length>0&&<details className="history-more"><summary>Show {rest.length} more run{rest.length>1?'s':''}</summary>{rest.map(renderGroup)}</details>}</div>
  })()}
