@@ -4,7 +4,10 @@ import NavBar from './components/NavBar'
 import TradeSignalToast from './components/TradeSignalToast'
 
 export const metadata: Metadata = {
-  title: 'Strategy Lab AI',
+  title: {
+    default: 'Strategy Lab AI',
+    template: '%s | Strategy Lab AI',
+  },
   description: 'AI-powered trading strategy research laboratory',
 }
 
