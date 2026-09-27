@@ -198,6 +198,18 @@ export default function HomePage(){
         <p>Generate a full equity research report on any publicly traded company.</p>
         <span className="service-cta">ENTER REPORTS →</span>
       </Link>
+      <Link href="/trade-signals" className="service-card">
+        <span className="service-icon">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs><linearGradient id="ic-signals" x1="0" y1="0" x2="24" y2="24"><stop offset="0" stopColor="#8ff3ff"/><stop offset="1" stopColor="#8b72ff"/></linearGradient></defs>
+            <path d="M2 13h3.6l1.8-5.4 3 10.8 2.4-8.4 1.6 3h6.6" stroke="url(#ic-signals)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+            <circle className="icon-pulse-dot" cx="19.6" cy="13" r="1.8" fill="url(#ic-signals)"/>
+          </svg>
+        </span>
+        <h2>Trade Signals</h2>
+        <p>Watch your favorited strategies against live prices and get told exactly when to buy or sell.</p>
+        <span className="service-cta">ENTER TRADE SIGNALS →</span>
+      </Link>
     </div>
 
     <section className="panel">
