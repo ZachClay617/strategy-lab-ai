@@ -1,6 +1,7 @@
 import './globals.css'
 import type { Metadata } from 'next'
 import NavBar from './components/NavBar'
+import TradeSignalToast from './components/TradeSignalToast'
 
 export const metadata: Metadata = {
   title: 'Strategy Lab AI',
@@ -11,5 +12,6 @@ export default function RootLayout({children}:{children:React.ReactNode}) {
   return <html lang="en"><body>
     <NavBar/>
     {children}
+    <TradeSignalToast/>
   </body></html>
 }

@@ -11,6 +11,8 @@ export default function NavBar(){
       <Link href="/research" className={pathname==='/research'?'active':''}>Research</Link>
       <Link href="/portfolios" className={pathname?.startsWith('/portfolios')?'active':''}>Portfolios</Link>
       <Link href="/company-report" className={pathname?.startsWith('/company-report')?'active':''}>Reports</Link>
+      <Link href="/live-trading" className={pathname?.startsWith('/live-trading')?'active':''}>Live Trading</Link>
+      <Link href="/notifications" className={pathname?.startsWith('/notifications')?'active':''}>Notifications</Link>
       <Link href="/account" className={pathname?.startsWith('/account')?'active':''}>Account</Link>
     </div>
   </nav>
