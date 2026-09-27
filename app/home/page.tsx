@@ -36,6 +36,7 @@ export default function HomePage(){
   const [testStockCount,setTestStockCount]=useState(0)
   const [signalStockCount,setSignalStockCount]=useState(0)
   const [notificationCount,setNotificationCount]=useState(0)
+  const [trackedStockCount,setTrackedStockCount]=useState(0)
 
   useEffect(()=>{if(!supabase)return;supabase.auth.getSession().then(({data})=>setSession(data.session));const {data}=supabase.auth.onAuthStateChange((_e,s)=>setSession(s));return()=>data.subscription.unsubscribe()},[])
   useEffect(()=>{if(session?.user)loadAll();else setLoading(false)},[session?.user?.id])
@@ -69,14 +70,16 @@ export default function HomePage(){
     if(!supabase)return
     const sevenDaysAgo=new Date(Date.now()-7*24*60*60*1000).toISOString()
     const seenAt=localStorage.getItem('notificationsSeenAt')||new Date(0).toISOString()
-    const [{data:runs},{data:signals},{count:pending}]=await Promise.all([
+    const [{data:runs},{data:signals},{count:pending},{data:watched}]=await Promise.all([
       supabase.from('research_runs').select('symbol,tested_count,variations_requested').eq('user_id',userId).gte('started_at',sevenDaysAgo),
       supabase.from('trade_notifications').select('symbol').eq('user_id',userId).gt('created_at',seenAt),
       supabase.from('trade_notifications').select('id',{count:'exact',head:true}).eq('user_id',userId).eq('acknowledged',false),
+      supabase.from('watchlist_symbols').select('symbol').eq('user_id',userId),
     ])
     setTestsLast7Days((runs||[]).reduce((sum:number,r:any)=>sum+(r.tested_count||r.variations_requested||0),0))
     setTestStockCount(new Set((runs||[]).map((r:any)=>r.symbol)).size)
     setSignalStockCount(new Set((signals||[]).map((s:any)=>s.symbol)).size)
+    setTrackedStockCount(new Set((watched||[]).map((w:any)=>w.symbol)).size)
     setNotificationCount(pending||0)
   }
 
@@ -177,6 +180,9 @@ export default function HomePage(){
     :null
   const testsLine=`I've run ${testsLast7Days.toLocaleString()} strategy test${testsLast7Days===1?'':'s'} for you in the last 7 days across ${testStockCount.toLocaleString()} stock${testStockCount===1?'':'s'}.`
   const signalsLine=`I've found and fired trade signals on ${signalStockCount.toLocaleString()} stock${signalStockCount===1?'':'s'} since you last checked.`
+  const trackedLine=trackedStockCount>0
+    ?`My eyes are on ${trackedStockCount.toLocaleString()} stock${trackedStockCount===1?'':'s'} right now, watching every tick for a signal worth your attention.`
+    :`I'm not watching any stocks for signals yet — add tickers to your watchlist and I'll start scanning them around the clock.`
   const notifLine=`You have ${notificationCount.toLocaleString()} notification${notificationCount===1?'':'s'} waiting for your review.`
 
   return <div className="shell home-page">
@@ -203,6 +209,7 @@ export default function HomePage(){
         {topHoldingLine&&<p><span className={`ai-briefing-caret ${topHoldingToday!.pct>=0?'up':'down'}`}>▸</span>{topHoldingLine}</p>}
         <p><span className="ai-briefing-caret">▸</span>{testsLine}</p>
         <p><span className="ai-briefing-caret">▸</span>{signalsLine}</p>
+        <p><span className="ai-briefing-caret">▸</span>{trackedLine}</p>
         <p><span className="ai-briefing-caret">▸</span>{notifLine}<span className="ai-briefing-cursor"></span></p>
       </div>}
     </section>
