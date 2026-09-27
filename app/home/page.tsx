@@ -32,6 +32,9 @@ export default function HomePage(){
   const [prices,setPrices]=useState<Record<string,PriceInfo>>({})
   const [loading,setLoading]=useState(true)
   const [msg,setMsg]=useState('')
+  const [testsLast7Days,setTestsLast7Days]=useState(0)
+  const [signalStockCount,setSignalStockCount]=useState(0)
+  const [notificationCount,setNotificationCount]=useState(0)
 
   useEffect(()=>{if(!supabase)return;supabase.auth.getSession().then(({data})=>setSession(data.session));const {data}=supabase.auth.onAuthStateChange((_e,s)=>setSession(s));return()=>data.subscription.unsubscribe()},[])
   useEffect(()=>{if(session?.user)loadAll();else setLoading(false)},[session?.user?.id])
@@ -57,7 +60,21 @@ export default function HomePage(){
     setClosedTrades((cErr?[]:(c||[])) as ClosedTrade[])
     const symbols=Array.from(new Set((h||[]).map((x:any)=>x.symbol as string)))
     if(symbols.length)await loadPrices(symbols)
+    await loadBriefingStats(session.user.id)
     setLoading(false)
+  }
+
+  async function loadBriefingStats(userId:string){
+    if(!supabase)return
+    const sevenDaysAgo=new Date(Date.now()-7*24*60*60*1000).toISOString()
+    const [{data:runs},{data:signals},{count:pending}]=await Promise.all([
+      supabase.from('research_runs').select('tested_count,variations_requested').eq('user_id',userId).gte('started_at',sevenDaysAgo),
+      supabase.from('trade_notifications').select('symbol').eq('user_id',userId),
+      supabase.from('trade_notifications').select('id',{count:'exact',head:true}).eq('user_id',userId).eq('acknowledged',false),
+    ])
+    setTestsLast7Days((runs||[]).reduce((sum:number,r:any)=>sum+(r.tested_count||r.variations_requested||0),0))
+    setSignalStockCount(new Set((signals||[]).map((s:any)=>s.symbol)).size)
+    setNotificationCount(pending||0)
   }
 
   async function loadPrices(symbols:string[]){
@@ -143,6 +160,14 @@ export default function HomePage(){
   if(!supabase)return <div className="shell"><p className="msg banner">Add Supabase environment variables first.</p></div>
   if(!session)return <div className="shell"><p className="msg banner">Log in on the <a href="/research">Research</a> page first, then come back here.</p></div>
 
+  const perfDir=overview.returnPct!=null&&overview.returnPct>=0?'up':'down'
+  const perfLine=hasAnyData&&overview.returnPct!=null
+    ?`Your portfolios are ${perfDir} ${Math.abs(overview.returnPct).toFixed(2)}% — that's ${fmtExact(Math.abs(overview.returnDollar))} ${perfDir} since you opened them.`
+    :`You haven't opened a portfolio yet. Tell me what you want and I'll build it.`
+  const testsLine=`I've run ${testsLast7Days.toLocaleString()} strategy test${testsLast7Days===1?'':'s'} for you in the last 7 days.`
+  const signalsLine=`I've found and fired trade signals on ${signalStockCount.toLocaleString()} stock${signalStockCount===1?'':'s'}.`
+  const notifLine=`You have ${notificationCount.toLocaleString()} notification${notificationCount===1?'':'s'} waiting for your review.`
+
   return <div className="shell home-page">
     <section className="hero home-hero">
       <div>
@@ -150,6 +175,23 @@ export default function HomePage(){
         <h1 className="home-greeting">{greeting(profile,session.user.email)}</h1>
         <p className="muted home-tagline">A-TAMP is online and ready to be at your service.</p>
       </div>
+    </section>
+
+    <section className="ai-briefing">
+      <div className="ai-briefing-scanline"></div>
+      <div className="ai-briefing-head">
+        <span className="ai-briefing-avatar"><span className="ai-briefing-avatar-core"></span></span>
+        <div>
+          <div className="ai-briefing-label">A-TAMP BRIEFING</div>
+          <div className="ai-briefing-sub">{loading?'Compiling your briefing…':'Live · compiled just now'}</div>
+        </div>
+      </div>
+      {!loading&&<div className="ai-briefing-body">
+        <p><span className={`ai-briefing-caret ${perfDir}`}>▸</span>{perfLine}</p>
+        <p><span className="ai-briefing-caret">▸</span>{testsLine}</p>
+        <p><span className="ai-briefing-caret">▸</span>{signalsLine}</p>
+        <p><span className="ai-briefing-caret">▸</span>{notifLine}<span className="ai-briefing-cursor"></span></p>
+      </div>}
     </section>
 
     {msg&&<p className="msg banner">{msg}</p>}
