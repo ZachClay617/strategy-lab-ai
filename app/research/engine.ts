@@ -120,12 +120,6 @@ export function atrSeries(data:Candle[], period=14):(number|null)[]{
   for(let i=period+1;i<n;i++){avg=(avg*(period-1)+tr[i])/period;out[i]=avg}
   return out
 }
-export function donchian(data:Candle[], i:number, lookback:number){
-  const from=Math.max(0,i-lookback)
-  const w=data.slice(from,i)
-  if(!w.length)return {hi:data[i].high,lo:data[i].low}
-  return {hi:Math.max(...w.map(x=>x.high)),lo:Math.min(...w.map(x=>x.low))}
-}
 // Session-resetting VWAP (typical price weighted by volume, reset each calendar day).
 export function vwapSeries(data:Candle[]):number[]{
   const out:number[]=new Array(data.length).fill(0)
@@ -153,10 +147,17 @@ export function computeIndicatorContext(data:Candle[], p:any):IndicatorCtx{
   const emaFastMacd=emaSeries(closes,12)
   const emaSlowMacd=emaSeries(closes,26)
   const macdLineRaw=closes.map((_,i)=>(emaFastMacd[i]!=null&&emaSlowMacd[i]!=null)?(emaFastMacd[i] as number)-(emaSlowMacd[i] as number):null)
-  const macdValues=macdLineRaw.map(v=>v??0)
-  const macdSignalRaw=emaSeries(macdValues,9)
-  const macdLine=macdLineRaw.map((v,i)=>v==null?null:v)
-  const macdSignal=macdSignalRaw.map((v,i)=>macdLineRaw[i]==null?null:v)
+  // Seed the signal EMA only from where the MACD line is actually defined — substituting
+  // 0 for the leading nulls (before the 26-period EMA warms up) would contaminate the
+  // signal line's seed average with fabricated values instead of real MACD readings.
+  const firstValid=macdLineRaw.findIndex(v=>v!=null)
+  const macdSignalRaw:(number|null)[]=new Array(macdLineRaw.length).fill(null)
+  if(firstValid>=0){
+    const tail=emaSeries(macdLineRaw.slice(firstValid) as number[],9)
+    for(let i=0;i<tail.length;i++)macdSignalRaw[firstValid+i]=tail[i]
+  }
+  const macdLine=macdLineRaw
+  const macdSignal=macdSignalRaw
   const bbPeriod=Math.max(5,Math.min(60,p.fast))
   const bbMid=smaSeries(closes,bbPeriod)
   const bbUpper:(number|null)[]=new Array(closes.length).fill(null)
@@ -229,7 +230,8 @@ export function backtestSession(data:Candle[], family:string, p:any, opts:{maxHo
   for(let i=warmup;i<data.length-1;i++){
     const sig=signalForFamily(ctx,data,i,family,p)
     const heldTooLong=side==='LONG'&&opts.maxHoldMs!=null&&(new Date(data[i].date).getTime()-new Date(data[entryIndex].date).getTime())>=opts.maxHoldMs
-    if(side===null&&sig.long){
+    const openedThisBar=side===null&&sig.long&&i<data.length-2
+    if(openedThisBar){
       const fillIdx=i+1
       const fillPrice=data[fillIdx].open*(1+EXECUTION.slippageBps/10000)
       const notional=cash*riskFraction
@@ -248,7 +250,10 @@ export function backtestSession(data:Candle[], family:string, p:any, opts:{maxHo
       tradeLog.push({side,entryIndex,exitIndex:fillIdx,entry,exit:fillPrice,qty,pnl,fee,reason:heldTooLong&&!sig.sell?'Maximum hold time reached for this bar size; position closed automatically.':'Sell signal closed the position.'})
       side=null;qty=0
     }
-    const mark=side==='LONG'?cash+((data[i].close-entry)*qty):cash
+    // A position just opened this bar hasn't actually filled yet (fill happens at the
+    // next bar's open), so marking it against this bar's close would be look-ahead;
+    // mark it flat until the position is actually held on a later bar.
+    const mark=side==='LONG'&&!openedThisBar?cash+((data[i].close-entry)*qty):cash
     peak=Math.max(peak,mark);maxDD=Math.max(maxDD,(peak-mark)/Math.max(peak,1));equity.push(mark)
   }
   if(side){
