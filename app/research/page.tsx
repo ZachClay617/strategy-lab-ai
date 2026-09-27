@@ -488,7 +488,7 @@ export default function Home(){
  return sessionsList.map((sess,si)=>{const range=sess.tier==='15m'?`${fmtDateTime(sess.startDate)} (${fmtClock(sess.startDate)}–${fmtClock(sess.endDate)} ET)`:`${fmtDateTime(sess.startDate)} → ${fmtDateTime(sess.endDate)}`;return <div className="session-block" key={si}><h4>Session {si+1} of {sessionsList.length} · {range} · real {tierLabel(sess.tier)} bars</h4><CandleChart candles={sess.candles} trades={sess.trades} activeIndex={sess.candles.length-1} windowSize={Math.min(sess.candles.length,20)} title={`${selected.symbol} · session ${si+1}`} indicator={indicatorSeries(sess.candles,selected.family,selected.parameters)}/><div className="section-label">EVERY TRADE THIS SESSION MADE</div><div className="trade-table">{sess.trades?.length?sess.trades.map((t,i)=>{const pct=(t.exit-t.entry)/t.entry*100;const entryDate=sess.candles?.[t.entryIndex]?.date;const exitDate=sess.candles?.[t.exitIndex]?.date;const held=entryDate&&exitDate?fmtDuration(new Date(exitDate).getTime()-new Date(entryDate).getTime()):'—';return <div className={`trade-row ${t.pnl>=0?'win':'loss'}`} key={i}><span>#{i+1}</span><span>{fmtDateTime(entryDate)}</span><span>BUY {fmtPrice(t.entry)}</span><span>{fmtDateTime(exitDate)}</span><span>SELL {fmtPrice(t.exit)}</span><span>Held {held}</span><span>{t.pnl>=0?'WIN':'LOSS'}</span><span>{pct>=0?'+':''}{pct.toFixed(2)}%</span><b>{fmtMoney(t.pnl)}</b></div>}):<div className="empty">No trades recorded.</div>}</div></div>})
  })()}
  </section>}
- {strategies.length>0&&(()=>{
+ {(()=>{
    const groups:Record<string,Strategy[]>={}
    for(const s of strategies){const key=s.run_id||'ungrouped';(groups[key] ||= []).push(s)}
    const favEntries=Object.entries(groups).map(([runId,list])=>{
@@ -520,7 +520,7 @@ export default function Home(){
      </div>}
    </div>
  })()}
- {strategies.length>0&&(()=>{
+ {(()=>{
    const favStrategies=strategies.filter(s=>s.favorite).sort((a,b)=>new Date(b.created_at).getTime()-new Date(a.created_at).getTime())
    const renderFavStrategyCard=(s:Strategy)=><div className="fav-card" key={s.id}>
      <button className="fav-card-star" title="Unpin" onClick={()=>toggleFavoriteStrategy(s.id)}>★</button>
