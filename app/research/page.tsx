@@ -40,7 +40,7 @@ function fmtDuration(ms:number){
 
 type Candle = { date:string; open:number; high:number; low:number; close:number; volume:number }
 type Trade = { side:'LONG'; entryIndex:number; exitIndex:number; entry:number; exit:number; qty:number; pnl:number; fee?:number; reason:string }
-type Session = { candles:Candle[]; trades:Trade[]; metrics:any; startDate?:string; endDate?:string; tier?:string }
+type Session = { candles:Candle[]; trades:Trade[]; metrics:any; startDate?:string; endDate?:string; tier?:string; params?:any }
 type Strategy = { id:string; run_id?:string; name:string; family:string; symbol:string; market:string; score:number; approved:boolean; metrics:any; explanation:string; parameters:any; equity?:any; trades?:Trade[]; candles?:Candle[]; test_start_at?:string|null; test_end_at?:string|null; sessions?:Session[]; created_at:string; favorite?:boolean; seq?:number|null }
 type Run = { id:string; symbol:string; market:string; status:string; variations_requested:number; best_score:number|null; started_at:string; finished_at:string|null; starting_balance:number; current_balance:number; summary:string|null; best_strategy_name:string|null; best_reason:string|null; failure_reason:string|null; tested_count:number; qualified_count:number; favorite?:boolean }
 
@@ -416,12 +416,12 @@ export default function Home(){
      const dk=dayKeyPool[Math.floor(rr()*dayKeyPool.length)]
      const cds=sessionDayMap[dk];const p2=clampParamsToSession(rawParams,cds.length)
      const res=backtestSession(cds,family,p2,{tierKey:'15m',startingCash,dataSource})
-     return {candles:cds,trades:res.trades,metrics:res.metrics,startDate:cds[0]?.date,endDate:cds[cds.length-1]?.date,tier:'15m'}
+     return {candles:cds,trades:res.trades,metrics:res.metrics,startDate:cds[0]?.date,endDate:cds[cds.length-1]?.date,tier:'15m',params:p2}
    }
    const holdMs=maxHoldMsFor(tier.key as TierKey)
    const slice=randomWindow(flatPool,rr,tier.minutes);const p2=clampParamsToSession(rawParams,slice.length)
    const res=backtestSession(slice,family,p2,{maxHoldMs:holdMs,tierKey:tier.key as TierKey,startingCash,dataSource})
-   return {candles:slice,trades:res.trades,metrics:res.metrics,startDate:slice[0]?.date,endDate:slice[slice.length-1]?.date,tier:tier.key}
+   return {candles:slice,trades:res.trades,metrics:res.metrics,startDate:slice[0]?.date,endDate:slice[slice.length-1]?.date,tier:tier.key,params:p2}
  }
  outer: for(let b=0;b<total;b+=batch){if(stopFlag)break;const r=seeded(b+symbol.length*999+Date.now()%10000);for(let j=0;j<Math.min(batch,total-b);j++){
    await waitWhilePaused();if(stopFlag)break outer
@@ -439,7 +439,7 @@ export default function Home(){
    const checkHard=(sess:Session&{metrics:Metrics})=>{if(hardFail)return;const hc=hardSafetyCheck(sess.metrics,sess.trades);if(!hc.ok)hardFail=hc.reason||'Failed a hard safety check.'}
    if(live){
      const res=backtestSession(data,family,params,{tierKey:'live',startingCash:candidateStartingCash,dataSource})
-     const sess={candles:data,trades:res.trades,metrics:res.metrics,startDate:data[0]?.date,endDate:data[data.length-1]?.date,tier:'live'}
+     const sess={candles:data,trades:res.trades,metrics:res.metrics,startDate:data[0]?.date,endDate:data[data.length-1]?.date,tier:'live',params}
      checkHard(sess)
      isSessions=[sess];oosFoldSessions=[[sess]]
    } else {
@@ -479,7 +479,13 @@ export default function Home(){
    const qual=evaluateQualification({dataSource:overallDataSource,inSample:isMetrics,outOfSample:oosMetrics,folds:foldMetricsList,hardCheck:{ok:!hardFail,reason:hardFail||undefined}})
    const primary=(isSessions[0]||oosAllSessions[0])
    const sampleSessions=[...isSessions.slice(0,5),...oosAllSessions.slice(0,5)]
-   const candidate={family,params,result:{metrics:oosMetrics,trades:primary?.trades||[]},passed:qual.passed,reason:qual.reason,index,candles:primary?.candles||[],startDate:primary?.startDate,endDate:primary?.endDate,sessions:sampleSessions,testedAt:new Date().toISOString()} as Candidate
+   // Persist/display the params actually used for the primary session's backtest (post
+   // clampParamsToSession), not the raw pre-clamp draw — a short session can clamp e.g.
+   // lookback down substantially, and saving the raw value made the saved "parameters"
+   // (and the live chart/replay indicator overlay, which reads candidate.params) disagree
+   // with the trades and candles saved right alongside them.
+   const primaryParams=primary?.params||params
+   const candidate={family,params:primaryParams,result:{metrics:oosMetrics,trades:primary?.trades||[]},passed:qual.passed,reason:qual.reason,index,candles:primary?.candles||[],startDate:primary?.startDate,endDate:primary?.endDate,sessions:sampleSessions,testedAt:new Date().toISOString()} as Candidate
    if(qual.passed&&overallDataSource==='yahoo'){
      qualified++;capital+=oosMetrics.profit;patchRun({balance:capital})
      const rankVal=rankScore(oosMetrics,foldMetricsList)
@@ -561,7 +567,7 @@ export default function Home(){
  {selected&&<section className="panel replay"><div className="panel-title"><h2>STRATEGY REPLAY & WHY IT WORKED</h2><button className="ghost" onClick={()=>setSelected(null)}>CLOSE</button></div><h3>{selected.seq!=null&&<span className="strategy-id">#{selected.seq}</span>}{selected.name}</h3><p className="tiny">Completed {fmtDateTime(selected.created_at)}</p><p className="muted">{selected.explanation}</p><div className="replay-grid"><div><span>Win rate</span><b>{selected.metrics.winRate.toFixed(1)}%</b></div><div><span>Return</span><b>{selected.metrics.returnPct.toFixed(2)}%</b></div><div><span>Drawdown</span><b>{selected.metrics.maxDrawdownPct.toFixed(1)}%</b></div><div><span>Sharpe</span><b>{selected.metrics.sharpe.toFixed(2)}</b></div><div><span>Trades</span><b>{selected.metrics.trades}</b></div></div>
  {(()=>{const sessionsList:Session[]=selected.sessions?.length?selected.sessions:(selected.candles?.length?[{candles:selected.candles,trades:selected.trades||[],metrics:selected.metrics,startDate:selected.test_start_at||undefined,endDate:selected.test_end_at||undefined,tier:undefined as any}]:[])
  if(!sessionsList.length)return <div className="chart empty">No stored chart for this strategy yet — run the migration and generate a new strategy to see its chart.</div>
- return sessionsList.slice(0,3).map((sess,si)=>{const range=sess.tier==='15m'?`${fmtDateTime(sess.startDate)} (${fmtClock(sess.startDate)}–${fmtClock(sess.endDate)} ET)`:`${fmtDateTime(sess.startDate)} → ${fmtDateTime(sess.endDate)}`;return <div className="session-block" key={si}><h4>Session {si+1} of {sessionsList.length} · {range} · real {tierLabel(sess.tier)} bars</h4><CandleChart candles={sess.candles} trades={sess.trades} activeIndex={sess.candles.length-1} windowSize={Math.min(sess.candles.length,20)} title={`${selected.symbol} · session ${si+1}`} indicator={indicatorSeries(sess.candles,selected.family,selected.parameters)}/><div className="section-label">EVERY TRADE THIS SESSION MADE</div><div className="trade-table">{sess.trades?.length?sess.trades.map((t,i)=>{const pct=(t.exit-t.entry)/t.entry*100;const entryDate=sess.candles?.[t.entryIndex]?.date;const exitDate=sess.candles?.[t.exitIndex]?.date;const held=entryDate&&exitDate?fmtDuration(new Date(exitDate).getTime()-new Date(entryDate).getTime()):'—';return <div className={`trade-row ${t.pnl>=0?'win':'loss'}`} key={i}><span>#{i+1}</span><span>{fmtDateTime(entryDate)}</span><span>BUY {fmtPrice(t.entry)}</span><span>{fmtDateTime(exitDate)}</span><span>SELL {fmtPrice(t.exit)}</span><span>Held {held}</span><span>{t.pnl>=0?'WIN':'LOSS'}</span><span>{pct>=0?'+':''}{pct.toFixed(2)}%</span><b>{fmtMoney(t.pnl)}</b></div>}):<div className="empty">No trades recorded.</div>}</div></div>})
+ return sessionsList.slice(0,3).map((sess,si)=>{const range=sess.tier==='15m'?`${fmtDateTime(sess.startDate)} (${fmtClock(sess.startDate)}–${fmtClock(sess.endDate)} ET)`:`${fmtDateTime(sess.startDate)} → ${fmtDateTime(sess.endDate)}`;return <div className="session-block" key={si}><h4>Session {si+1} of {sessionsList.length} · {range} · real {tierLabel(sess.tier)} bars</h4><CandleChart candles={sess.candles} trades={sess.trades} activeIndex={sess.candles.length-1} windowSize={Math.min(sess.candles.length,20)} title={`${selected.symbol} · session ${si+1}`} indicator={indicatorSeries(sess.candles,selected.family,sess.params||clampParamsToSession(selected.parameters,sess.candles.length))}/><div className="section-label">EVERY TRADE THIS SESSION MADE</div><div className="trade-table">{sess.trades?.length?sess.trades.map((t,i)=>{const pct=(t.exit-t.entry)/t.entry*100;const entryDate=sess.candles?.[t.entryIndex]?.date;const exitDate=sess.candles?.[t.exitIndex]?.date;const held=entryDate&&exitDate?fmtDuration(new Date(exitDate).getTime()-new Date(entryDate).getTime()):'—';return <div className={`trade-row ${t.pnl>=0?'win':'loss'}`} key={i}><span>#{i+1}</span><span>{fmtDateTime(entryDate)}</span><span>BUY {fmtPrice(t.entry)}</span><span>{fmtDateTime(exitDate)}</span><span>SELL {fmtPrice(t.exit)}</span><span>Held {held}</span><span>{t.pnl>=0?'WIN':'LOSS'}</span><span>{pct>=0?'+':''}{pct.toFixed(2)}%</span><b>{fmtMoney(t.pnl)}</b></div>}):<div className="empty">No trades recorded.</div>}</div></div>})
  })()}
  </section>}
  {(()=>{
