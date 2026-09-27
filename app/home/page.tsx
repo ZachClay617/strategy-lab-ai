@@ -67,9 +67,10 @@ export default function HomePage(){
   async function loadBriefingStats(userId:string){
     if(!supabase)return
     const sevenDaysAgo=new Date(Date.now()-7*24*60*60*1000).toISOString()
+    const seenAt=localStorage.getItem('notificationsSeenAt')||new Date(0).toISOString()
     const [{data:runs},{data:signals},{count:pending}]=await Promise.all([
       supabase.from('research_runs').select('tested_count,variations_requested').eq('user_id',userId).gte('started_at',sevenDaysAgo),
-      supabase.from('trade_notifications').select('symbol').eq('user_id',userId),
+      supabase.from('trade_notifications').select('symbol').eq('user_id',userId).gt('created_at',seenAt),
       supabase.from('trade_notifications').select('id',{count:'exact',head:true}).eq('user_id',userId).eq('acknowledged',false),
     ])
     setTestsLast7Days((runs||[]).reduce((sum:number,r:any)=>sum+(r.tested_count||r.variations_requested||0),0))
@@ -166,7 +167,7 @@ export default function HomePage(){
     ?`Your portfolios are ${perfDir} ${Math.abs(overview.returnPct).toFixed(2)}% — that's ${fmtExact(Math.abs(overview.returnDollar))} ${perfDir} since you opened them.`
     :`You haven't opened a portfolio yet. Tell me what you want and I'll build it.`
   const testsLine=`I've run ${testsLast7Days.toLocaleString()} strategy test${testsLast7Days===1?'':'s'} for you in the last 7 days.`
-  const signalsLine=`I've found and fired trade signals on ${signalStockCount.toLocaleString()} stock${signalStockCount===1?'':'s'}.`
+  const signalsLine=`I've found and fired trade signals on ${signalStockCount.toLocaleString()} stock${signalStockCount===1?'':'s'} since you last checked.`
   const notifLine=`You have ${notificationCount.toLocaleString()} notification${notificationCount===1?'':'s'} waiting for your review.`
 
   return <div className="shell home-page">
