@@ -150,7 +150,7 @@ export default function TradeSignalsPage(){
       <form onSubmit={addToWatchlist} className="add-holding-grid" style={{gridTemplateColumns:'2fr 1fr auto',alignItems:'end'}}>
         <label>Ticker symbol<input value={newSymbol} onChange={e=>setNewSymbol(e.target.value.toUpperCase())} placeholder="e.g. AAPL" required/></label>
         <label>Market<select value={newMarket} onChange={e=>setNewMarket(e.target.value)}>{markets.map(m=><option key={m}>{m}</option>)}</select></label>
-        <button className="run cta-glow" type="submit" disabled={adding} style={{marginTop:0,width:'auto',padding:'12px 22px'}}>{adding?'ADDING…':'+ ADD TICKER'}</button>
+        <button className="run cta-glow" type="submit" disabled={adding} style={{marginTop:0,width:'auto',padding:'12px 22px'}}>{adding?'ADDING…':'MAKE A-TAMP MONITOR YOUR STOCK'}</button>
       </form>
       {addError&&<p className="field-warning" style={{marginTop:10}}>⚠ {addError}</p>}
       {watchlist.length>0&&<div className="watchlist-chips">
