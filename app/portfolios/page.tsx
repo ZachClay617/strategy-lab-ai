@@ -52,6 +52,8 @@ export default function Portfolios(){
   const [descDraft,setDescDraft]=useState('')
   const [nameDraft,setNameDraft]=useState('')
   const [editingName,setEditingName]=useState(false)
+  const [showDeletePortfolio,setShowDeletePortfolio]=useState(false)
+  const [deletingPortfolio,setDeletingPortfolio]=useState(false)
   const [addSymbol,setAddSymbol]=useState('')
   const [addShares,setAddShares]=useState('')
   const [addAvgCost,setAddAvgCost]=useState('')
@@ -318,6 +320,18 @@ export default function Portfolios(){
   function toggleDesc(id:string,e:React.MouseEvent){e.stopPropagation();setExpandedDesc(prev=>({...prev,[id]:!prev[id]}))}
   function viewPortfolio(id:string){setSelectedId(id);setView('detail');setMsg('')}
   function backToOverview(){setView('overview');setMsg('')}
+  async function deletePortfolio(){
+    if(!supabase||!selectedId)return
+    setDeletingPortfolio(true)
+    const {error}=await supabase.from('portfolios').delete().eq('id',selectedId)
+    setDeletingPortfolio(false)
+    if(error){setMsg(`Could not delete this portfolio: ${error.message}`);return}
+    setPortfolios(prev=>prev.filter(p=>p.id!==selectedId))
+    setShowDeletePortfolio(false)
+    setSelectedId(null)
+    setView('overview')
+    setMsg('Portfolio permanently deleted.')
+  }
   function researchPortfolio(id:string){
     const portfolio=portfolios.find(p=>p.id===id)
     if(!portfolio?.description.trim()){setMsg('Add a description first so the AI knows what this portfolio should do.');return}
@@ -483,7 +497,7 @@ export default function Portfolios(){
         </>:!selected?<div className="empty">Select or create a portfolio to see its detail.</div>:<>
           <div className="portfolio-sticky">
             <div className="panel-title">
-              {editingName?<div className="portfolio-name-edit"><input value={nameDraft} onChange={e=>setNameDraft(e.target.value)} autoFocus/><button className="ghost" onClick={saveName} disabled={!nameDraft.trim()}>SAVE</button><button className="ghost" onClick={()=>{setEditingName(false);setNameDraft(selected.name)}}>CANCEL</button></div>:<h2>{selected.name.toUpperCase()}<button className="ghost portfolio-name-btn" onClick={()=>{setNameDraft(selected.name);setEditingName(true)}} title="Rename portfolio">RENAME</button></h2>}
+              {editingName?<div className="portfolio-name-edit"><input value={nameDraft} onChange={e=>setNameDraft(e.target.value)} autoFocus/><button className="ghost" onClick={saveName} disabled={!nameDraft.trim()}>SAVE</button><button className="ghost" onClick={()=>{setEditingName(false);setNameDraft(selected.name)}}>CANCEL</button></div>:<h2>{selected.name.toUpperCase()}<button className="ghost portfolio-name-btn" onClick={()=>{setNameDraft(selected.name);setEditingName(true)}} title="Rename portfolio">RENAME</button><button className="ghost danger-ghost portfolio-name-btn" onClick={()=>setShowDeletePortfolio(true)} title="Delete this portfolio">🗑 DELETE</button></h2>}
               <span className="muted">Updated {fmtDateTime(selected.updated_at)}</span>
             </div>
             <div className="metrics" style={{gridTemplateColumns:'repeat(7,1fr)'}}>
@@ -604,5 +618,16 @@ export default function Portfolios(){
         </>}
       </section>
     </div>
+    {showDeletePortfolio&&selected&&<div className="confirm-overlay" onClick={()=>!deletingPortfolio&&setShowDeletePortfolio(false)}>
+      <div className="confirm-card" onClick={e=>e.stopPropagation()}>
+        <div className="confirm-icon">⚠</div>
+        <h3>Delete "{selected.name}"?</h3>
+        <p className="muted">This permanently deletes the entire portfolio — every holding, closed trade, return snapshot, and change log entry — for good. This cannot be undone.</p>
+        <div className="confirm-actions">
+          <button className="ghost" onClick={()=>setShowDeletePortfolio(false)} disabled={deletingPortfolio}>CANCEL</button>
+          <button className="danger-confirm" onClick={deletePortfolio} disabled={deletingPortfolio}>{deletingPortfolio?'DELETING…':'YES, PERMANENTLY DELETE'}</button>
+        </div>
+      </div>
+    </div>}
   </div>
 }
