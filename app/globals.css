@@ -104,7 +104,7 @@
 @media(max-width:900px){.portfolio-cards{grid-template-columns:1fr}}
 .home-hero{margin-bottom:26px}
 .home-greeting{font-size:clamp(30px,4.6vw,52px);margin:12px 0 6px}
-.home-tagline{font-size:15px;color:var(--cyan);letter-spacing:.02em;margin:0}
+.home-tagline{font-size:18px;color:var(--cyan);letter-spacing:.02em;margin:0}
 .service-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-bottom:22px}
 .icon-pulse-dot{animation:icon-pulse 1.8s ease-in-out infinite}
 @keyframes icon-pulse{0%,100%{opacity:1}50%{opacity:.35}}
