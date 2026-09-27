@@ -253,9 +253,9 @@ type RunSnapshot = {
   activeCandidate:Candidate|null; researchCandles:Candle[]; activeIndex:number; activeTrades:Trade[]
   rejectionCounts:Record<string,number>; tickerError:string|null; selectedRun:Run|null; balance:number
   symbol:string; market:string; runMode:'paper'|'live'; speedKey:SpeedKey
-  completedCount:number; qualifiedCount:number
+  completedCount:number; qualifiedCount:number; currentRunId:string|null
 }
-let runSnapshot:RunSnapshot={running:false,paused:false,progress:0,feed:[],testLog:[],activeCandidate:null,researchCandles:[],activeIndex:0,activeTrades:[],rejectionCounts:{},tickerError:null,selectedRun:null,balance:STARTING_CAPITAL,symbol:'AAPL',market:'Stocks',runMode:'paper',speedKey:'normal',completedCount:0,qualifiedCount:0}
+let runSnapshot:RunSnapshot={running:false,paused:false,progress:0,feed:[],testLog:[],activeCandidate:null,researchCandles:[],activeIndex:0,activeTrades:[],rejectionCounts:{},tickerError:null,selectedRun:null,balance:STARTING_CAPITAL,symbol:'AAPL',market:'Stocks',runMode:'paper',speedKey:'normal',completedCount:0,qualifiedCount:0,currentRunId:null}
 const runListeners=new Set<()=>void>()
 function patchRun(patch:Partial<RunSnapshot>|((s:RunSnapshot)=>Partial<RunSnapshot>)){
   const delta=typeof patch==='function'?patch(runSnapshot):patch
@@ -311,7 +311,17 @@ export default function Home(){
      }
      return
    }
-   setMsg('');setStrategies((s||[]) as Strategy[]);setRuns((r||[]) as Run[]);const {data:p}=await supabase.from('profiles').select('current_balance,avatar_url').eq('id',session.user.id).maybeSingle();if(p?.current_balance!=null&&!runSnapshot.running)patchRun({balance:Number(p.current_balance)});setAvatarUrl(p?.avatar_url||null)
+   setMsg('')
+   // A run can only ever be genuinely "running" in the tab that started it. Any other
+   // row still marked running was abandoned mid-run (tab closed or refreshed before it
+   // could finish) and never got a final status — reconcile those to "stopped" here.
+   let rows=(r||[]) as Run[]
+   const orphaned=rows.filter(x=>x.status==='running'&&x.id!==runSnapshot.currentRunId)
+   if(orphaned.length){
+     rows=rows.map(x=>orphaned.includes(x)?{...x,status:'stopped'}:x)
+     await Promise.all(orphaned.map(x=>supabase!.from('research_runs').update({status:'stopped',finished_at:x.finished_at||new Date().toISOString()}).eq('id',x.id)))
+   }
+   setStrategies((s||[]) as Strategy[]);setRuns(rows);const {data:p}=await supabase.from('profiles').select('current_balance,avatar_url').eq('id',session.user.id).maybeSingle();if(p?.current_balance!=null&&!runSnapshot.running)patchRun({balance:Number(p.current_balance)});setAvatarUrl(p?.avatar_url||null)
  }
 
  async function openStrategy(s:Strategy){
@@ -362,25 +372,25 @@ export default function Home(){
    setMsg('Password reset email sent. Check your inbox for a link to set a new password.')
  }
  async function saveEvent(runId:string,message:string,level='info',pct=0){if(!supabase||!session?.user)return;const {error}=await supabase.from('run_events').insert({run_id:runId,user_id:session.user.id,message,level,progress:pct});if(error)console.error('saveEvent failed',error)}
- async function runResearch(){if(!supabase||!session?.user||runSnapshot.running)return;stopFlag=false;pauseFlag=false;skipFlag=false;speedMsFlag=speeds.find(s=>s.key===runSnapshot.speedKey)?.ms??1000;patchRun({paused:false,running:true,progress:0,feed:[],testLog:[],selectedRun:null,activeCandidate:null,rejectionCounts:{},completedCount:0,qualifiedCount:0});const runId=crypto.randomUUID();const started=new Date().toISOString();const startingCapitalForRun=balance;const {error:runInsertError}=await supabase.from('research_runs').insert({id:runId,user_id:session.user.id,symbol:symbol.toUpperCase(),market,modes:[runMode],variations_requested:variations,status:'running',started_at:started,starting_balance:startingCapitalForRun,current_balance:startingCapitalForRun,tested_count:0,qualified_count:0,summary:'AI research started.',capital_events:[]});
- if(runInsertError){setMsg(`Could not start the run: ${runInsertError.message}`);patchRun({running:false});return}
+ async function runResearch(){if(!supabase||!session?.user||runSnapshot.running)return;stopFlag=false;pauseFlag=false;skipFlag=false;speedMsFlag=speeds.find(s=>s.key===runSnapshot.speedKey)?.ms??1000;patchRun({paused:false,running:true,progress:0,feed:[],testLog:[],selectedRun:null,activeCandidate:null,rejectionCounts:{},completedCount:0,qualifiedCount:0});const runId=crypto.randomUUID();patchRun({currentRunId:runId});const started=new Date().toISOString();const startingCapitalForRun=balance;const {error:runInsertError}=await supabase.from('research_runs').insert({id:runId,user_id:session.user.id,symbol:symbol.toUpperCase(),market,modes:[runMode],variations_requested:variations,status:'running',started_at:started,starting_balance:startingCapitalForRun,current_balance:startingCapitalForRun,tested_count:0,qualified_count:0,summary:'AI research started.',capital_events:[]});
+ if(runInsertError){setMsg(`Could not start the run: ${runInsertError.message}`);patchRun({running:false,currentRunId:null});return}
  setMsg('')
  let data:Candle[]=[];const live=runMode==='live'
  let sessionDayMap:Record<string,Candle[]>={};let sessionDayKeys:string[]=[]
  let hourlyData:Candle[]=[];let dailyData:Candle[]=[]
  if(live){
-   try{const res=await fetch(`/api/market?symbol=${encodeURIComponent(symbol)}&live=1&market=${encodeURIComponent(market)}`);const j=await res.json();if(j?.error==='invalid_ticker'){patchRun({tickerError:j.message,running:false});setMsg(`Could not start the run: ${j.message}`);await supabase.from('research_runs').delete().eq('id',runId);return}if(!Array.isArray(j)||j.length<40)throw new Error('insufficient live data');data=j;setLiveCandles(j);setLiveStatus(`Updated ${new Date().toLocaleTimeString()}`);patchRun(s=>({tickerError:null,feed:['Live execution: testing against real-time market data instead of historical bars.',...s.feed]}))}
+   try{const res=await fetch(`/api/market?symbol=${encodeURIComponent(symbol)}&live=1&market=${encodeURIComponent(market)}`);const j=await res.json();if(j?.error==='invalid_ticker'){patchRun({tickerError:j.message,running:false,currentRunId:null});setMsg(`Could not start the run: ${j.message}`);await supabase.from('research_runs').delete().eq('id',runId);return}if(!Array.isArray(j)||j.length<40)throw new Error('insufficient live data');data=j;setLiveCandles(j);setLiveStatus(`Updated ${new Date().toLocaleTimeString()}`);patchRun(s=>({tickerError:null,feed:['Live execution: testing against real-time market data instead of historical bars.',...s.feed]}))}
    catch{data=makeSynthetic(symbol,5); patchRun(s=>({feed:['Live feed unavailable right now; falling back to simulated data for this run.',...s.feed]}))}
  } else {
    const fetchTier=(interval:string,rangeDays:number)=>fetch(`/api/market?symbol=${encodeURIComponent(symbol)}&market=${encodeURIComponent(market)}&interval=${interval}&rangeDays=${rangeDays}`).then(r=>r.json()).catch(()=>null)
    const [d15,d1h,d1d]=await Promise.all([fetchTier('15m',SESSION_RANGE_DAYS),fetchTier('1h',730),fetchTier('1d',3650)])
    const invalid=[d15,d1h,d1d].find((d:any)=>d?.error==='invalid_ticker') as any
-   if(invalid){patchRun({tickerError:invalid.message,running:false});setMsg(`Could not start the run: ${invalid.message}`);await supabase.from('research_runs').delete().eq('id',runId);return}
+   if(invalid){patchRun({tickerError:invalid.message,running:false,currentRunId:null});setMsg(`Could not start the run: ${invalid.message}`);await supabase.from('research_runs').delete().eq('id',runId);return}
    if(Array.isArray(d15)&&d15.length){data=d15;sessionDayMap=extractMorningSessions(d15);sessionDayKeys=Object.keys(sessionDayMap).filter(k=>sessionDayMap[k].length>=4).sort()}
    if(Array.isArray(d1h)&&d1h.length)hourlyData=d1h
    if(Array.isArray(d1d)&&d1d.length)dailyData=d1d
    if(!data.length)data=dailyData.length?dailyData:(hourlyData.length?hourlyData:makeSynthetic(symbol,60))
-   if(!sessionDayKeys.length&&!hourlyData.length&&!dailyData.length){setMsg('Could not load any real historical data for this ticker. Try a different symbol.');patchRun({running:false});await supabase.from('research_runs').delete().eq('id',runId);return}
+   if(!sessionDayKeys.length&&!hourlyData.length&&!dailyData.length){setMsg('Could not load any real historical data for this ticker. Try a different symbol.');patchRun({running:false,currentRunId:null});await supabase.from('research_runs').delete().eq('id',runId);return}
    patchRun(s=>({tickerError:null,feed:[`Real historical data loaded — 15-Minute: ${sessionDayKeys.length} sessions (~${SESSION_RANGE_DAYS}d), Hourly: ${hourlyData.length?`${hourlyData.length} bars (~2y)`:'unavailable'}, Daily: ${dailyData.length?`${dailyData.length} bars (~10y)`:'unavailable'}. Each test's date decides which real bar size and max hold rule applies.`,...s.feed]}))
  }
  const pickTier=(r:()=>number)=>{
@@ -450,7 +460,7 @@ export default function Home(){
  else if(strategySaveError)setMsg(`Run finished, but qualified strategies could not be saved: ${strategySaveError}. Run the latest Supabase migration and try again.`)
  const {error:balanceError}=await supabase.from('profiles').upsert({id:session.user.id,current_balance:capital})
  if(balanceError)setMsg(`Run finished, but capital could not be saved: ${balanceError.message}`)
- await saveEvent(runId,summary,'success',100);patchRun(s=>({feed:[summary,...s.feed],running:false,paused:false,progress:100,rejectionCounts:{...rejections},completedCount:completed,qualifiedCount:qualified,balance:capital}));await loadData()
+ await saveEvent(runId,summary,'success',100);patchRun(s=>({feed:[summary,...s.feed],running:false,paused:false,progress:100,rejectionCounts:{...rejections},completedCount:completed,qualifiedCount:qualified,balance:capital,currentRunId:null}));await loadData()
  }
  async function resetBalance(){if(!supabase||!session?.user)return;await supabase.from('capital_events').insert({user_id:session.user.id,event_type:'reset',amount_before:balance,amount_after:STARTING_CAPITAL});const {error}=await supabase.from('profiles').upsert({id:session.user.id,current_balance:STARTING_CAPITAL,starting_balance:STARTING_CAPITAL});if(error){setMsg(`Could not save the reset: ${error.message}`);return}patchRun({balance:STARTING_CAPITAL})}
  async function toggleFavoriteRun(runId:string){if(!supabase)return;const run=runs.find(r=>r.id===runId);const next=!run?.favorite;setRuns(prev=>prev.map(r=>r.id===runId?{...r,favorite:next}:r));const {error}=await supabase.from('research_runs').update({favorite:next}).eq('id',runId);if(error){setMsg(`Could not update favorite: ${error.message}. Run the latest Supabase migration.`);setRuns(prev=>prev.map(r=>r.id===runId?{...r,favorite:!next}:r))}}
