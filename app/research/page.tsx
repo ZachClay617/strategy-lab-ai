@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
-const STARTING_CAPITAL = 10_000_000_000
+const STARTING_CAPITAL = 100_000
 const families = ['Trend Following','Mean Reversion','Breakout','Momentum','Volume Confirmation','RSI Regime','Moving Average Cross']
 const markets = ['Stocks','Crypto']
 const speeds = [
