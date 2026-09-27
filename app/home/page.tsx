@@ -168,6 +168,13 @@ export default function HomePage(){
   const perfLine=hasAnyData&&overview.returnPct!=null
     ?`Your portfolios are ${perfDir} ${Math.abs(overview.returnPct).toFixed(2)}% — that's ${fmtExact(Math.abs(overview.returnDollar))} ${perfDir} since you opened them.`
     :`You haven't opened a portfolio yet. Tell me what you want and I'll build it.`
+  const dayDir=overview.dayReturnPct!=null&&overview.dayReturnPct>=0?'up':'down'
+  const dayLine=hasAnyData&&overview.dayReturnPct!=null
+    ?`Today, your portfolios are ${dayDir} ${Math.abs(overview.dayReturnPct).toFixed(2)}% (${fmtExact(Math.abs(overview.dayReturnDollar))}).`
+    :null
+  const topHoldingLine=topHoldingToday
+    ?`Your best mover today is ${topHoldingToday.symbol}, ${topHoldingToday.pct>=0?'up':'down'} ${Math.abs(topHoldingToday.pct).toFixed(2)}% (${fmtDollar(topHoldingToday.dollar)}).`
+    :null
   const testsLine=`I've run ${testsLast7Days.toLocaleString()} strategy test${testsLast7Days===1?'':'s'} for you in the last 7 days across ${testStockCount.toLocaleString()} stock${testStockCount===1?'':'s'}.`
   const signalsLine=`I've found and fired trade signals on ${signalStockCount.toLocaleString()} stock${signalStockCount===1?'':'s'} since you last checked.`
   const notifLine=`You have ${notificationCount.toLocaleString()} notification${notificationCount===1?'':'s'} waiting for your review.`
@@ -192,6 +199,8 @@ export default function HomePage(){
       </div>
       {!loading&&<div className="ai-briefing-body">
         <p><span className={`ai-briefing-caret ${perfDir}`}>▸</span>{perfLine}</p>
+        {dayLine&&<p><span className={`ai-briefing-caret ${dayDir}`}>▸</span>{dayLine}</p>}
+        {topHoldingLine&&<p><span className={`ai-briefing-caret ${topHoldingToday!.pct>=0?'up':'down'}`}>▸</span>{topHoldingLine}</p>}
         <p><span className="ai-briefing-caret">▸</span>{testsLine}</p>
         <p><span className="ai-briefing-caret">▸</span>{signalsLine}</p>
         <p><span className="ai-briefing-caret">▸</span>{notifLine}<span className="ai-briefing-cursor"></span></p>
