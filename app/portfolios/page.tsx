@@ -436,7 +436,7 @@ export default function Portfolios(){
 
   return <div className="shell portfolios-page">
     <section className="hero"><div><div className="eyebrow">AI PORTFOLIO AUTOPILOT</div><h1>Describe it. Track it. <span>Visualize it.</span></h1><p className="muted">Give the AI a plain-language description of what you want a portfolio to do. It builds and maintains a real-symbol portfolio against that description, on your command, and logs every change.</p></div></section>
-    {msg&&<p className="msg banner">{msg}</p>}
+    {msg&&<p className="msg banner"><span>{msg}</span><button className="msg-dismiss" onClick={()=>setMsg('')} aria-label="Dismiss">✕</button></p>}
     <div className="grid">
       <section className="panel">
         <div className="panel-title"><h2>YOUR PORTFOLIOS</h2>{view==='detail'&&<button className="ghost" onClick={backToOverview}>← OVERVIEW</button>}</div>
