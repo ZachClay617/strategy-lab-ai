@@ -41,7 +41,7 @@
 .rejection-rank{color:var(--muted);min-width:150px;flex-shrink:0}
 .rejection-label{flex:1;color:#fff}
 .rejection-count{color:var(--muted);white-space:nowrap}
-.test-list{max-height:480px;overflow-y:auto;overflow-anchor:none;display:flex;flex-direction:column;gap:6px;padding-right:4px}
+.test-list{max-height:320px;overflow-y:auto;overflow-anchor:none;display:flex;flex-direction:column;gap:6px;padding-right:4px}
 .test-item{display:flex;justify-content:space-between;align-items:center;gap:12px;background:#080d1a;border:1px solid #18213a;border-radius:10px;padding:10px 13px}
 .test-item.pass{border-color:#1f4a3a}.test-item.fail{border-color:#231b30}
 .test-item-main{min-width:0}.test-item-main b{display:block;font-size:12px}.test-item-main span{display:block;font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:340px}
