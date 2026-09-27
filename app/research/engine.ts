@@ -221,7 +221,10 @@ export function backtestSession(data:Candle[], family:string, p:any, opts:{maxHo
   let peak=cash, maxDD=0, grossProfit=0, grossLoss=0
   const equity:number[]=[]; const tradeLog:Trade[]=[]
   const riskFraction=.02
-  const warmup=Math.max(4,p.slow||0,p.lookback||0,26)
+  // Scale the warmup floor to the session length: a fixed 26-bar floor left short
+  // sessions (e.g. the 15m morning window, ~12 candles) with no bars to trade at all.
+  const maxWarmup=Math.max(4,Math.floor((data.length-2)*.5))
+  const warmup=Math.min(maxWarmup,Math.max(4,p.slow||0,p.lookback||0,26))
   // Reserve the final bar so every signal has a next bar to execute on (no look-ahead: decide with data<=i, fill at i+1).
   for(let i=warmup;i<data.length-1;i++){
     const sig=signalForFamily(ctx,data,i,family,p)
