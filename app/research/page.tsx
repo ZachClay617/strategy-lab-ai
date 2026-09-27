@@ -446,15 +446,20 @@ export default function Home(){
      pickedTier=tier
      const dayPoolIS=tier.key==='15m'?daySplit.inSample:[]
      const flatPoolIS=tier.key==='1h'?hourSplit.inSample:tier.key==='1d'?daySplitD.inSample:[]
-     for(let n=0;n<minTrades;n++){const sess=sampleSession(tier,dayPoolIS,flatPoolIS,r,family,params,candidateStartingCash,'yahoo');checkHard(sess);isSessions.push(sess)}
+     // Same floor as the out-of-sample sessions below — minTrades defaults to 1, which
+     // otherwise starved the in-sample portion's contribution to the 50-trade total.
+     const isSessionCount=clamp(Math.max(minTrades,8),8,30)
+     for(let n=0;n<isSessionCount;n++){const sess=sampleSession(tier,dayPoolIS,flatPoolIS,r,family,params,candidateStartingCash,'yahoo');checkHard(sess);isSessions.push(sess)}
      const isMetricsQuick=combineMetrics(isSessions.map(s=>s.metrics),candidateStartingCash)
      if(!hardFail&&isMetricsQuick.trades>0){
        const folds=tier.key==='15m'?dayFolds:tier.key==='1h'?hourFolds:dayFoldsD
-       // Out-of-sample sessions per fold are capped (independent of minTrades) so a
-       // large minTrades setting — meant to make in-sample exploration thorough —
-       // doesn't multiply run time by the fold count on top of it. Qualification only
-       // needs 20+ total out-of-sample trades, not thousands of out-of-sample sessions.
-       const oosSessionsPerFold=Math.min(minTrades,8)
+       // Out-of-sample sessions per fold have a floor of 8 regardless of minTrades —
+       // qualification needs 20+ out-of-sample trades, and with minTrades at its
+       // default of 1 a naive Math.min(minTrades,8) ran a single OOS session per
+       // fold, which could almost never reach that trade count. A high minTrades
+       // (meant for thorough in-sample exploration) can still raise this, capped
+       // so it doesn't multiply run time unboundedly.
+       const oosSessionsPerFold=clamp(Math.max(minTrades,8),8,30)
        for(const fold of folds){
          const dayPoolFold=tier.key==='15m'?(fold as unknown as string[]):[]
          const flatPoolFold=tier.key==='1h'||tier.key==='1d'?(fold as unknown as Candle[]):[]
