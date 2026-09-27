@@ -56,9 +56,14 @@ export async function evaluateSymbolSignals(client:any, userId:string, symbol:st
   const favorites=(favs||[]) as FavoriteStrategy[]
   if(!favorites.length)return []
 
+  // Buy eligibility is symbol-wide (not per-strategy): if the user already
+  // holds an open position in this symbol — whichever favorited strategy
+  // opened it — don't fire another buy signal for it. Sell notifications
+  // still resolve to the specific strategy/position pair being closed.
   const {data:openPositions}=await client.from('live_positions').select('id,strategy_id')
-    .eq('user_id',userId).eq('status','open').in('strategy_id',favorites.map(f=>f.id))
+    .eq('user_id',userId).eq('status','open').eq('symbol',symbol).eq('market',market)
   const openByStrategy=new Map<string,{id:string}>((openPositions||[]).map((p:any)=>[p.strategy_id,p]))
+  const hasOpenPositionForSymbol=(openPositions||[]).length>0
 
   const i=candles.length-1
   const lastClose=candles[i].close
@@ -71,7 +76,7 @@ export async function evaluateSymbolSignals(client:any, userId:string, symbol:st
     const sig=signalFor(candles,i,strat.family,params)
     const openPos=openByStrategy.get(strat.id)
 
-    if(!openPos&&sig.long){
+    if(!hasOpenPositionForSymbol&&sig.long){
       const {data:pending}=await client.from('trade_notifications').select('id')
         .eq('user_id',userId).eq('strategy_id',strat.id).eq('action','buy').eq('acknowledged',false).limit(1)
       if(pending?.length)continue
