@@ -180,7 +180,7 @@ export function signalForFamily(ctx:IndicatorCtx, data:Candle[], i:number, famil
   let long=false,sell=false
   if(family==='Trend Following'){long=c>fast*(1+p.threshold);sell=c<fast*(1-p.threshold)}
   else if(family==='Mean Reversion'){if(rsi==null)return {long:false,sell:false};long=rsi<p.rsi;sell=rsi>100-p.rsi}
-  else if(family==='Breakout'){const {hi,lo}=donchian({...data[i]} as any,i,p.lookback);const win=ctx.closes.slice(Math.max(0,i-p.lookback),i);const hiC=win.length?Math.max(...win):c;const loC=win.length?Math.min(...win):c;long=c>=hiC*(1+p.threshold);sell=c<=loC*(1-p.threshold)}
+  else if(family==='Breakout'){const win=ctx.closes.slice(Math.max(0,i-p.lookback),i);const hiC=win.length?Math.max(...win):c;const loC=win.length?Math.min(...win):c;long=c>=hiC*(1+p.threshold);sell=c<=loC*(1-p.threshold)}
   else if(family==='Momentum'){long=c>prev*(1+p.threshold);sell=c<prev*(1-p.threshold)}
   else if(family==='Volume Confirmation'){const from=Math.max(0,i-p.fast);const vols=data.slice(from,i).map(x=>x.volume);const avgv=vols.length?vols.reduce((a,b)=>a+b,0)/vols.length:data[i].volume;long=c>fast&&data[i].volume>avgv*(1+p.vol);sell=c<fast}
   else if(family==='RSI Regime'){if(rsi==null)return {long:false,sell:false};long=rsi<p.rsi&&c>fast;sell=rsi>100-p.rsi||c<fast*(1-p.threshold)}
