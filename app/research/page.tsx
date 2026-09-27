@@ -4,9 +4,13 @@ import { useEffect, useState, useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import {
+  STARTING_CAPITAL, FAMILIES as families, RESOLUTION_TIERS, TierKey, maxHoldMsFor, tierLabel,
+  describeFamily, backtestSession, combineMetrics, hardSafetyCheck, evaluateQualification,
+  rankScore, dedupeKey, paramsPlausible, randomParams, clampParamsToSession, validateDataset,
+  splitChronological, makeWalkForwardFolds, EXECUTION, clamp, seeded, Metrics, DataSource,
+} from './engine'
 
-const STARTING_CAPITAL = 100_000
-const families = ['Trend Following','Mean Reversion','Breakout','Momentum','Volume Confirmation','RSI Regime','Moving Average Cross']
 const markets = ['Stocks','Crypto']
 const speeds = [
   { key:'slow', label:'Slow · 1 test / 3s', ms:3000 },
@@ -26,18 +30,7 @@ const SESSION_RANGE_DAYS = 55
 // To give the AI a genuinely real 10-year testing pool, each test's date decides
 // which real bar size is used, and a matching maximum trade-hold rule applies so
 // a position can never span more real time than one bar of that size reasonably
-// represents.
-const RESOLUTION_TIERS = [
-  { key:'15m', label:'15-Minute', minutes:15, rangeDays:SESSION_RANGE_DAYS, maxDaysAgo:SESSION_RANGE_DAYS, holdLabel:'must close within the 9:00 AM–12:00 PM ET session' },
-  { key:'1h', label:'Hourly', minutes:60, rangeDays:730, maxDaysAgo:730, holdLabel:'must close within 3 days of opening' },
-  { key:'1d', label:'Daily', minutes:1440, rangeDays:3650, maxDaysAgo:3650, holdLabel:'must close within 5 trading days of opening' },
-] as const
-type TierKey = typeof RESOLUTION_TIERS[number]['key']
-function maxHoldMsFor(tierKey:TierKey){
-  if(tierKey==='1h')return 3*24*60*60*1000
-  if(tierKey==='1d')return 5*24*60*60*1000
-  return undefined
-}
+// represents. (RESOLUTION_TIERS/maxHoldMsFor/tierLabel now live in ./engine.)
 const MAX_CHART_SPAN_MS = 7*24*60*60*1000
 function fmtDuration(ms:number){
   const mins=Math.round(ms/60000)
@@ -48,7 +41,7 @@ function fmtDuration(ms:number){
 }
 
 type Candle = { date:string; open:number; high:number; low:number; close:number; volume:number }
-type Trade = { side:'LONG'; entryIndex:number; exitIndex:number; entry:number; exit:number; qty:number; pnl:number; reason:string }
+type Trade = { side:'LONG'; entryIndex:number; exitIndex:number; entry:number; exit:number; qty:number; pnl:number; fee?:number; reason:string }
 type Session = { candles:Candle[]; trades:Trade[]; metrics:any; startDate?:string; endDate?:string; tier?:string }
 type Strategy = { id:string; run_id?:string; name:string; family:string; symbol:string; market:string; score:number; approved:boolean; metrics:any; explanation:string; parameters:any; equity?:any; trades?:Trade[]; candles?:Candle[]; test_start_at?:string|null; test_end_at?:string|null; sessions?:Session[]; created_at:string; favorite?:boolean; seq?:number|null }
 type Run = { id:string; symbol:string; market:string; status:string; variations_requested:number; best_score:number|null; started_at:string; finished_at:string|null; starting_balance:number; current_balance:number; summary:string|null; best_strategy_name:string|null; best_reason:string|null; failure_reason:string|null; tested_count:number; qualified_count:number; favorite?:boolean }
@@ -67,8 +60,6 @@ function balanceFontSize(s:string){
   return 12
 }
 function fmtPrice(n:number){return new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:2}).format(n)}
-function clamp(n:number,a:number,b:number){return Math.max(a,Math.min(b,n))}
-function seeded(seed:number){let x=seed|0;return()=>{x=(x*1664525+1013904223)|0;return(x>>>0)/4294967296}}
 let timerWorker:Worker|null=null
 let timerSeq=0
 const timerResolvers=new Map<number,()=>void>()
@@ -144,80 +135,8 @@ function stopBackgroundKeepAlive(){
 }
 function makeSynthetic(symbol:string, days:number):Candle[]{const r=seeded(symbol.split('').reduce((a,c)=>a+c.charCodeAt(0),0));let p=100;const out:Candle[]=[];for(let i=0;i<Math.min(days,2500);i++){const ret=(r()-.49)*.04;const open=p;p*=Math.exp(ret);const close=p;const high=Math.max(open,close)*(1+r()*.012);const low=Math.min(open,close)*(1-r()*.012);out.push({date:new Date(Date.now()-(days-i)*86400000).toISOString(),open,high,low,close,volume:500000+r()*4500000})}return out}
 
-function signalFor(data:Candle[], i:number, family:string, p:any){
-  const c=data[i].close, prev=data[i-1]?.close||c
-  const fastWindow=data.slice(Math.max(0,i-p.fast),i)
-  const avg=fastWindow.reduce((s,x)=>s+x.close,0)/(fastWindow.length||1)
-  const slowWindow=data.slice(Math.max(0,i-p.slow),i)
-  const slow=slowWindow.reduce((s,x)=>s+x.close,0)/(slowWindow.length||1)
-  const rsiLike=50+((c-prev)/Math.max(prev,.01))*2500
-  let long=false,short=false
-  if(family==='Trend Following'){long=c>avg*(1+p.threshold);short=c<avg*(1-p.threshold)}
-  if(family==='Mean Reversion'){long=rsiLike<p.rsi;short=rsiLike>100-p.rsi}
-  if(family==='Breakout'){const hi=Math.max(...data.slice(Math.max(0,i-p.lookback),i).map(x=>x.close));const lo=Math.min(...data.slice(Math.max(0,i-p.lookback),i).map(x=>x.close));long=c>=hi*(1+p.threshold);short=c<=lo*(1-p.threshold)}
-  if(family==='Momentum'){long=c>prev*(1+p.threshold);short=c<prev*(1-p.threshold)}
-  if(family==='Volume Confirmation'){const avgv=fastWindow.reduce((s,x)=>s+x.volume,0)/(fastWindow.length||1);long=c>avg&&data[i].volume>avgv*(1+p.vol);short=c<avg}
-  if(family==='RSI Regime'){long=rsiLike<p.rsi&&c>avg;short=rsiLike>100-p.rsi||c<avg*(1-p.threshold)}
-  if(family==='Moving Average Cross'){long=avg>slow*(1+p.threshold);short=avg<slow*(1-p.threshold)}
-  return {long,sell:short}
-}
-
-function describeFamily(family:string, p:any){
-  const pct=(n:number)=>`${(n*100).toFixed(2)}%`
-  if(family==='Trend Following')return `Trend Following buys when price closes more than ${pct(p.threshold)} above its ${p.fast}-candle moving average, and sells once price falls more than ${pct(p.threshold)} below that same average. Indicator: ${p.fast}-period simple moving average.`
-  if(family==='Mean Reversion')return `Mean Reversion buys when a short-term momentum reading (a fast RSI-style indicator) drops below ${p.rsi}, betting on a bounce back toward the average, and sells once that reading climbs back above ${100-p.rsi}. Indicator: RSI-style momentum oscillator.`
-  if(family==='Breakout')return `Breakout buys when price closes above the highest close of the last ${p.lookback} candles by more than ${pct(p.threshold)}, and sells when price breaks back below the recent low band. Indicator: ${p.lookback}-candle rolling high/low channel.`
-  if(family==='Momentum')return `Momentum buys when price rises more than ${pct(p.threshold)} versus the previous candle, and sells when price falls more than ${pct(p.threshold)} versus the previous candle. Indicator: single-candle rate of change.`
-  if(family==='Volume Confirmation')return `Volume Confirmation buys when price is above its ${p.fast}-candle average AND volume is running ${pct(p.vol)} above its ${p.fast}-candle average volume, and sells when price falls back below that average. Indicators: ${p.fast}-period price average and ${p.fast}-period volume average.`
-  if(family==='RSI Regime')return `RSI Regime buys when the momentum oscillator is below ${p.rsi} while price is still above its ${p.fast}-candle average (a pullback inside an uptrend), and sells when momentum climbs above ${100-p.rsi} or price breaks the average by ${pct(p.threshold)}. Indicators: RSI-style oscillator and ${p.fast}-period moving average.`
-  if(family==='Moving Average Cross')return `Moving Average Cross buys when the ${p.fast}-period average crosses more than ${pct(p.threshold)} above the ${p.slow}-period average, and sells when it crosses back below. Indicators: ${p.fast}-period and ${p.slow}-period moving averages.`
-  return 'Custom rule set.'
-}
-
-function backtest(data:Candle[], family:string, p:any, maxHoldMs?:number, startingCash:number=STARTING_CAPITAL){
-  let cash=startingCash, qty=0, side:'LONG'|null=null, entry=0, entryIndex=0, wins=0, losses=0, trades=0, peak=cash, maxDD=0
-  const equity:number[]=[]; const tradeLog:Trade[]=[]
-  const riskFraction=.02
-  const start=Math.max(3,p.slow,p.lookback)
-  for(let i=start;i<data.length;i++){
-    const c=data[i].close
-    const {long,sell}=signalFor(data,i,family,p)
-    const heldTooLong=side==='LONG'&&maxHoldMs!=null&&(new Date(data[i].date).getTime()-new Date(data[entryIndex].date).getTime())>=maxHoldMs
-    if(side===null && long){
-      const notional=cash*riskFraction
-      qty=notional/Math.max(c,.000001)
-      side='LONG';entry=c;entryIndex=i
-    } else if(side==='LONG' && (sell||heldTooLong)){
-      const pnl=(c-entry)*qty;cash+=pnl;const win=pnl>=0;if(win)wins++;else losses++;trades++;tradeLog.push({side,entryIndex,exitIndex:i,entry,exit:c,qty,pnl,reason:heldTooLong&&!sell?'Maximum hold time reached for this bar size; position closed automatically.':'Sell signal closed the position.'});side=null;qty=0
-    }
-    const mark=side==='LONG'?cash+((c-entry)*qty):cash
-    peak=Math.max(peak,mark);maxDD=Math.max(maxDD,(peak-mark)/Math.max(peak,1));equity.push(mark)
-  }
-  if(side){const c=data[data.length-1].close;const pnl=(c-entry)*qty;cash+=pnl;const win=pnl>=0;if(win)wins++;else losses++;trades++;tradeLog.push({side,entryIndex,exitIndex:data.length-1,entry,exit:c,qty,pnl,reason:'End-of-test liquidation.'})}
-  const ret=(cash/startingCash-1)*100
-  const winRate=trades?wins/trades*100:0
-  const daily:number[]=[];for(let i=1;i<equity.length;i++)daily.push((equity[i]-equity[i-1])/Math.max(Math.abs(equity[i-1]),1))
-  const mean=daily.reduce((a,b)=>a+b,0)/(daily.length||1);const sd=Math.sqrt(daily.reduce((a,b)=>a+(b-mean)**2,0)/(daily.length||1))||1
-  const sharpe=mean/sd*Math.sqrt(252)
-  const consistency=clamp(50+ret*.25-maxDD*100*.35+Math.min(trades,100)*.15,0,100)
-  const score=clamp(ret*.35+winRate*.3+sharpe*10*.15+consistency*.15-(maxDD*100)*.25,0,100)
-  return {metrics:{returnPct:ret,winRate,maxDrawdownPct:maxDD*100,sharpe,consistency,trades,profit:cash-startingCash,score,wins,losses},equity, trades:tradeLog, endingBalance:cash}
-}
-// combines a strategy's per-session results into one set of metrics, so qualification (including minimum trades) applies to the whole strategy across every session it was tested on, not just one
-function aggregateMetrics(list:any[]){
-  const trades=list.reduce((s,m)=>s+m.trades,0)
-  const wins=list.reduce((s,m)=>s+m.wins,0)
-  const losses=list.reduce((s,m)=>s+m.losses,0)
-  const profit=list.reduce((s,m)=>s+m.profit,0)
-  const winRate=trades?wins/trades*100:0
-  const returnPct=list.length?list.reduce((s,m)=>s+m.returnPct,0)/list.length:0
-  const maxDrawdownPct=list.length?Math.max(...list.map(m=>m.maxDrawdownPct)):0
-  const sharpe=list.length?list.reduce((s,m)=>s+m.sharpe,0)/list.length:0
-  const consistency=clamp(50+returnPct*.25-maxDrawdownPct*.35+Math.min(trades,100)*.15,0,100)
-  const score=clamp(returnPct*.35+winRate*.3+sharpe*10*.15+consistency*.15-maxDrawdownPct*.25,0,100)
-  return {returnPct,winRate,maxDrawdownPct,sharpe,consistency,trades,profit,score,wins,losses}
-}
-function randomParams(r:()=>number){return{fast:Math.floor(5+r()*55),slow:Math.floor(30+r()*120),lookback:Math.floor(10+r()*80),threshold:.001+r()*.03,rsi:25+Math.floor(r()*35),vol:r()*.8}}
+// signalFor/describeFamily/backtest/aggregateMetrics/randomParams now live in ./engine
+// (single source of truth for indicators, execution, and metrics math).
 function fmtDateTime(iso?:string){if(!iso)return '—';return new Date(iso).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'})}
 function downloadJSON(filename:string,data:any){
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'})
@@ -257,14 +176,7 @@ function randomWindow(data:Candle[], r:()=>number, minutesPerBar:number=15){
   const len=Math.max(minLen,Math.floor(minLen+r()*Math.max(0,maxExtra)))
   return data.slice(start,Math.min(data.length,start+len))
 }
-function clampParamsToSession(p:any, len:number){
-  const cap=(v:number,min:number,max:number)=>Math.max(min,Math.min(max,v))
-  return {...p,
-    fast:Math.round(cap(p.fast,2,Math.max(2,Math.floor(len*.35)))),
-    slow:Math.round(cap(p.slow,3,Math.max(3,Math.floor(len*.6)))),
-    lookback:Math.round(cap(p.lookback,2,Math.max(2,Math.floor(len*.5)))),
-  }
-}
+// clampParamsToSession now lives in ./engine
 function sma(data:Candle[], i:number, period:number){const from=Math.max(0,i-period);const w=data.slice(from,i+1);return w.length?w.reduce((s,x)=>s+x.close,0)/w.length:data[i].close}
 function indicatorSeries(data:Candle[], family:string, p:any):{label:string,color:string,values:(number|null)[]}{
   const n=data.length
@@ -280,16 +192,8 @@ function indicatorSeries(data:Candle[], family:string, p:any):{label:string,colo
   for(let i=0;i<n;i++){values[i]=i<2?null:sma(data,i,p.fast)}
   return {label:`${p.fast}-period average`,color:'#ffd166',values}
 }
-function categorizeRejection(m:any):string|null{
-  if(m.trades<=0)return 'No completed trades'
-  if(m.winRate<45)return 'Win rate below 45%'
-  if(m.returnPct<.025)return 'Return below 0.025%'
-  if(m.maxDrawdownPct>=8)return 'Drawdown at or above 8%'
-  if(m.sharpe<.85||m.sharpe>5)return 'Sharpe outside 0.85–5'
-  return null
-}
-function tierLabel(key?:string){if(key==='live')return 'live 1-minute'; const t=RESOLUTION_TIERS.find(x=>x.key===key); return t?`${t.label} (${t.holdLabel})`:key||'unknown'}
-function explainCandidate(c:Candidate,sessionsTested:number){const m=c.result.metrics;const n=sessionsTested||c.sessions?.length||1;const bar=tierLabel(c.sessions?.[0]?.tier);if(m.trades<=0)return`Rejected: no completed trades across ${n} tested session${n>1?'s':''} on ${bar} bars.`;if(m.winRate<45)return`Rejected: ${m.winRate.toFixed(1)}% win rate is below the required 45% on ${bar} bars. It finished with ${m.wins} wins and ${m.losses} losses.`;if(m.returnPct<.025)return`Rejected: ${m.returnPct.toFixed(3)}% return is below the required 0.025% minimum on ${bar} bars.`;if(m.maxDrawdownPct>=8)return`Rejected: drawdown reached ${m.maxDrawdownPct.toFixed(1)}%, above the required 8% max on ${bar} bars.`;if(m.sharpe<.85||m.sharpe>5)return`Rejected: ${m.sharpe.toFixed(2)} Sharpe is outside the required 0.85–5 range on ${bar} bars.`;return`Qualified on ${bar} bars: ${m.wins} wins / ${m.losses} losses, ${m.returnPct.toFixed(2)}% return, ${m.maxDrawdownPct.toFixed(1)}% max drawdown and ${m.sharpe.toFixed(2)} Sharpe.`}
+// categorizeRejection/tierLabel/explainCandidate are replaced by the single
+// evaluateQualification() result from ./engine (category + reason) — see runResearch().
 
 function CandleChart({candles,trades,activeIndex,title,live=false,windowSize=14,errorMessage,indicator}:{candles:Candle[];trades:Trade[];activeIndex:number;title:string;live?:boolean;windowSize?:number;errorMessage?:string|null;indicator?:{label:string,color:string,values:(number|null)[]}|null}){
   if(errorMessage)return <div className="chart empty error">⚠ {errorMessage}</div>
@@ -461,73 +365,128 @@ export default function Home(){
  let data:Candle[]=[];const live=runMode==='live'
  let sessionDayMap:Record<string,Candle[]>={};let sessionDayKeys:string[]=[]
  let hourlyData:Candle[]=[];let dailyData:Candle[]=[]
+ let liveDataSource:DataSource='yahoo'
  if(live){
    try{const res=await fetch(`/api/market?symbol=${encodeURIComponent(symbol)}&live=1&market=${encodeURIComponent(market)}`);const j=await res.json();if(j?.error==='invalid_ticker'){patchRun({tickerError:j.message,running:false,currentRunId:null});setMsg(`Could not start the run: ${j.message}`);await supabase.from('research_runs').delete().eq('id',runId);stopBackgroundKeepAlive();return}if(!Array.isArray(j)||j.length<40)throw new Error('insufficient live data');data=j;setLiveCandles(j);setLiveStatus(`Updated ${new Date().toLocaleTimeString()}`);patchRun(s=>({tickerError:null,feed:['Live execution: testing against real-time market data instead of historical bars.',...s.feed]}))}
-   catch{data=makeSynthetic(symbol,5); patchRun(s=>({feed:['Live feed unavailable right now; falling back to simulated data for this run.',...s.feed]}))}
+   catch{data=makeSynthetic(symbol,5);liveDataSource='synthetic';patchRun(s=>({feed:['Live feed unavailable right now; falling back to simulated data for this run. Simulated tests can never qualify or affect Research Capital.',...s.feed]}))}
  } else {
    const fetchTier=(interval:string,rangeDays:number)=>fetch(`/api/market?symbol=${encodeURIComponent(symbol)}&market=${encodeURIComponent(market)}&interval=${interval}&rangeDays=${rangeDays}`).then(r=>r.json()).catch(()=>null)
    const [d15,d1h,d1d]=await Promise.all([fetchTier('15m',SESSION_RANGE_DAYS),fetchTier('1h',730),fetchTier('1d',3650)])
    const invalid=[d15,d1h,d1d].find((d:any)=>d?.error==='invalid_ticker') as any
    if(invalid){patchRun({tickerError:invalid.message,running:false,currentRunId:null});setMsg(`Could not start the run: ${invalid.message}`);await supabase.from('research_runs').delete().eq('id',runId);stopBackgroundKeepAlive();return}
-   if(Array.isArray(d15)&&d15.length){data=d15;sessionDayMap=extractMorningSessions(d15);sessionDayKeys=Object.keys(sessionDayMap).filter(k=>sessionDayMap[k].length>=4).sort()}
-   if(Array.isArray(d1h)&&d1h.length)hourlyData=d1h
-   if(Array.isArray(d1d)&&d1d.length)dailyData=d1d
-   if(!data.length)data=dailyData.length?dailyData:(hourlyData.length?hourlyData:makeSynthetic(symbol,60))
-   if(!sessionDayKeys.length&&!hourlyData.length&&!dailyData.length){setMsg('Could not load any real historical data for this ticker. Try a different symbol.');patchRun({running:false,currentRunId:null});await supabase.from('research_runs').delete().eq('id',runId);stopBackgroundKeepAlive();return}
-   patchRun(s=>({tickerError:null,feed:[`Real historical data loaded — 15-Minute: ${sessionDayKeys.length} sessions (~${SESSION_RANGE_DAYS}d), Hourly: ${hourlyData.length?`${hourlyData.length} bars (~2y)`:'unavailable'}, Daily: ${dailyData.length?`${dailyData.length} bars (~10y)`:'unavailable'}. Each test's date decides which real bar size and max hold rule applies.`,...s.feed]}))
+   // Every tier is validated (chronological, no duplicates/malformed bars, no excessive
+   // gaps, minimum bar count) before it's allowed to feed any test. A tier that fails
+   // validation is dropped entirely rather than silently patched or replaced with
+   // simulated data — synthetic data is only ever used as a last-resort fallback below,
+   // and it is tagged so it can never qualify or touch Research Capital.
+   const validations:string[]=[]
+   const v15=Array.isArray(d15)?validateDataset(d15,'15m'):{ok:false,reason:'No 15-minute data returned.',barCount:0}
+   if(v15.ok){data=d15;sessionDayMap=extractMorningSessions(d15);sessionDayKeys=Object.keys(sessionDayMap).filter(k=>sessionDayMap[k].length>=4).sort()}
+   else validations.push(`15-Minute rejected: ${v15.reason}`)
+   const v1h=Array.isArray(d1h)?validateDataset(d1h,'1h'):{ok:false,reason:'No hourly data returned.',barCount:0}
+   if(v1h.ok)hourlyData=d1h; else validations.push(`Hourly rejected: ${v1h.reason}`)
+   const v1d=Array.isArray(d1d)?validateDataset(d1d,'1d'):{ok:false,reason:'No daily data returned.',barCount:0}
+   if(v1d.ok)dailyData=d1d; else validations.push(`Daily rejected: ${v1d.reason}`)
+   if(!data.length)data=dailyData.length?dailyData:(hourlyData.length?hourlyData:[])
+   if(!sessionDayKeys.length&&!hourlyData.length&&!dailyData.length){setMsg(`Could not start the run — no bar size passed data validation for this ticker. ${validations.join(' ')}`);patchRun({running:false,currentRunId:null});await supabase.from('research_runs').delete().eq('id',runId);stopBackgroundKeepAlive();return}
+   patchRun(s=>({tickerError:null,feed:[`Real historical data loaded and validated — 15-Minute: ${sessionDayKeys.length} sessions (~${SESSION_RANGE_DAYS}d), Hourly: ${hourlyData.length?`${hourlyData.length} bars (~2y)`:'unavailable'}, Daily: ${dailyData.length?`${dailyData.length} bars (~10y)`:'unavailable'}.${validations.length?' '+validations.join(' '):''} Each test's date decides which real bar size and max hold rule applies. 70% of each pool is used for research; the remaining 30% is held out, unseen, for qualification.`,...s.feed]}))
  }
+ // Chronological 70/30 split per tier: params may only be explored on the in-sample
+ // 70%; qualification is decided on the untouched out-of-sample 30%, further split
+ // into up to 3 walk-forward folds so one lucky window can't qualify a strategy alone.
+ const daySplit=splitChronological(sessionDayKeys,0.7)
+ const dayFolds=makeWalkForwardFolds(daySplit.outOfSample,3,3)
+ const hourSplit=splitChronological(hourlyData,0.7)
+ const hourFolds=makeWalkForwardFolds(hourSplit.outOfSample,90,3)
+ const daySplitD=splitChronological(dailyData,0.7)
+ const dayFoldsD=makeWalkForwardFolds(daySplitD.outOfSample,40,3)
  const pickTier=(r:()=>number)=>{
-   const avail=RESOLUTION_TIERS.filter(t=>t.key==='15m'?sessionDayKeys.length:t.key==='1h'?hourlyData.length:dailyData.length)
+   const avail=RESOLUTION_TIERS.filter(t=>t.key==='15m'?daySplit.inSample.length:t.key==='1h'?hourSplit.inSample.length:daySplitD.inSample.length)
    return avail.length?avail[Math.floor(r()*avail.length)]:null
  }
  patchRun({researchCandles:data,activeIndex:0,activeTrades:[]})
- const best:any[]=[];let completed=0,qualified=0;const batch=100;const total=Math.max(50,variations);let capital=startingCapitalForRun;const rejections:Record<string,number>={}
+ const best:{family:string;params:any;candidate:Candidate;rankVal:number;key:string;isMetrics:Metrics;oosMetrics:Metrics;folds:Metrics[];execution:typeof EXECUTION;qual:{category:string;reason:string}}[]=[]
+ let completed=0,qualified=0;const batch=100;const total=Math.max(50,variations);let capital=startingCapitalForRun;const rejections:Record<string,number>={}
  let lastProgressSave=Date.now()
+ // One session drawn from a tier/pool, using next-bar execution with slippage+fees (see engine.EXECUTION).
+ const sampleSession=(tier:typeof RESOLUTION_TIERS[number],dayKeyPool:string[],flatPool:Candle[],rr:()=>number,family:string,rawParams:any,startingCash:number,dataSource:DataSource):Session&{metrics:Metrics}=>{
+   if(tier.key==='15m'){
+     const dk=dayKeyPool[Math.floor(rr()*dayKeyPool.length)]
+     const cds=sessionDayMap[dk];const p2=clampParamsToSession(rawParams,cds.length)
+     const res=backtestSession(cds,family,p2,{tierKey:'15m',startingCash,dataSource})
+     return {candles:cds,trades:res.trades,metrics:res.metrics,startDate:cds[0]?.date,endDate:cds[cds.length-1]?.date,tier:'15m'}
+   }
+   const holdMs=maxHoldMsFor(tier.key as TierKey)
+   const slice=randomWindow(flatPool,rr,tier.minutes);const p2=clampParamsToSession(rawParams,slice.length)
+   const res=backtestSession(slice,family,p2,{maxHoldMs:holdMs,tierKey:tier.key as TierKey,startingCash,dataSource})
+   return {candles:slice,trades:res.trades,metrics:res.metrics,startDate:slice[0]?.date,endDate:slice[slice.length-1]?.date,tier:tier.key}
+ }
  outer: for(let b=0;b<total;b+=batch){if(stopFlag)break;const r=seeded(b+symbol.length*999+Date.now()%10000);for(let j=0;j<Math.min(batch,total-b);j++){
    await waitWhilePaused();if(stopFlag)break outer
    const index=completed+1;const family=families[Math.floor(r()*families.length)];const params=randomParams(r)
-   let sessions:Session[]=[];let storedParams=params;let pickedTier:typeof RESOLUTION_TIERS[number]|null=null
-   const runSession=(tier:typeof RESOLUTION_TIERS[number],rr:()=>number,useParams:any):Session=>{
-     if(tier.key==='15m'){
-       const dk=sessionDayKeys[Math.floor(rr()*sessionDayKeys.length)]
-       const cds=sessionDayMap[dk];const p2=clampParamsToSession(useParams,cds.length)
-       const res=backtest(cds,family,p2,undefined,capital)
-       return {candles:cds,trades:res.trades,metrics:res.metrics,startDate:cds[0]?.date,endDate:cds[cds.length-1]?.date,tier:'15m'}
-     }
-     const sourceData=tier.key==='1h'?hourlyData:dailyData;const holdMs=maxHoldMsFor(tier.key)
-     const slice=randomWindow(sourceData,rr,tier.minutes);const p2=clampParamsToSession(useParams,slice.length)
-     const res=backtest(slice,family,p2,holdMs,capital)
-     return {candles:slice,trades:res.trades,metrics:res.metrics,startDate:slice[0]?.date,endDate:slice[slice.length-1]?.date,tier:tier.key}
+   const candidateStartingCash=capital
+   if(!paramsPlausible(family,params)){
+     rejections['Implausible parameters']=(rejections['Implausible parameters']||0)+1
+     completed++;if(completed%50===0||completed===total)patchRun({progress:completed/total*100});await sleepSkippable();if(stopFlag)break outer;continue
    }
+   let isSessions:(Session&{metrics:Metrics})[]=[]
+   let oosFoldSessions:(Session&{metrics:Metrics})[][]=[]
+   let pickedTier:typeof RESOLUTION_TIERS[number]|null=null
+   let dataSource:DataSource=live?liveDataSource:'yahoo'
+   let hardFail:string|null=null
+   const checkHard=(sess:Session&{metrics:Metrics})=>{if(hardFail)return;const hc=hardSafetyCheck(sess.metrics,sess.trades);if(!hc.ok)hardFail=hc.reason||'Failed a hard safety check.'}
    if(live){
-     const result=backtest(data,family,params,undefined,capital)
-     sessions=[{candles:data,trades:result.trades,metrics:result.metrics,startDate:data[0]?.date,endDate:data[data.length-1]?.date,tier:'live'}]
+     const res=backtestSession(data,family,params,{tierKey:'live',startingCash:candidateStartingCash,dataSource})
+     const sess={candles:data,trades:res.trades,metrics:res.metrics,startDate:data[0]?.date,endDate:data[data.length-1]?.date,tier:'live'}
+     checkHard(sess)
+     isSessions=[sess];oosFoldSessions=[[sess]]
    } else {
      const tier=pickTier(r)
      if(!tier){completed++;continue}
      pickedTier=tier
-     for(let n=0;n<minTrades;n++){
-       const sess=runSession(tier,r,params)
-       if(n===0)storedParams=clampParamsToSession(params,sess.candles.length)
-       sessions.push(sess)
+     const dayPoolIS=tier.key==='15m'?daySplit.inSample:[]
+     const flatPoolIS=tier.key==='1h'?hourSplit.inSample:tier.key==='1d'?daySplitD.inSample:[]
+     for(let n=0;n<minTrades;n++){const sess=sampleSession(tier,dayPoolIS,flatPoolIS,r,family,params,candidateStartingCash,'yahoo');checkHard(sess);isSessions.push(sess)}
+     const isMetricsQuick=combineMetrics(isSessions.map(s=>s.metrics),candidateStartingCash)
+     if(!hardFail&&isMetricsQuick.trades>0){
+       const folds=tier.key==='15m'?dayFolds:tier.key==='1h'?hourFolds:dayFoldsD
+       // Out-of-sample sessions per fold are capped (independent of minTrades) so a
+       // large minTrades setting — meant to make in-sample exploration thorough —
+       // doesn't multiply run time by the fold count on top of it. Qualification only
+       // needs 20+ total out-of-sample trades, not thousands of out-of-sample sessions.
+       const oosSessionsPerFold=Math.min(minTrades,8)
+       for(const fold of folds){
+         const dayPoolFold=tier.key==='15m'?(fold as unknown as string[]):[]
+         const flatPoolFold=tier.key==='1h'||tier.key==='1d'?(fold as unknown as Candle[]):[]
+         const foldSessions:(Session&{metrics:Metrics})[]=[]
+         for(let n=0;n<oosSessionsPerFold;n++){const sess=sampleSession(tier,dayPoolFold,flatPoolFold,r,family,params,candidateStartingCash,'yahoo');checkHard(sess);foldSessions.push(sess)}
+         oosFoldSessions.push(foldSessions)
+       }
      }
    }
-   const agg=aggregateMetrics(sessions.map(s=>s.metrics))
-   const passed=agg.trades>0&&agg.winRate>=45&&agg.returnPct>=.025&&agg.maxDrawdownPct<8&&agg.sharpe>=.85&&agg.sharpe<=5
-   const primary=sessions[0]
-   let sampleSessions=sessions.slice(0,10)
-   if(passed&&pickedTier&&sampleSessions.length<10){
-     const extra:Session[]=[]
-     for(let k=sampleSessions.length;k<10;k++)extra.push(runSession(pickedTier,r,storedParams))
-     sampleSessions=sampleSessions.concat(extra)
+   const isMetrics=combineMetrics(isSessions.map(s=>s.metrics),candidateStartingCash)
+   const oosAllSessions=oosFoldSessions.flat()
+   const oosMetrics=combineMetrics(oosAllSessions.map(s=>s.metrics),candidateStartingCash)
+   const foldMetricsList=oosFoldSessions.map(f=>combineMetrics(f.map(s=>s.metrics),candidateStartingCash))
+   const overallDataSource:DataSource=(isMetrics.dataSource==='yahoo'&&(oosMetrics.trades===0||oosMetrics.dataSource==='yahoo')&&dataSource==='yahoo')?'yahoo':'synthetic'
+   const qual=evaluateQualification({dataSource:overallDataSource,inSample:isMetrics,outOfSample:oosMetrics,folds:foldMetricsList,hardCheck:{ok:!hardFail,reason:hardFail||undefined}})
+   const primary=(isSessions[0]||oosAllSessions[0])
+   const sampleSessions=[...isSessions.slice(0,5),...oosAllSessions.slice(0,5)]
+   const candidate={family,params,result:{metrics:oosMetrics,trades:primary?.trades||[]},passed:qual.passed,reason:qual.reason,index,candles:primary?.candles||[],startDate:primary?.startDate,endDate:primary?.endDate,sessions:sampleSessions,testedAt:new Date().toISOString()} as Candidate
+   if(qual.passed&&overallDataSource==='yahoo'){
+     qualified++;capital+=oosMetrics.profit;patchRun({balance:capital})
+     const rankVal=rankScore(oosMetrics,foldMetricsList)
+     const key=dedupeKey(family,params)
+     const existingIdx=best.findIndex(x=>x.key===key)
+     if(existingIdx>=0){if(rankVal>best[existingIdx].rankVal)best[existingIdx]={family,params,candidate,rankVal,key,isMetrics,oosMetrics,folds:foldMetricsList,execution:EXECUTION,qual:{category:qual.category,reason:qual.reason}}}
+     else best.push({family,params,candidate,rankVal,key,isMetrics,oosMetrics,folds:foldMetricsList,execution:EXECUTION,qual:{category:qual.category,reason:qual.reason}})
+     best.sort((a,b)=>b.rankVal-a.rankVal);if(best.length>100)best.pop()
+   } else {
+     rejections[qual.category]=(rejections[qual.category]||0)+1
    }
-   const candidate={family,params:storedParams,result:{metrics:agg,trades:primary.trades},passed,reason:'',index,candles:primary.candles,startDate:primary.startDate,endDate:primary.endDate,sessions:sampleSessions,testedAt:new Date().toISOString()} as Candidate
-   candidate.reason=explainCandidate(candidate,sessions.length)
-   if(passed){qualified++;capital+=agg.profit;patchRun({balance:capital});best.push(candidate);best.sort((a,b)=>b.result.metrics.score-a.result.metrics.score);if(best.length>100)best.pop()}
-   else{const cat=categorizeRejection(agg);if(cat)rejections[cat]=(rejections[cat]||0)+1}
    const uiStride=speedMsFlag<=2?25:speedMsFlag<=10?5:1
-   if(passed||index===1||index%uiStride===0){patchRun(s=>({activeCandidate:candidate,researchCandles:primary.candles,activeTrades:primary.trades,activeIndex:primary.candles.length-1,testLog:[candidate,...s.testLog].slice(0,200),rejectionCounts:{...rejections},completedCount:index,qualifiedCount:qualified}))}
-   if(index===1||index%250===0||passed){patchRun(s=>({feed:[`TEST #${index.toLocaleString()} · ${family} · ${passed?'QUALIFIED':'REJECTED'} · ${candidate.reason}`,...s.feed].slice(0,80)}));await saveEvent(runId,`Test #${index.toLocaleString()} · ${family} · ${passed?'qualified':'rejected'} · ${candidate.reason}`,passed?'success':'info',index/total*100)}
+   if(qual.passed||index===1||index%uiStride===0){patchRun(s=>({activeCandidate:candidate,researchCandles:primary?.candles||s.researchCandles,activeTrades:primary?.trades||[],activeIndex:(primary?.candles.length||1)-1,testLog:[candidate,...s.testLog].slice(0,200),rejectionCounts:{...rejections},completedCount:index,qualifiedCount:qualified}))}
+   if(index===1||index%250===0||qual.passed){patchRun(s=>({feed:[`TEST #${index.toLocaleString()} · ${family} · ${qual.passed?'QUALIFIED':'REJECTED'} · ${qual.reason}`,...s.feed].slice(0,80)}));await saveEvent(runId,`Test #${index.toLocaleString()} · ${family} · ${qual.passed?'qualified':'rejected'} · ${qual.reason}`,qual.passed?'success':'info',index/total*100)}
    completed++
    if(completed%uiStride===0||completed===total)patchRun({progress:completed/total*100})
    if(completed===total||Date.now()-lastProgressSave>=2000){lastProgressSave=Date.now();const {error}=await supabase.from('research_runs').update({tested_count:completed,qualified_count:qualified,current_balance:capital}).eq('id',runId);if(error)console.error('run progress update failed',error)}
@@ -536,9 +495,14 @@ export default function Home(){
  }
  }
  let strategySaveError:string|null=null
- for(const item of best){const m=item.result.metrics;const {error}=await supabase.from('strategies').insert({user_id:session.user.id,run_id:runId,symbol:symbol.toUpperCase(),market,name:`${item.family} / ${Math.round(m.score)} score`,family:item.family,parameters:item.params,source:idea?'AI + user idea':'AI generated',approved:true,score:m.score,metrics:m,equity:item.result.equity,trades:item.result.trades,candles:item.candles,test_start_at:item.startDate,test_end_at:item.endDate,sessions:item.sessions,explanation:`How it works: ${describeFamily(item.family,item.params)} Bar size: real ${tierLabel(item.sessions?.[0]?.tier)} bars. Why it worked: this run generated ${m.wins} wins and ${m.losses} losses for a ${m.winRate.toFixed(1)}% win rate. It returned ${m.returnPct.toFixed(2)}% with ${m.maxDrawdownPct.toFixed(1)}% maximum drawdown and ${m.sharpe.toFixed(2)} Sharpe. The engine only buys and sells (goes long) and closes the position on a sell signal, a maximum-hold rule for the bar size, or at the end of the test. This is historical research on real market data, not a guarantee of future performance.`});if(error){console.error('strategy save failed',error);strategySaveError=error.message}}
- const bestOne=best[0];const finished=new Date().toISOString();const summary=bestOne?`The research tested ${completed.toLocaleString()} variations. ${qualified.toLocaleString()} met the qualification rules. The leading ${bestOne.family} candidate returned ${bestOne.result.metrics.returnPct.toFixed(2)}%, won ${bestOne.result.metrics.winRate.toFixed(1)}% of ${bestOne.result.metrics.trades} trades, and reached ${bestOne.result.metrics.maxDrawdownPct.toFixed(1)}% max drawdown.`:`The research tested ${completed.toLocaleString()} variations and found no candidate that met all qualification rules. The engine records the rejection reason for each observed test.`
- const {error:finishError}=await supabase.from('research_runs').update({status:stopFlag?'stopped':'completed',finished_at:finished,best_score:bestOne?.result.metrics.score??null,current_balance:capital,tested_count:completed,qualified_count:qualified,summary,best_strategy_name:bestOne?`${bestOne.family} / ${Math.round(bestOne.result.metrics.score)} score`:null,best_reason:bestOne?bestOne.reason:null,failure_reason:bestOne?null:'No strategy met the 45% win-rate, 0.025% minimum return, 8% max drawdown, 0.85-5 Sharpe, and minimum-trade rules.'}).eq('id',runId)
+ for(const item of best){
+   const oos=item.oosMetrics, is=item.isMetrics
+   const m={...oos,inSample:is,folds:item.folds,dataSource:oos.dataSource,execution:item.execution,qualification:item.qual,rankScore:item.rankVal}
+   const {error}=await supabase.from('strategies').insert({user_id:session.user.id,run_id:runId,symbol:symbol.toUpperCase(),market,name:`${item.family} / ${Math.round(item.rankVal)} rank`,family:item.family,parameters:item.candidate.params,source:idea?'AI + user idea':'AI generated',approved:true,score:oos.score,metrics:m,equity:[],trades:item.candidate.result.trades,candles:item.candidate.candles,test_start_at:item.candidate.startDate,test_end_at:item.candidate.endDate,sessions:item.candidate.sessions,explanation:`How it works: ${describeFamily(item.family,item.candidate.params)} Bar size: real ${tierLabel(item.candidate.sessions?.find(s=>s.tier)?.tier)} bars. Data source: ${oos.dataSource}. Execution: next-bar open fills with ${EXECUTION.slippageBps}bps slippage and ${EXECUTION.feeBps}bps fees per side — never the signal bar's own price. In-sample (research, 70%): ${is.trades} trades, ${is.winRate.toFixed(1)}% win rate. Out-of-sample (unseen, 30%, ${item.folds.length} validation window${item.folds.length===1?'':'s'}): ${oos.wins} wins / ${oos.losses} losses, ${oos.returnPct.toFixed(2)}% return, ${oos.maxDrawdownPct.toFixed(1)}% max drawdown, ${oos.sharpe.toFixed(2)} Sharpe, ${Number.isFinite(oos.profitFactor)?oos.profitFactor.toFixed(2):'∞'} profit factor, $${oos.expectancy.toFixed(2)} expectancy per trade. The engine only buys and sells (goes long) and closes the position on a sell signal, a maximum-hold rule for the bar size, or at the end of the test. This is historical research on real market data, not a guarantee of future performance.`})
+   if(error){console.error('strategy save failed',error);strategySaveError=error.message}
+ }
+ const bestOne=best[0];const finished=new Date().toISOString();const summary=bestOne?`The research tested ${completed.toLocaleString()} variations across a 70% in-sample / 30% out-of-sample split. ${qualified.toLocaleString()} met the qualification rules on unseen data. The leading ${bestOne.family} candidate returned ${bestOne.oosMetrics.returnPct.toFixed(2)}% out-of-sample, won ${bestOne.oosMetrics.winRate.toFixed(1)}% of ${bestOne.oosMetrics.trades} out-of-sample trades, and reached ${bestOne.oosMetrics.maxDrawdownPct.toFixed(1)}% max drawdown.`:`The research tested ${completed.toLocaleString()} variations and found no candidate that qualified on unseen out-of-sample data. The engine records the rejection reason for each observed test.`
+ const {error:finishError}=await supabase.from('research_runs').update({status:stopFlag?'stopped':'completed',finished_at:finished,best_score:bestOne?.oosMetrics.score??null,current_balance:capital,tested_count:completed,qualified_count:qualified,summary,best_strategy_name:bestOne?`${bestOne.family} / ${Math.round(bestOne.rankVal)} rank`:null,best_reason:bestOne?bestOne.qual.reason:null,failure_reason:bestOne?null:'No strategy met the out-of-sample qualification rules: 50+ total trades (20+ out-of-sample), positive expectancy, 1.15+ profit factor, 0.75+ out-of-sample Sharpe, positive out-of-sample return, drawdown at or below 10%, and consistency across validation windows.'}).eq('id',runId)
  if(finishError)setMsg(`Run finished but could not save results: ${finishError.message}`)
  else if(strategySaveError)setMsg(`Run finished, but qualified strategies could not be saved: ${strategySaveError}. Run the latest Supabase migration and try again.`)
  const {error:balanceError}=await supabase.from('profiles').upsert({id:session.user.id,current_balance:capital})
@@ -585,7 +549,7 @@ export default function Home(){
  return <main className="shell">
  {msg&&<div className="msg banner"><span>{msg}</span><button className="msg-dismiss" onClick={()=>setMsg('')} aria-label="Dismiss">✕</button></div>}
  <section className="hero"><div><div className="eyebrow">AI STRATEGY RESEARCH ENGINE</div><h1>Build. Break. <span>Repeat.</span></h1><p className="muted">Watch the engine generate, test, buy and sell, reject weak ideas, and save the strategies that pass the rules.</p></div><div className="balance"><small>AI RESEARCH CAPITAL</small><strong style={{fontSize:balanceFontSize(fmtMoney(balance))}}>{fmtMoney(balance)}</strong>{(()=>{const pl=balance-STARTING_CAPITAL;const plPct=pl/STARTING_CAPITAL*100;const up=pl>=0;return <div className={`pl ${up?'up':'down'}`}>{up?'▲':'▼'} {fmtMoney(Math.abs(pl))} ({up?'+':'-'}{Math.abs(plPct).toFixed(2)}%)</div>})()}<button onClick={resetBalance}>RESET TO {fmtMoney(STARTING_CAPITAL)}</button></div></section>
- <div className="grid" style={{alignItems:'stretch'}}><div className="grid-col"><section className="panel"><div className="panel-title"><h2>RUN CONFIGURATION</h2><span className="badge">45% MIN WIN RATE</span></div><label>Ticker symbol<input value={symbol} onChange={e=>patchRun({symbol:e.target.value.toUpperCase(),tickerError:null})} onBlur={e=>{if(market==='Crypto'&&e.target.value&&!e.target.value.includes('-'))patchRun({symbol:`${e.target.value.toUpperCase()}-USD`})}} placeholder={market==='Crypto'?'e.g. BTC-USD':'e.g. AAPL'}/>{market==='Crypto'&&<span className="tiny">Yahoo Finance crypto format: SYMBOL-USD (e.g. BTC-USD, ETH-USD, SOL-USD).</span>}{tickerError&&<span className="field-warning">⚠ {tickerError}</span>}</label><label>Market<select value={market} onChange={e=>{const nextMarket=e.target.value;patchRun(s=>({market:nextMarket,symbol:nextMarket==='Crypto'&&s.symbol&&!s.symbol.includes('-')?`${s.symbol}-USD`:s.symbol}))}}>{markets.map(x=><option key={x}>{x}</option>)}</select></label><p className="tiny">Every test uses real historical data spanning up to 10 years. Recent dates (~{SESSION_RANGE_DAYS} days) trade real 15-minute candles within the 9:00 AM–12:00 PM ET session; older dates (~2 years) trade real hourly candles with a 3-day max hold; the oldest dates (up to 10 years) trade real daily candles with a 5-day max hold. Every chart window is capped at 1 week of real time. A strategy can only qualify with a max drawdown under 8% and a Sharpe ratio between 0.85 and 5. Every saved strategy states which bar size it used.</p><label>Strategy variations (up to {MAX_VARIATIONS.toLocaleString()})<input type="number" min={50} max={MAX_VARIATIONS} value={variations} onChange={e=>setVariations(clamp(Math.round(+e.target.value||0),50,MAX_VARIATIONS))}/></label><label>Minimum trades — fewest real historical sessions each strategy is tested on before it can qualify (up to {MAX_MIN_TRADES.toLocaleString()})<input type="number" min={1} max={MAX_MIN_TRADES} value={minTrades} onChange={e=>setMinTrades(clamp(Math.round(+e.target.value||0),1,MAX_MIN_TRADES))}/></label><label>Test speed<select value={speed} onChange={e=>{const key=e.target.value as SpeedKey;patchRun({speedKey:key});speedMsFlag=speeds.find(s=>s.key===key)?.ms??1000}}>{speeds.map(s=><option key={s.key} value={s.key}>{s.label}</option>)}</select></label><label>User strategy idea<textarea value={idea} onChange={e=>setIdea(e.target.value)} placeholder="Optional: describe a strategy you want tested..."/></label><div className="section-label">TEST SOURCES</div><div className="checks mode-pick">{([['paper','Paper trading / backtesting'],['live','Live execution']] as const).map(([k,label])=><label key={k}><input type="radio" name="runMode" checked={runMode===k} onChange={()=>patchRun({runMode:k})}/>{label}</label>)}</div><button className="run cta-glow" onClick={runResearch} disabled={running}>{running?`AI TRADING · ${progress.toFixed(1)}%`:'▶ START A-TAMP STRATEGY RESEARCH'}</button>{running&&<div className="run-controls"><button className="ghost" onClick={()=>{pauseFlag=!pauseFlag;patchRun({paused:pauseFlag});if(!pauseFlag)wakeSleep()}}>{paused?'▶ Resume':'⏸ Pause'}</button><button className="ghost" onClick={()=>{skipFlag=true;wakeSleep()}} disabled={paused}>⏭ Skip strategy</button><button className="ghost stop" onClick={()=>{stopFlag=true;pauseFlag=false;patchRun({paused:false});wakeSleep()}}>⏹ Stop</button></div>}<p className="tiny">{runMode==='paper'?'Paper trading / backtesting backtests the selected ticker on real historical bars, one random date at a time across up to 10 years. No real data feed or broker is touched.':'Live execution runs the AI\'s tests against live, real-time market data instead of historical bars. It never places a real trade or touches a broker account.'}</p></section></div><div className="grid-col"><section className="panel"><div className="panel-title"><h2>LIVE MARKET CHART</h2><span className="muted">{running&&watchLive?(runMode==='live'?'AI TRADING ON LIVE DATA':'AI TRADING (BACKTEST)'):liveStatus}</span></div><div className="chart-controls"><label className="inline-check"><input type="checkbox" checked={watchLive} onChange={e=>setWatchLive(e.target.checked)}/>Watch AI trade</label><div className="zoom-controls"><span>Zoom</span><button className="ghost small-btn" onClick={()=>setChartWindow(w=>clamp(w-2,4,60))}>−</button><button className="ghost small-btn" onClick={()=>setChartWindow(w=>clamp(w+2,4,60))}>+</button></div></div>{runMode==='paper'&&activeCandidate&&(()=>{const tier=activeCandidate.sessions?.[0]?.tier;const range=tier==='15m'?`${fmtDateTime(activeCandidate.startDate)} (${fmtClock(activeCandidate.startDate)}–${fmtClock(activeCandidate.endDate)} ET)`:`${fmtDateTime(activeCandidate.startDate)} → ${fmtDateTime(activeCandidate.endDate)}`;return <div className="tiny test-window">Testing {symbol} on <b>{range}</b> · real <b>{tierLabel(tier)}</b> bars</div>})()}{(()=>{const displayCandles=watchLive&&researchCandles.length?researchCandles:liveCandles;const displayTrades=watchLive?activeTrades:[];const displayIndex=watchLive&&researchCandles.length?activeIndex:Math.max(0,liveCandles.length-1);const err=!displayCandles.length&&tickerError?tickerError:null;const ind=activeCandidate&&displayCandles===researchCandles?indicatorSeries(displayCandles,activeCandidate.family,activeCandidate.params):null;return displayCandles.length||err?<CandleChart candles={displayCandles} trades={displayTrades} activeIndex={displayIndex} windowSize={chartWindow} title={activeCandidate?`TEST #${activeCandidate.index.toLocaleString()} · ${activeCandidate.family}`:`${symbol}${symbolNames[symbol]?` · ${symbolNames[symbol]}`:''}`} live={runMode==='live'} errorMessage={err} indicator={ind}/>:<div className="chart empty">Run a search to watch the AI trade on this chart.</div>})()}<p className="tiny">This is the chart the AI trades on. Zoom only changes what you see — it never changes what data the AI uses to trade.</p></section><section className="panel arena-panel"><div className="panel-title"><h2>AI TRADING ARENA</h2><span className={running?'live-dot':''}>{running?'ENGINE TRADING':'READY'}</span></div><div className="trade-status"><div><span>Mode</span><b>{runMode==='live'?'Live execution':'Paper trading / backtesting'}</b></div><div><span>Current test</span><b>{activeCandidate?`${activeCandidate.family} · ${activeCandidate.passed?'QUALIFIED':'REJECTED'}`:'—'}</b></div><div><span>Outcome</span><b>{activeCandidate?.reason||'Waiting for the first strategy test.'}</b></div></div></section></div></div>
+ <div className="grid" style={{alignItems:'stretch'}}><div className="grid-col"><section className="panel"><div className="panel-title"><h2>RUN CONFIGURATION</h2><span className="badge">OUT-OF-SAMPLE VALIDATED</span></div><label>Ticker symbol<input value={symbol} onChange={e=>patchRun({symbol:e.target.value.toUpperCase(),tickerError:null})} onBlur={e=>{if(market==='Crypto'&&e.target.value&&!e.target.value.includes('-'))patchRun({symbol:`${e.target.value.toUpperCase()}-USD`})}} placeholder={market==='Crypto'?'e.g. BTC-USD':'e.g. AAPL'}/>{market==='Crypto'&&<span className="tiny">Yahoo Finance crypto format: SYMBOL-USD (e.g. BTC-USD, ETH-USD, SOL-USD).</span>}{tickerError&&<span className="field-warning">⚠ {tickerError}</span>}</label><label>Market<select value={market} onChange={e=>{const nextMarket=e.target.value;patchRun(s=>({market:nextMarket,symbol:nextMarket==='Crypto'&&s.symbol&&!s.symbol.includes('-')?`${s.symbol}-USD`:s.symbol}))}}>{markets.map(x=><option key={x}>{x}</option>)}</select></label><p className="tiny">Every test uses real historical data spanning up to 10 years. Recent dates (~{SESSION_RANGE_DAYS} days) trade real 15-minute candles within the 9:00 AM–12:00 PM ET session; older dates (~2 years) trade real hourly candles with a 3-day max hold; the oldest dates (up to 10 years) trade real daily candles with a 5-day max hold. Every chart window is capped at 1 week of real time. Parameters are only explored on the first 70% of each data pool (chronologically); qualification is decided purely on the remaining unseen 30%, split into multiple validation windows. A strategy can only qualify with 50+ total trades (20+ out-of-sample), positive expectancy, a 1.15+ profit factor, 0.75+ out-of-sample Sharpe, a positive out-of-sample return, drawdown at or below 10%, and consistent results across validation windows — real Yahoo Finance data only, with realistic next-bar execution, slippage and fees. Every saved strategy states which bar size and data source it used.</p><label>Strategy variations (up to {MAX_VARIATIONS.toLocaleString()})<input type="number" min={50} max={MAX_VARIATIONS} value={variations} onChange={e=>setVariations(clamp(Math.round(+e.target.value||0),50,MAX_VARIATIONS))}/></label><label>Minimum trades — fewest real historical sessions each strategy is tested on before it can qualify (up to {MAX_MIN_TRADES.toLocaleString()})<input type="number" min={1} max={MAX_MIN_TRADES} value={minTrades} onChange={e=>setMinTrades(clamp(Math.round(+e.target.value||0),1,MAX_MIN_TRADES))}/></label><label>Test speed<select value={speed} onChange={e=>{const key=e.target.value as SpeedKey;patchRun({speedKey:key});speedMsFlag=speeds.find(s=>s.key===key)?.ms??1000}}>{speeds.map(s=><option key={s.key} value={s.key}>{s.label}</option>)}</select></label><label>User strategy idea<textarea value={idea} onChange={e=>setIdea(e.target.value)} placeholder="Optional: describe a strategy you want tested..."/></label><div className="section-label">TEST SOURCES</div><div className="checks mode-pick">{([['paper','Paper trading / backtesting'],['live','Live execution']] as const).map(([k,label])=><label key={k}><input type="radio" name="runMode" checked={runMode===k} onChange={()=>patchRun({runMode:k})}/>{label}</label>)}</div><button className="run cta-glow" onClick={runResearch} disabled={running}>{running?`AI TRADING · ${progress.toFixed(1)}%`:'▶ START A-TAMP STRATEGY RESEARCH'}</button>{running&&<div className="run-controls"><button className="ghost" onClick={()=>{pauseFlag=!pauseFlag;patchRun({paused:pauseFlag});if(!pauseFlag)wakeSleep()}}>{paused?'▶ Resume':'⏸ Pause'}</button><button className="ghost" onClick={()=>{skipFlag=true;wakeSleep()}} disabled={paused}>⏭ Skip strategy</button><button className="ghost stop" onClick={()=>{stopFlag=true;pauseFlag=false;patchRun({paused:false});wakeSleep()}}>⏹ Stop</button></div>}<p className="tiny">{runMode==='paper'?'Paper trading / backtesting backtests the selected ticker on real historical bars, one random date at a time across up to 10 years. No real data feed or broker is touched.':'Live execution runs the AI\'s tests against live, real-time market data instead of historical bars. It never places a real trade or touches a broker account.'}</p></section></div><div className="grid-col"><section className="panel"><div className="panel-title"><h2>LIVE MARKET CHART</h2><span className="muted">{running&&watchLive?(runMode==='live'?'AI TRADING ON LIVE DATA':'AI TRADING (BACKTEST)'):liveStatus}</span></div><div className="chart-controls"><label className="inline-check"><input type="checkbox" checked={watchLive} onChange={e=>setWatchLive(e.target.checked)}/>Watch AI trade</label><div className="zoom-controls"><span>Zoom</span><button className="ghost small-btn" onClick={()=>setChartWindow(w=>clamp(w-2,4,60))}>−</button><button className="ghost small-btn" onClick={()=>setChartWindow(w=>clamp(w+2,4,60))}>+</button></div></div>{runMode==='paper'&&activeCandidate&&(()=>{const tier=activeCandidate.sessions?.[0]?.tier;const range=tier==='15m'?`${fmtDateTime(activeCandidate.startDate)} (${fmtClock(activeCandidate.startDate)}–${fmtClock(activeCandidate.endDate)} ET)`:`${fmtDateTime(activeCandidate.startDate)} → ${fmtDateTime(activeCandidate.endDate)}`;return <div className="tiny test-window">Testing {symbol} on <b>{range}</b> · real <b>{tierLabel(tier)}</b> bars</div>})()}{(()=>{const displayCandles=watchLive&&researchCandles.length?researchCandles:liveCandles;const displayTrades=watchLive?activeTrades:[];const displayIndex=watchLive&&researchCandles.length?activeIndex:Math.max(0,liveCandles.length-1);const err=!displayCandles.length&&tickerError?tickerError:null;const ind=activeCandidate&&displayCandles===researchCandles?indicatorSeries(displayCandles,activeCandidate.family,activeCandidate.params):null;return displayCandles.length||err?<CandleChart candles={displayCandles} trades={displayTrades} activeIndex={displayIndex} windowSize={chartWindow} title={activeCandidate?`TEST #${activeCandidate.index.toLocaleString()} · ${activeCandidate.family}`:`${symbol}${symbolNames[symbol]?` · ${symbolNames[symbol]}`:''}`} live={runMode==='live'} errorMessage={err} indicator={ind}/>:<div className="chart empty">Run a search to watch the AI trade on this chart.</div>})()}<p className="tiny">This is the chart the AI trades on. Zoom only changes what you see — it never changes what data the AI uses to trade.</p></section><section className="panel arena-panel"><div className="panel-title"><h2>AI TRADING ARENA</h2><span className={running?'live-dot':''}>{running?'ENGINE TRADING':'READY'}</span></div><div className="trade-status"><div><span>Mode</span><b>{runMode==='live'?'Live execution':'Paper trading / backtesting'}</b></div><div><span>Current test</span><b>{activeCandidate?`${activeCandidate.family} · ${activeCandidate.passed?'QUALIFIED':'REJECTED'}`:'—'}</b></div><div><span>Outcome</span><b>{activeCandidate?.reason||'Waiting for the first strategy test.'}</b></div></div></section></div></div>
 <section className="panel" style={{overflowAnchor:'none'}}><div className="panel-title"><h2>WHAT THE AI IS TESTING</h2><span className="muted">Scroll for more · {testLog.length} shown</span></div>{completedCount>0&&<p className="tiny" style={{marginBottom:10}}><b>{(qualifiedCount/completedCount*100).toFixed(2)}%</b> of the {completedCount.toLocaleString()} tests run so far qualified ({qualifiedCount.toLocaleString()} strategies).</p>}{(()=>{const entries=Object.entries(rejectionCounts).sort((a,b)=>b[1]-a[1]).slice(0,3);if(!entries.length)return null;const total=Object.values(rejectionCounts).reduce((a,b)=>a+b,0);const ordinal=['Top reason','2nd most common reason','3rd most common reason'];return <div className="rejection-breakdown"><p className="tiny" style={{marginBottom:6}}>Most common reasons tests did NOT qualify:</p>{entries.map(([reason,count],i)=><div key={reason} className="rejection-row"><span className="rejection-rank">{ordinal[i]}</span><span className="rejection-label">{reason}</span><span className="rejection-count">{count.toLocaleString()} ({(count/total*100).toFixed(1)}%)</span></div>)}</div>})()}<div className="test-list">{testLog.length?testLog.map(c=><div className={`test-item ${c.passed?'pass':'fail'}`} key={`${c.index}-${c.testedAt}`}><div className="test-item-main"><b>#{c.index.toLocaleString()} · {c.family}</b><span>{c.reason}</span></div><div className="test-item-stats"><span>{c.result.metrics.winRate.toFixed(1)}% WR</span><span>{c.result.metrics.maxDrawdownPct.toFixed(1)}% DD</span><span>{fmtDateTime(c.testedAt)}</span><strong>{c.result.metrics.score.toFixed(1)}</strong></div></div>):<div className="empty">Every observed test will show its strategy, result, and rejection/qualification reason here.</div>}</div></section>
  {selected&&<section className="panel replay"><div className="panel-title"><h2>STRATEGY REPLAY & WHY IT WORKED</h2><button className="ghost" onClick={()=>setSelected(null)}>CLOSE</button></div><h3>{selected.seq!=null&&<span className="strategy-id">#{selected.seq}</span>}{selected.name}</h3><p className="tiny">Completed {fmtDateTime(selected.created_at)}</p><p className="muted">{selected.explanation}</p><div className="replay-grid"><div><span>Win rate</span><b>{selected.metrics.winRate.toFixed(1)}%</b></div><div><span>Return</span><b>{selected.metrics.returnPct.toFixed(2)}%</b></div><div><span>Drawdown</span><b>{selected.metrics.maxDrawdownPct.toFixed(1)}%</b></div><div><span>Sharpe</span><b>{selected.metrics.sharpe.toFixed(2)}</b></div><div><span>Trades</span><b>{selected.metrics.trades}</b></div></div>
  {(()=>{const sessionsList:Session[]=selected.sessions?.length?selected.sessions:(selected.candles?.length?[{candles:selected.candles,trades:selected.trades||[],metrics:selected.metrics,startDate:selected.test_start_at||undefined,endDate:selected.test_end_at||undefined,tier:undefined as any}]:[])
