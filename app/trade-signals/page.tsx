@@ -33,12 +33,12 @@ export default function LiveTradingPage(){
   },[])
 
   useEffect(()=>{
-    const saved=localStorage.getItem('liveTradingSymbol')
-    const savedMarket=localStorage.getItem('liveTradingMarket')
+    const saved=localStorage.getItem('tradeSignalsSymbol')
+    const savedMarket=localStorage.getItem('tradeSignalsMarket')
     if(saved)setSymbol(saved)
     if(savedMarket)setMarket(savedMarket)
   },[])
-  useEffect(()=>{localStorage.setItem('liveTradingSymbol',symbol);localStorage.setItem('liveTradingMarket',market)},[symbol,market])
+  useEffect(()=>{localStorage.setItem('tradeSignalsSymbol',symbol);localStorage.setItem('tradeSignalsMarket',market)},[symbol,market])
 
   // Poll live candles for the selected ticker.
   useEffect(()=>{
@@ -112,7 +112,7 @@ export default function LiveTradingPage(){
   })
 
   return <div className="shell">
-    <section className="hero"><div><div className="eyebrow">ALWAYS-ON SIGNAL ENGINE</div><h1>Live <span>Trading.</span></h1><p className="muted">Pick a ticker. A-TAMP watches every favorited strategy tested on it and tells you exactly when to buy or sell — even while you're on another page.</p></div></section>
+    <section className="hero"><div><div className="eyebrow">ALWAYS-ON SIGNAL ENGINE</div><h1>Trade <span>Signals.</span></h1><p className="muted">Pick a ticker. A-TAMP watches every favorited strategy tested on it and tells you exactly when to buy or sell on whatever platform you trade with — even while you're on another page.</p></div></section>
 
     <section className="panel">
       <div className="add-holding-grid" style={{gridTemplateColumns:'2fr 1fr'}}>

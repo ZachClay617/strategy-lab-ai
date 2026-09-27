@@ -5,7 +5,7 @@ import { evaluateSymbolSignals } from '@/lib/strategySignals'
 
 // Called periodically by an external scheduler (same pattern as
 // /api/cron/portfolio-snapshots) so favorited strategies keep being checked
-// against live prices even when nobody has the Live Trading page open, the
+// against live prices even when nobody has the Trade Signals page open, the
 // site is reloaded, or the user isn't logged in. Auth is a shared secret since
 // this reads/writes data for every user via the service role key.
 export const dynamic = 'force-dynamic'

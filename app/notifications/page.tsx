@@ -76,7 +76,7 @@ export default function NotificationsPage(){
 
     <div className="notif-feed">
       {loading?<div className="empty">Loading signal history…</div>:
-       !filtered.length?<div className="empty">No {filter==='all'?'':filter+' '}signals yet. Favorite a strategy tested on a ticker in Research, then watch it on the Live Trading page.</div>:
+       !filtered.length?<div className="empty">No {filter==='all'?'':filter+' '}signals yet. Favorite a strategy tested on a ticker in Research, then watch it on the Trade Signals page.</div>:
        filtered.map(n=><div className={`notif-card ${n.action} ${n.acknowledged?'ack':'pending'}`} key={n.id}>
         <div className="notif-card-rail"/>
         <div className="notif-card-main">

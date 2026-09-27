@@ -12,7 +12,7 @@ function fmtPrice(n:number|null){if(n==null)return '—';return new Intl.NumberF
 
 // Rendered once in the root layout so a pending buy/sell signal shows up as a
 // small, persistent toast no matter which page the user is on — it keeps
-// polling in the background rather than living inside the Live Trading page.
+// polling in the background rather than living inside the Trade Signals page.
 export default function TradeSignalToast(){
   const [userId,setUserId]=useState<string|null>(null)
   const [pending,setPending]=useState<Notification[]>([])

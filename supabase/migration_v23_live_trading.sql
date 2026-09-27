@@ -1,8 +1,8 @@
 -- Strategy Lab AI v23 migration. Run this ONCE in the Supabase SQL Editor.
--- Backs the new Live Trading page: tracks open/closed positions the user has
+-- Backs the new Trade Signals page: tracks open/closed positions the user has
 -- confirmed buying or selling, and the buy/sell notifications generated when a
 -- favorited strategy signals on the ticker the user is watching. Notifications
--- are written both by the browser (while the Live Trading page is open) and by
+-- are written both by the browser (while the Trade Signals page is open) and by
 -- a server-side cron endpoint using the service role key, so detection keeps
 -- running even when nobody has the site open.
 

@@ -45,7 +45,7 @@ export type LiveNotification = {
 // Evaluates every favorited strategy the user has for this exact symbol+market
 // against the latest candle, and writes a trade_notifications row (with a
 // duplicate-notification guard) whenever one fires. Works identically whether
-// `client` is the browser's RLS-scoped Supabase client (Live Trading page,
+// `client` is the browser's RLS-scoped Supabase client (Trade Signals page,
 // while open) or a service-role admin client (the always-on cron job) — the
 // server cron is what makes detection keep running while the site is on
 // another page, reloaded, or the user is logged out.
