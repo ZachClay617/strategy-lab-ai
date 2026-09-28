@@ -1,31 +1,28 @@
-// Lightweight per-instance rate limiter for API routes. No external store
-// (Redis/Upstash) is configured for this project, so this is an in-memory
-// fixed-window counter — it protects each individual serverless/edge instance
-// from being hammered (and, more importantly, protects the paid/free upstream
-// APIs we call — Anthropic, Yahoo Finance — from being abused through our
-// routes), but a determined attacker spread across many cold-started
-// instances or edge regions can still get more total requests through than
-// the nominal limit suggests. It is a real deterrent against scripted abuse
-// and runaway loops, not a hard distributed guarantee. If stronger
-// enforcement is ever needed, swap this for Vercel KV / Upstash Redis behind
-// the same `checkRateLimit` signature.
+// Rate limiter for API routes. Uses Upstash Redis (a real distributed store —
+// shared across every serverless/edge instance, so the limit is an actual
+// guarantee, not a per-instance approximation) when UPSTASH_REDIS_REST_URL and
+// UPSTASH_REDIS_REST_TOKEN are configured, and transparently falls back to an
+// in-memory per-instance limiter otherwise so every route keeps working (with
+// the weaker guarantee described below) before those env vars are set.
+import { Redis } from '@upstash/redis'
+import { Ratelimit } from '@upstash/ratelimit'
 
+const redisUrl=process.env.UPSTASH_REDIS_REST_URL
+const redisToken=process.env.UPSTASH_REDIS_REST_TOKEN
+const redis=redisUrl&&redisToken?new Redis({url:redisUrl,token:redisToken}):null
+
+export type RateLimitResult = { ok:boolean; limit:number; remaining:number; resetAt:number; label?:string }
+
+// ---------- In-memory fallback (used only when Redis isn't configured) ----------
 type Bucket = { count:number; resetAt:number }
-const buckets = new Map<string, Bucket>()
-let lastSweep = Date.now()
-
+const buckets=new Map<string,Bucket>()
+let lastSweep=Date.now()
 function sweep(now:number){
   if(now-lastSweep<60_000)return
   lastSweep=now
   for(const [key,b] of buckets)if(b.resetAt<=now)buckets.delete(key)
 }
-
-export type RateLimitResult = { ok:boolean; limit:number; remaining:number; resetAt:number }
-
-// One bucket per (key, windowMs) — callers can stack a tight per-minute limit
-// with a looser per-hour cap on the same identity by calling this twice with
-// different suffixes/windows (see checkRateLimit below).
-export function rateLimit(key:string, limit:number, windowMs:number):RateLimitResult{
+function memoryLimit(key:string,limit:number,windowMs:number):Omit<RateLimitResult,'label'>{
   const now=Date.now()
   sweep(now)
   let b=buckets.get(key)
@@ -37,11 +34,19 @@ export function rateLimit(key:string, limit:number, windowMs:number):RateLimitRe
   return {ok:b.count<=limit,limit,remaining:Math.max(0,limit-b.count),resetAt:b.resetAt}
 }
 
-// Best-effort client IP from the headers Vercel/Next set on every request.
-// Not spoof-proof (a client can send its own x-forwarded-for), but Vercel's
-// edge network overwrites/appends the real connecting IP as the first entry
-// for requests that reach it directly, which covers the normal case this is
-// meant to deter (a script hammering the public URL).
+// ---------- Upstash-backed limiter (one Ratelimit instance per distinct tier shape, cached) ----------
+const limiterCache=new Map<string,Ratelimit>()
+function getLimiter(limit:number,windowMs:number):Ratelimit{
+  const cacheKey=`${limit}:${windowMs}`
+  let rl=limiterCache.get(cacheKey)
+  if(!rl){
+    const seconds=Math.max(1,Math.round(windowMs/1000))
+    rl=new Ratelimit({redis:redis!,limiter:Ratelimit.slidingWindow(limit,`${seconds} s`),prefix:'ratelimit',analytics:false})
+    limiterCache.set(cacheKey,rl)
+  }
+  return rl
+}
+
 export function clientIp(req:{headers:{get(name:string):string|null}}):string{
   const fwd=req.headers.get('x-forwarded-for')
   if(fwd)return fwd.split(',')[0].trim()
@@ -50,11 +55,19 @@ export function clientIp(req:{headers:{get(name:string):string|null}}):string{
 
 // Applies one or more (limit, windowMs) tiers to the same route+identity —
 // e.g. a tight per-minute burst limit plus a looser per-hour cost cap for a
-// route that calls a paid API. Returns the first tier that's exceeded, if any.
-export function checkRateLimit(routeKey:string, id:string, tiers:{limit:number; windowMs:number; label:string}[]):RateLimitResult&{label?:string}{
-  let worst:RateLimitResult&{label?:string}=({ok:true,limit:Infinity,remaining:Infinity,resetAt:0})
+// route that calls a paid API. Returns the first tier that's exceeded, if any,
+// else the tier with the least remaining headroom.
+export async function checkRateLimit(routeKey:string, id:string, tiers:{limit:number; windowMs:number; label:string}[]):Promise<RateLimitResult>{
+  let worst:RateLimitResult={ok:true,limit:Infinity,remaining:Infinity,resetAt:0}
   for(const t of tiers){
-    const r=rateLimit(`${routeKey}:${t.label}:${id}`,t.limit,t.windowMs)
+    const key=`${routeKey}:${t.label}:${id}`
+    let r:Omit<RateLimitResult,'label'>
+    if(redis){
+      const res=await getLimiter(t.limit,t.windowMs).limit(key)
+      r={ok:res.success,limit:t.limit,remaining:res.remaining,resetAt:res.reset}
+    } else {
+      r=memoryLimit(key,t.limit,t.windowMs)
+    }
     if(!r.ok)return {...r,label:t.label}
     if(r.remaining<worst.remaining)worst={...r,label:t.label}
   }

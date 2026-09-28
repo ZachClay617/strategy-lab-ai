@@ -3,7 +3,7 @@ import { fetchCandles, fetchSymbolNames } from '@/lib/market'
 import { checkRateLimit, clientIp, rateLimitedPayload } from '@/lib/rateLimit'
 
 export async function GET(req:NextRequest){
-  const rl=checkRateLimit('market',clientIp(req),[
+  const rl=await checkRateLimit('market',clientIp(req),[
     {limit:120,windowMs:60_000,label:'burst'},
     {limit:2000,windowMs:3_600_000,label:'hourly'},
   ])

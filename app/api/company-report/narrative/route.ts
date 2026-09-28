@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
   // a low per-minute burst cap plus a hard per-hour ceiling regardless of
   // burst pacing, since a single generated report never needs more than one
   // or two of these.
-  const rl = checkRateLimit('narrative', clientIp(req), [
+  const rl = await checkRateLimit('narrative', clientIp(req), [
     { limit: 4, windowMs: 60_000, label: 'burst' },
     { limit: 20, windowMs: 3_600_000, label: 'hourly' },
   ])
