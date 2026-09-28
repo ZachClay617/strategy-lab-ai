@@ -28,9 +28,19 @@ export async function fetchCandles(symbol:string, opts:{ live?:boolean; interval
   const yInterval=INTERVAL_MAP[intervalKey]||'1d'
   const requestedDays=opts.rangeDays||3650
   const days=Math.min(requestedDays, MAX_RANGE_DAYS[intervalKey]??3650)
+  const toCandles=(x:any):Candle[]|null=>{
+    const timestamps=x?.timestamp
+    const q=x?.indicators?.quote?.[0]
+    if(!Array.isArray(timestamps)||!timestamps.length||!q)return null
+    const a=x.indicators.adjclose?.[0]?.adjclose||q.close
+    return timestamps.map((t:number,i:number)=>({date:new Date(t*1000).toISOString(),open:q.open[i],high:q.high[i],low:q.low[i],close:a[i],volume:q.volume[i]})).filter((v:any)=>v.open!=null&&v.high!=null&&v.low!=null&&v.close!=null)
+  }
   try{
     const now=Math.floor(Date.now()/1000)
-    const period1=live?now-86400*2:Math.floor((Date.now()-days*86400000)/1000)
+    // A weekend/holiday close (or just after-hours) can leave zero 1-minute bars
+    // in a short recent window — widen it enough to always cover the last
+    // trading session instead of assuming "live" means "market is open right now".
+    const period1=live?now-86400*5:Math.floor((Date.now()-days*86400000)/1000)
     const url=`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?period1=${period1}&period2=${now}&interval=${yInterval}&events=div%2Csplits&includeAdjustedClose=true`
     let {r,j}=await fetchJson(url)
     // A transient block/rate-limit (5xx, or no body at all) is worth one quick
@@ -48,10 +58,19 @@ export async function fetchCandles(symbol:string, opts:{ live?:boolean; interval
       }
       throw new Error('no market result')
     }
-    const q=x.indicators.quote[0]
-    const a=x.indicators.adjclose?.[0]?.adjclose||q.close
-    const candles=x.timestamp.map((t:number,i:number)=>({date:new Date(t*1000).toISOString(),open:q.open[i],high:q.high[i],low:q.low[i],close:a[i],volume:q.volume[i]})).filter((v:any)=>v.open!=null&&v.high!=null&&v.low!=null&&v.close!=null)
-    return {candles}
+    const candles=toCandles(x)
+    if(candles)return {candles}
+    // The result came back with no usable bars at all (e.g. a fresh/illiquid
+    // symbol, or an interval Yahoo just doesn't have data for over this span).
+    // Fall back to a coarser, much wider daily window so the caller still gets
+    // the most recent real candles instead of a crash or a stuck empty chart.
+    if(live){
+      const fbUrl=`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?period1=${now-86400*10}&period2=${now}&interval=1d&events=div%2Csplits&includeAdjustedClose=true`
+      const {j:fj}=await fetchJson(fbUrl)
+      const fallback=toCandles(fj?.chart?.result?.[0])
+      if(fallback)return {candles:fallback}
+    }
+    return {candles:[]}
   }catch(e){return {error:String(e)}}
 }
 
