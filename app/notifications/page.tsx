@@ -53,6 +53,17 @@ export default function NotificationsPage(){
     setNotifications(prev=>prev.map(x=>x.id===n.id?{...x,acknowledged:true}:x))
     setBusyId(null)
   }
+  // Closes out a notification without acting on it — e.g. the user decided
+  // not to take the trade, or already closed the position another way (the
+  // Trade Signals page's "CLOSE EARLY" button). Just marks it acknowledged;
+  // never touches live_positions, since there's nothing here to confirm.
+  async function dismiss(n:Notification){
+    if(!supabase||!session?.user)return
+    setBusyId(n.id)
+    await supabase.from('trade_notifications').update({acknowledged:true}).eq('id',n.id)
+    setNotifications(prev=>prev.map(x=>x.id===n.id?{...x,acknowledged:true}:x))
+    setBusyId(null)
+  }
 
   if(!supabase)return <div className="shell"><p className="msg banner">Add Supabase environment variables first.</p></div>
   if(!session)return <div className="shell"><p className="msg banner">Log in on the <a href="/research">Research</a> page first, then come back here.</p></div>
@@ -91,9 +102,12 @@ export default function NotificationsPage(){
           </div>
         </div>
         {n.acknowledged?<span className="notif-ack-tag">✓ CONFIRMED</span>:
-          <button className="notif-confirm" disabled={busyId===n.id} onClick={()=>n.action==='buy'?confirmBuy(n):confirmSell(n)}>
-            {busyId===n.id?'SAVING…':n.action==='buy'?'I BOUGHT IT':'I SOLD IT'}
-          </button>}
+          <div className="notif-actions">
+            <button className="notif-confirm" disabled={busyId===n.id} onClick={()=>n.action==='buy'?confirmBuy(n):confirmSell(n)}>
+              {busyId===n.id?'SAVING…':n.action==='buy'?'I BOUGHT IT':'I SOLD IT'}
+            </button>
+            <button className="ghost small-btn notif-dismiss" disabled={busyId===n.id} onClick={()=>dismiss(n)} title="Close this out without acting on it">DISMISS</button>
+          </div>}
       </div>)}
     </div>
   </div>

@@ -33,6 +33,7 @@ export default function TradeSignalsPage(){
   const [lastChecked,setLastChecked]=useState<string>('')
   const [symbolNames,setSymbolNames]=useState<Record<string,string>>({})
   const [cronStaleMinutes,setCronStaleMinutes]=useState<number|null>(null)
+  const [closingId,setClosingId]=useState<string|null>(null)
 
   useEffect(()=>{
     if(!supabase)return
@@ -92,6 +93,24 @@ export default function TradeSignalsPage(){
     const id=setInterval(check,120000)
     return ()=>{dead=true;clearInterval(id)}
   },[session?.user?.id])
+
+  // Lets the user close a position early, before any sell signal fires —
+  // e.g. they want out ahead of earnings, or just changed their mind. Records
+  // it as an already-acknowledged sell notification (not a pending one the
+  // user would have to separately confirm) so it still shows up in history.
+  async function closePositionManually(pos:Position, strat:FavStrategy){
+    if(!supabase||!session?.user)return
+    setClosingId(pos.id)
+    const liveClose=candlesByKey[key(strat.symbol,strat.market)]?.slice(-1)[0]?.close ?? pos.entry_price
+    await supabase.from('live_positions').update({status:'closed',exit_price:liveClose,closed_at:new Date().toISOString()}).eq('id',pos.id)
+    await supabase.from('trade_notifications').insert({
+      user_id:session.user.id,strategy_id:strat.id,strategy_name:strat.name,symbol:strat.symbol,market:strat.market,
+      action:'sell',price:liveClose,reason:'Closed manually — you exited this position early, before a sell signal fired.',
+      position_id:pos.id,acknowledged:true
+    })
+    setPositions(prev=>prev.filter(p=>p.id!==pos.id))
+    setClosingId(null)
+  }
 
   async function removeFromWatchlist(id:string){
     if(!supabase)return
@@ -241,10 +260,11 @@ export default function TradeSignalsPage(){
         <div className="table">{favStrategies.filter(s=>activeStrategyIds.has(s.id)).map(s=>{
           const pos=positions.find(p=>p.strategy_id===s.id)
           let params=s.parameters;if(typeof params==='string'){try{params=JSON.parse(params)}catch{params=null}}
-          return <div className="row" key={s.id} style={{gridTemplateColumns:'2fr 1fr 1fr'}}>
+          return <div className="row" key={s.id} style={{gridTemplateColumns:'2fr 1fr 1fr auto'}}>
             <div><strong>{s.name}</strong><span className="how-it-works">{params?describeFamily(s.family,params):s.family}</span></div>
             <span className={pos?'up':''}>{pos?`OPEN · bought ${fmtPrice(pos.entry_price)}`:'WATCHING FOR BUY'}</span>
             <span>{pos?`since ${fmtDateTime(pos.opened_at)}`:'—'}</span>
+            {pos?<button className="ghost small-btn" disabled={closingId===pos.id} onClick={()=>closePositionManually(pos,s)}>{closingId===pos.id?'CLOSING…':'CLOSE EARLY'}</button>:<span/>}
           </div>
         })}</div>}
       </section>
