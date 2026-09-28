@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { confirmBuySignal, confirmSellSignal, dismissSignal } from '@/lib/tradeConfirm'
 
 type Notification = {
   id:string; strategy_id:string|null; strategy_name:string; symbol:string; market:string
@@ -38,18 +39,16 @@ export default function NotificationsPage(){
   },[session?.user?.id])
 
   async function confirmBuy(n:Notification){
-    if(!supabase||!session?.user||!n.strategy_id)return
+    if(!supabase||!session?.user)return
     setBusyId(n.id)
-    const {data:pos}=await supabase.from('live_positions').insert({user_id:session.user.id,strategy_id:n.strategy_id,symbol:n.symbol,market:n.market,entry_price:n.price||0}).select().maybeSingle()
-    await supabase.from('trade_notifications').update({acknowledged:true,position_id:pos?.id||null}).eq('id',n.id)
-    setNotifications(prev=>prev.map(x=>x.id===n.id?{...x,acknowledged:true,position_id:pos?.id||null}:x))
+    await confirmBuySignal(supabase,session.user.id,n)
+    setNotifications(prev=>prev.map(x=>x.id===n.id?{...x,acknowledged:true}:x))
     setBusyId(null)
   }
   async function confirmSell(n:Notification){
     if(!supabase||!session?.user)return
     setBusyId(n.id)
-    if(n.position_id)await supabase.from('live_positions').update({status:'closed',exit_price:n.price||0,closed_at:new Date().toISOString()}).eq('id',n.position_id)
-    await supabase.from('trade_notifications').update({acknowledged:true}).eq('id',n.id)
+    await confirmSellSignal(supabase,n)
     setNotifications(prev=>prev.map(x=>x.id===n.id?{...x,acknowledged:true}:x))
     setBusyId(null)
   }
@@ -60,7 +59,7 @@ export default function NotificationsPage(){
   async function dismiss(n:Notification){
     if(!supabase||!session?.user)return
     setBusyId(n.id)
-    await supabase.from('trade_notifications').update({acknowledged:true}).eq('id',n.id)
+    await dismissSignal(supabase,n.id)
     setNotifications(prev=>prev.map(x=>x.id===n.id?{...x,acknowledged:true}:x))
     setBusyId(null)
   }
