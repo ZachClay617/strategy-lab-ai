@@ -515,8 +515,24 @@ export default function Home(){
    const foldMetricsList=oosFoldSessions.map(f=>combineMetrics(f.map(s=>s.metrics),candidateStartingCash))
    const overallDataSource:DataSource=(isMetrics.dataSource==='yahoo'&&(oosMetrics.trades===0||oosMetrics.dataSource==='yahoo')&&dataSource==='yahoo')?'yahoo':'synthetic'
    const qual=evaluateQualification({dataSource:overallDataSource,inSample:isMetrics,outOfSample:oosMetrics,folds:foldMetricsList,hardCheck:{ok:!hardFail,reason:hardFail||undefined}})
-   const primary=(isSessions[0]||oosAllSessions[0])
-   const sampleSessions=[...isSessions.slice(0,5),...oosAllSessions.slice(0,5)]
+   // Pick whichever sampled session (in-sample or out-of-sample) actually ran on the
+   // most recent dates as "primary" — the one whose candles/trades/date-range get
+   // saved as the strategy's displayed/exported test window. isSessions is always
+   // drawn from the older 70% in-sample pool (chronologically first), so always
+   // preferring isSessions[0] meant every saved strategy's test window came from
+   // years ago and never reflected the recent out-of-sample data it was actually
+   // validated against, even though out-of-sample sessions run right up to today.
+   const allSessions=[...isSessions,...oosAllSessions]
+   const primary=allSessions.reduce<(Session&{metrics:Metrics})|undefined>((latest,s)=>{
+     if(!latest)return s
+     if(!s.endDate)return latest
+     if(!latest.endDate)return s
+     return new Date(s.endDate).getTime()>new Date(latest.endDate).getTime()?s:latest
+   },undefined)
+   // Keep the primary (most recent) session first in the replay list so it's the one
+   // shown/charted, not just the one whose date range is reported in the header.
+   const restSessions=allSessions.filter(s=>s!==primary)
+   const sampleSessions=(primary?[primary]:[]).concat(restSessions.slice(0,9))
    // Persist/display the params actually used for the primary session's backtest (post
    // clampParamsToSession), not the raw pre-clamp draw — a short session can clamp e.g.
    // lookback down substantially, and saving the raw value made the saved "parameters"
