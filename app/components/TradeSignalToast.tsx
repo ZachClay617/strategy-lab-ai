@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { confirmBuySignal, confirmSellSignal } from '@/lib/tradeConfirm'
 
 type Notification = {
   id:string; strategy_id:string|null; strategy_name:string; symbol:string; market:string
@@ -39,12 +40,9 @@ export default function TradeSignalToast(){
   },[userId])
 
   async function confirmBuy(n:Notification){
-    if(!supabase||!userId||!n.strategy_id)return
+    if(!supabase||!userId)return
     setBusyId(n.id)
-    const {data:pos}=await supabase.from('live_positions').insert({
-      user_id:userId,strategy_id:n.strategy_id,symbol:n.symbol,market:n.market,entry_price:n.price||0
-    }).select().maybeSingle()
-    await supabase.from('trade_notifications').update({acknowledged:true,position_id:pos?.id||null}).eq('id',n.id)
+    await confirmBuySignal(supabase,userId,n)
     setPending(prev=>prev.filter(p=>p.id!==n.id))
     setBusyId(null)
   }
@@ -52,8 +50,7 @@ export default function TradeSignalToast(){
   async function confirmSell(n:Notification){
     if(!supabase||!userId)return
     setBusyId(n.id)
-    if(n.position_id)await supabase.from('live_positions').update({status:'closed',exit_price:n.price||0,closed_at:new Date().toISOString()}).eq('id',n.position_id)
-    await supabase.from('trade_notifications').update({acknowledged:true}).eq('id',n.id)
+    await confirmSellSignal(supabase,n)
     setPending(prev=>prev.filter(p=>p.id!==n.id))
     setBusyId(null)
   }
