@@ -234,7 +234,7 @@
 .fav-tray-scroll{display:flex;gap:12px;overflow-x:auto;padding-bottom:8px;scroll-snap-type:x mandatory}
 .fav-ticker-groups{display:flex;flex-direction:column;gap:14px}
 .fav-ticker-heading{display:flex;align-items:baseline;gap:8px;padding:0 2px}
-.fav-ticker-heading span{font-weight:900;font-size:13px;letter-spacing:.04em;color:var(--text)}
+.fav-ticker-heading span{font-weight:900;font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--text)}
 .fav-ticker-heading small{font-size:11px;color:#6b7690}
 .fav-card{position:relative;scroll-snap-align:start;flex:0 0 230px;background:#0a0e1d;border:1px solid #202b49;border-radius:14px;padding:14px;transition:border-color .15s,flex-basis .15s}
 .fav-card:hover{border-color:#3a4a7a}
