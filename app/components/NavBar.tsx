@@ -4,8 +4,6 @@ import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
-const SEEN_KEY='notificationsSeenAt'
-
 export default function NavBar(){
   const pathname=usePathname()
   const [userId,setUserId]=useState<string|null>(null)
@@ -18,20 +16,18 @@ export default function NavBar(){
     return ()=>data.subscription.unsubscribe()
   },[])
 
-  // Visiting the Notifications page marks everything seen so far — the badge
-  // reappears only once a new notification arrives after that.
+  // Counts notifications still needing action (acknowledged=false) rather than
+  // "created since the last time this browser visited /notifications" — that
+  // per-browser timestamp lived only in localStorage, so it was missing on a
+  // fresh browser/device/private window and silently fell back to counting
+  // every notification ever created. This is server-side state instead, so it
+  // stays accurate across relogins and devices and only drops as notifications
+  // are actually confirmed or dismissed (here or via the corner toast).
   useEffect(()=>{
-    if(!pathname?.startsWith('/notifications'))return
-    localStorage.setItem(SEEN_KEY,new Date().toISOString())
-    setUnreadCount(0)
-  },[pathname])
-
-  useEffect(()=>{
-    if(!supabase||!userId||pathname?.startsWith('/notifications'))return
+    if(!supabase||!userId)return
     let dead=false
     const load=async()=>{
-      const seenAt=localStorage.getItem(SEEN_KEY)||new Date(0).toISOString()
-      const {count}=await supabase!.from('trade_notifications').select('id',{count:'exact',head:true}).eq('user_id',userId).gt('created_at',seenAt)
+      const {count}=await supabase!.from('trade_notifications').select('id',{count:'exact',head:true}).eq('user_id',userId).eq('acknowledged',false)
       if(!dead)setUnreadCount(count||0)
     }
     load()
