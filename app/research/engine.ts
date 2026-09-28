@@ -415,20 +415,6 @@ export function clampParamsToSession(p:any, len:number){
 }
 
 // ---------- Chronological in-sample / out-of-sample splitting ----------
-export function splitChronological<T>(list:T[], inSampleFraction=0.7):{inSample:T[]; outOfSample:T[]}{
-  const cut=Math.floor(list.length*inSampleFraction)
-  return {inSample:list.slice(0,cut), outOfSample:list.slice(cut)}
-}
-// Chronological walk-forward folds within a (typically out-of-sample) slice, so a
-// qualifying strategy is checked across multiple distinct periods, not one lucky window.
-export function makeWalkForwardFolds<T>(list:T[], minPerFold:number, maxFolds=3):T[][]{
-  if(list.length<minPerFold*2)return list.length?[list]:[]
-  const folds=Math.min(maxFolds,Math.floor(list.length/minPerFold))
-  const size=Math.floor(list.length/folds)
-  const out:T[][]=[]
-  for(let i=0;i<folds;i++)out.push(list.slice(i*size, i===folds-1?list.length:(i+1)*size))
-  return out
-}
 // A single 70/30 chronological cut (old splitChronological+makeWalkForwardFolds
 // pipeline) put ALL out-of-sample data in the most recent slice of whatever pool
 // was fetched — so on a 10-year daily pool, qualification (and every displayed
@@ -441,23 +427,29 @@ export function makeWalkForwardFolds<T>(list:T[], minPerFold:number, maxFolds=3)
 // Each block stays internally contiguous (no mid-window date jumps), and a pool
 // too small to give every fold at least `minFoldItems` items falls back to fewer
 // blocks (down to 1, the old single-cut behavior) rather than fragmenting.
-export function makeSpreadValidation<T>(list:T[], inSampleFraction=0.7, minFoldItems=3, maxFolds=3):{inSample:T[]; folds:T[][]}{
+// inSampleChunks is an array of each block's own contiguous leading 70% (NOT
+// concatenated into one flat array) — concatenating them would stitch together
+// dates from opposite ends of a gap (each block's skipped OOS tail), and a
+// window later sliced across that seam would silently jump years mid-backtest.
+// Callers must sample a single chunk at a time (see pickWeightedChunk in page.tsx).
+export function makeSpreadValidation<T>(list:T[], inSampleFraction=0.7, minFoldItems=3, maxFolds=3):{inSampleChunks:T[][]; folds:T[][]}{
   const n=list.length
-  if(!n)return {inSample:[],folds:[]}
+  if(!n)return {inSampleChunks:[],folds:[]}
   const oosFrac=1-inSampleFraction
   let blocks=maxFolds
   while(blocks>1 && Math.floor((n/blocks)*oosFrac)<minFoldItems)blocks--
   const blockSize=Math.floor(n/blocks)
-  const inSample:T[]=[]
+  const inSampleChunks:T[][]=[]
   const folds:T[][]=[]
   for(let i=0;i<blocks;i++){
     const start=i*blockSize
     const end=i===blocks-1?n:start+blockSize
     const block=list.slice(start,end)
     const cut=Math.floor(block.length*inSampleFraction)
-    inSample.push(...block.slice(0,cut))
+    const isChunk=block.slice(0,cut)
+    if(isChunk.length)inSampleChunks.push(isChunk)
     const oos=block.slice(cut)
     if(oos.length)folds.push(oos)
   }
-  return {inSample,folds}
+  return {inSampleChunks,folds}
 }

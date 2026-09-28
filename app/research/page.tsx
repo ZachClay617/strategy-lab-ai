@@ -452,15 +452,24 @@ export default function Home(){
  const hourSpread=makeSpreadValidation(hourlyData,0.7,90,3)
  const daySpreadD=makeSpreadValidation(dailyData,0.7,120,3)
  const pickTier=(r:()=>number)=>{
-   const avail=RESOLUTION_TIERS.filter(t=>t.key==='15m'?daySpread.inSample.length:t.key==='1h'?hourSpread.inSample.length:daySpreadD.inSample.length)
+   const avail=RESOLUTION_TIERS.filter(t=>t.key==='15m'?daySpread.inSampleChunks.length:t.key==='1h'?hourSpread.inSampleChunks.length:daySpreadD.inSampleChunks.length)
    return avail.length?avail[Math.floor(r()*avail.length)]:null
+ }
+ // Picks one chunk at random (weighted by length) instead of concatenating chunks
+ // into one array — concatenating would let randomWindow slice a window that spans
+ // the gap between two chunks, silently jumping years mid-backtest.
+ function pickWeightedChunk<T extends {length:number}>(chunks:T[], rr:()=>number):T{
+   const total=chunks.reduce((s,c)=>s+c.length,0)
+   let x=rr()*total
+   for(const c of chunks){if(x<c.length)return c;x-=c.length}
+   return chunks[chunks.length-1]
  }
  patchRun({researchCandles:data,activeIndex:0,activeTrades:[]})
  const best:{family:string;params:any;candidate:Candidate;rankVal:number;key:string;isMetrics:Metrics;oosMetrics:Metrics;folds:Metrics[];execution:typeof EXECUTION;qual:{category:string;reason:string}}[]=[]
  let completed=0,qualified=0;const batch=100;const total=Math.max(50,variations);let capital=startingCapitalForRun;const rejections:Record<string,number>={}
  let lastProgressSave=Date.now()
  // One session drawn from a tier/pool, using next-bar execution with slippage+fees (see engine.EXECUTION).
- const sampleSession=(tier:typeof RESOLUTION_TIERS[number],dayKeyPool:string[],flatPool:Candle[],rr:()=>number,family:string,rawParams:any,startingCash:number,dataSource:DataSource):Session&{metrics:Metrics}=>{
+ const sampleSession=(tier:typeof RESOLUTION_TIERS[number],dayKeyPool:string[],flatPoolChunks:Candle[][],rr:()=>number,family:string,rawParams:any,startingCash:number,dataSource:DataSource):Session&{metrics:Metrics}=>{
    if(tier.key==='15m'){
      const dk=dayKeyPool[Math.floor(rr()*dayKeyPool.length)]
      const cds=sessionDayMap[dk];const p2=clampParamsToSession(rawParams,cds.length)
@@ -468,7 +477,8 @@ export default function Home(){
      return {candles:cds,trades:res.trades,metrics:res.metrics,startDate:cds[0]?.date,endDate:cds[cds.length-1]?.date,tier:'15m',params:p2}
    }
    const holdMs=maxHoldMsFor(tier.key as TierKey)
-   const slice=randomWindow(flatPool,rr,tier.minutes);const p2=clampParamsToSession(rawParams,slice.length)
+   const chunk=pickWeightedChunk(flatPoolChunks,rr)
+   const slice=randomWindow(chunk,rr,tier.minutes);const p2=clampParamsToSession(rawParams,slice.length)
    const res=backtestSession(slice,family,p2,{maxHoldMs:holdMs,tierKey:tier.key as TierKey,startingCash,dataSource})
    return {candles:slice,trades:res.trades,metrics:res.metrics,startDate:slice[0]?.date,endDate:slice[slice.length-1]?.date,tier:tier.key,params:p2}
  }
@@ -495,8 +505,8 @@ export default function Home(){
      const tier=pickTier(r)
      if(!tier){completed++;continue}
      pickedTier=tier
-     const dayPoolIS=tier.key==='15m'?daySpread.inSample:[]
-     const flatPoolIS=tier.key==='1h'?hourSpread.inSample:tier.key==='1d'?daySpreadD.inSample:[]
+     const dayPoolIS=tier.key==='15m'?daySpread.inSampleChunks.flat():[]
+     const flatPoolIS=tier.key==='1h'?hourSpread.inSampleChunks:tier.key==='1d'?daySpreadD.inSampleChunks:[]
      // Same floor as the out-of-sample sessions below — minTrades defaults to 1, which
      // otherwise starved the in-sample portion's contribution to the 50-trade total.
      const isSessionCount=clamp(Math.max(minTrades,8),8,30)
@@ -513,7 +523,7 @@ export default function Home(){
        const oosSessionsPerFold=clamp(Math.max(minTrades,8),8,30)
        for(const fold of folds){
          const dayPoolFold=tier.key==='15m'?(fold as unknown as string[]):[]
-         const flatPoolFold=tier.key==='1h'||tier.key==='1d'?(fold as unknown as Candle[]):[]
+         const flatPoolFold=tier.key==='1h'||tier.key==='1d'?[fold as unknown as Candle[]]:[]
          const foldSessions:(Session&{metrics:Metrics})[]=[]
          for(let n=0;n<oosSessionsPerFold;n++){const sess=sampleSession(tier,dayPoolFold,flatPoolFold,r,family,params,candidateStartingCash,'yahoo');checkHard(sess);foldSessions.push(sess)}
          oosFoldSessions.push(foldSessions)
@@ -526,20 +536,19 @@ export default function Home(){
    const foldMetricsList=oosFoldSessions.map(f=>combineMetrics(f.map(s=>s.metrics),candidateStartingCash))
    const overallDataSource:DataSource=(isMetrics.dataSource==='yahoo'&&(oosMetrics.trades===0||oosMetrics.dataSource==='yahoo')&&dataSource==='yahoo')?'yahoo':'synthetic'
    const qual=evaluateQualification({dataSource:overallDataSource,inSample:isMetrics,outOfSample:oosMetrics,folds:foldMetricsList,hardCheck:{ok:!hardFail,reason:hardFail||undefined}})
-   // Pick whichever sampled session (in-sample or out-of-sample) actually ran on the
-   // most recent dates as "primary" — the one whose candles/trades/date-range get
-   // saved as the strategy's displayed/exported test window. isSessions is always
-   // drawn from the older 70% in-sample pool (chronologically first), so always
-   // preferring isSessions[0] meant every saved strategy's test window came from
-   // years ago and never reflected the recent out-of-sample data it was actually
-   // validated against, even though out-of-sample sessions run right up to today.
+   // Pick the strategy's displayed/exported "primary" test window from a RANDOM
+   // out-of-sample session (falling back to in-sample if there were none) rather
+   // than always the single most-recent one. Out-of-sample folds are now spread
+   // across the entire fetched history (oldest/middle/most-recent blocks, see
+   // makeSpreadValidation) — always preferring the latest end date meant every
+   // saved strategy's test window came from the newest block only, making it
+   // look like qualification (and everything downloaded/displayed) only ever
+   // used the last couple of years even though older blocks were genuinely
+   // tested too. isSessions alone would always be older in-sample data, which
+   // was the original bug this replaced.
    const allSessions=[...isSessions,...oosAllSessions]
-   const primary=allSessions.reduce<(Session&{metrics:Metrics})|undefined>((latest,s)=>{
-     if(!latest)return s
-     if(!s.endDate)return latest
-     if(!latest.endDate)return s
-     return new Date(s.endDate).getTime()>new Date(latest.endDate).getTime()?s:latest
-   },undefined)
+   const primaryPool=oosAllSessions.length?oosAllSessions:allSessions
+   const primary=primaryPool.length?primaryPool[Math.floor(r()*primaryPool.length)]:undefined
    // Keep the primary (most recent) session first in the replay list so it's the one
    // shown/charted, not just the one whose date range is reported in the header.
    const restSessions=allSessions.filter(s=>s!==primary)
