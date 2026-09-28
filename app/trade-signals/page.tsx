@@ -105,12 +105,13 @@ export default function TradeSignalsPage(){
           } else {
             // Any other failure (upstream fetch error, bad JSON, etc.) used to fall
             // through silently, leaving the chart stuck on "Waiting for market
-            // data…" forever with no indication anything was wrong. Surface it and
-            // keep the last good candles on screen instead of clearing them.
-            setErrorByKey(prev=>({...prev,[k]:RETRY_MSG}))
+            // data…" forever with no indication anything was wrong. Surface it —
+            // including the raw server error text — right on the page, so
+            // diagnosing this never again requires opening dev tools.
+            setErrorByKey(prev=>({...prev,[k]:j?.error?`${RETRY_MSG} (${String(j.error).slice(0,160)})`:RETRY_MSG}))
           }
-        }catch{
-          if(!dead)setErrorByKey(prev=>({...prev,[k]:RETRY_MSG}))
+        }catch(e){
+          if(!dead)setErrorByKey(prev=>({...prev,[k]:`${RETRY_MSG} (${String((e as any)?.message||e).slice(0,160)})`}))
         }
       }))
       if(!dead)setLastChecked(new Date().toLocaleTimeString())
@@ -195,7 +196,7 @@ export default function TradeSignalsPage(){
         <LiveChart candles={activeCandles} markers={markers} title={active?.symbol||''} windowSize={60}/>
         {active&&errorByKey[key(active.symbol,active.market)]&&(()=>{
           const msg=errorByKey[key(active.symbol,active.market)]!
-          const retrying=msg===RETRY_MSG
+          const retrying=msg.startsWith(RETRY_MSG)
           return retrying
             ? <p className="retry-banner" style={{marginTop:10}}><span className="retry-pulse-dot"/><span className="retry-text">{msg}</span></p>
             : <p className="field-warning" style={{marginTop:10}}>⚠ {msg}</p>
