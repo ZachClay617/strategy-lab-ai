@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { PORTFOLIO_UNIVERSE } from '@/lib/portfolioUniverse'
+import { checkRateLimit, clientIp, rateLimitedPayload } from '@/lib/rateLimit'
 
 const KEYWORD_MAP:Record<string,string[]> = {
   tech:['tech','technology','software'],
@@ -59,6 +60,16 @@ function extractKeywords(description:string){
 }
 
 export async function POST(req:NextRequest){
+  // Fans out a Yahoo daily-closes fetch across the portfolio universe, so it's
+  // meaningfully heavier than a single candle request — throttle accordingly.
+  const rl=checkRateLimit('portfolio-research',clientIp(req),[
+    {limit:10,windowMs:60_000,label:'burst'},
+    {limit:60,windowMs:3_600_000,label:'hourly'},
+  ])
+  if(!rl.ok){
+    const p=rateLimitedPayload(rl)
+    return NextResponse.json(p.body,{status:p.status,headers:p.headers})
+  }
   const body=await req.json().catch(()=>null)
   if(!body)return NextResponse.json({error:'invalid_request'},{status:400})
   const description:string=body.description||''

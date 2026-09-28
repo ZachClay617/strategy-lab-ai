@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { fetchLastPrice } from '@/lib/market'
+import { checkRateLimit, clientIp, rateLimitedPayload } from '@/lib/rateLimit'
 
 // Called every ~15 minutes by an external scheduler (not Vercel Cron, which can't
 // run sub-daily on the Hobby plan) so the portfolio return chart keeps gaining
@@ -21,6 +22,13 @@ function isAuthorized(req:NextRequest){
 }
 
 export async function GET(req:NextRequest){
+  // Ahead of the secret check on purpose — also throttles repeated wrong-secret
+  // guesses from the same IP, not just legitimate-but-excessive calls.
+  const rl=checkRateLimit('cron-portfolio-snapshots',clientIp(req),[{limit:30,windowMs:3_600_000,label:'hourly'}])
+  if(!rl.ok){
+    const p=rateLimitedPayload(rl)
+    return NextResponse.json(p.body,{status:p.status,headers:p.headers})
+  }
   if(!isAuthorized(req))return NextResponse.json({error:'unauthorized'},{status:401})
 
   const url=process.env.NEXT_PUBLIC_SUPABASE_URL
