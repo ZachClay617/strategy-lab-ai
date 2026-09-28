@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
   // (quoteSummary + 5 years of daily candles, times up to a handful of
   // competitors) plus a news fetch — one of the heavier routes in the app,
   // so it gets a tighter limit than plain candle polling.
-  const rl = checkRateLimit('company-report', clientIp(req), [
+  const rl = await checkRateLimit('company-report', clientIp(req), [
     { limit: 15, windowMs: 60_000, label: 'burst' },
     { limit: 100, windowMs: 3_600_000, label: 'hourly' },
   ])

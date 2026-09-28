@@ -62,7 +62,7 @@ function extractKeywords(description:string){
 export async function POST(req:NextRequest){
   // Fans out a Yahoo daily-closes fetch across the portfolio universe, so it's
   // meaningfully heavier than a single candle request — throttle accordingly.
-  const rl=checkRateLimit('portfolio-research',clientIp(req),[
+  const rl=await checkRateLimit('portfolio-research',clientIp(req),[
     {limit:10,windowMs:60_000,label:'burst'},
     {limit:60,windowMs:3_600_000,label:'hourly'},
   ])
