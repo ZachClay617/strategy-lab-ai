@@ -1,0 +1,23 @@
+name: Portfolio snapshots cron
+
+# Calls /api/cron/portfolio-snapshots on a schedule so portfolio return charts
+# keep gaining data points even when nobody has the site open. The route's own
+# comment says it expects "an external scheduler (not Vercel Cron, which can't
+# run sub-daily on the Hobby plan)" every ~15 minutes — nothing was actually
+# configured to do that, so this workflow is that scheduler.
+#
+# Requires the same CRON_SECRET repository secret as live-signals-cron.yml.
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  ping-portfolio-snapshots:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call /api/cron/portfolio-snapshots
+        run: |
+          curl -sS -f --max-time 30 \
+            "https://strategy-lab-ai.vercel.app/api/cron/portfolio-snapshots?secret=${{ secrets.CRON_SECRET }}"
