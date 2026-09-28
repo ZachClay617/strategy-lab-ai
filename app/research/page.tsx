@@ -43,7 +43,7 @@ type Candle = { date:string; open:number; high:number; low:number; close:number;
 type Trade = { side:'LONG'; entryIndex:number; exitIndex:number; entry:number; exit:number; qty:number; pnl:number; fee?:number; reason:string }
 type Session = { candles:Candle[]; trades:Trade[]; metrics:any; startDate?:string; endDate?:string; tier?:string; params?:any }
 type Strategy = { id:string; run_id?:string; name:string; family:string; symbol:string; market:string; score:number; approved:boolean; metrics:any; explanation:string; parameters:any; equity?:any; trades?:Trade[]; candles?:Candle[]; test_start_at?:string|null; test_end_at?:string|null; sessions?:Session[]; created_at:string; favorite?:boolean; seq?:number|null }
-type Run = { id:string; symbol:string; market:string; status:string; variations_requested:number; best_score:number|null; started_at:string; finished_at:string|null; starting_balance:number; current_balance:number; summary:string|null; best_strategy_name:string|null; best_reason:string|null; failure_reason:string|null; tested_count:number; qualified_count:number; favorite?:boolean; seq?:number|null }
+type Run = { id:string; name?:string|null; symbol:string; market:string; status:string; variations_requested:number; best_score:number|null; started_at:string; finished_at:string|null; starting_balance:number; current_balance:number; summary:string|null; best_strategy_name:string|null; best_reason:string|null; failure_reason:string|null; tested_count:number; qualified_count:number; favorite?:boolean; seq?:number|null }
 
 type Candidate = { family:string; params:any; result:any; passed:boolean; reason:string; index:number; candles:Candle[]; startDate?:string; endDate?:string; sessions:Session[]; testedAt:string }
 
@@ -136,6 +136,11 @@ function makeSynthetic(symbol:string, days:number):Candle[]{const r=seeded(symbo
 
 // signalFor/describeFamily/backtest/aggregateMetrics/randomParams now live in ./engine
 // (single source of truth for indicators, execution, and metrics math).
+function runLabel(r?:Run|null, fallbackSymbol?:string){
+  if(r?.name?.trim())return r.name.trim()
+  if(r)return `${r.symbol} · ${r.market}`
+  return fallbackSymbol||'Run'
+}
 function fmtDateTime(iso?:string){if(!iso)return '—';return new Date(iso).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'})}
 function downloadBlob(filename:string,blob:Blob){
   const url=URL.createObjectURL(blob)
@@ -163,7 +168,7 @@ async function downloadFavoritedLogsDocx(filename:string,entries:{run?:Run|null,
     new Paragraph({text:''}),
   ]
   for(const g of entries){
-    children.push(new Paragraph({heading:HeadingLevel.HEADING_1,children:[new TextRun(`${g.run?.seq!=null?`#${g.run.seq} `:''}${g.run?`${g.run.symbol} · ${g.run.market}`:g.list[0]?.symbol||'Run'}`)]}))
+    children.push(new Paragraph({heading:HeadingLevel.HEADING_1,children:[new TextRun(`${g.run?.seq!=null?`#${g.run.seq} `:''}${runLabel(g.run,g.list[0]?.symbol)}`)]}))
     if(g.run)children.push(new Paragraph({children:[new TextRun({text:`Run ID: #${g.run.seq??'—'}  (record ${g.run.id})`,bold:true})]}))
     if(g.run)children.push(new Paragraph({children:[new TextRun(`Started ${fmtDateTime(g.run.started_at)} · Tested ${(g.run.tested_count??g.run.variations_requested).toLocaleString()} · Qualified ${g.run.qualified_count}`)]}))
     if(g.run?.summary)children.push(new Paragraph({children:[new TextRun(g.run.summary)]}))
@@ -308,7 +313,7 @@ async function waitWhilePaused(){
 
 export default function Home(){
  const router=useRouter()
- const [session,setSession]=useState<any>(null),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[mode,setMode]=useState<'login'|'signup'>('login'),[msg,setMsg]=useState(''),[showPassword,setShowPassword]=useState(false),[strategies,setStrategies]=useState<Strategy[]>([]),[runs,setRuns]=useState<Run[]>([]),[selected,setSelected]=useState<Strategy|null>(null),[variations,setVariations]=useState(25000),[minTrades,setMinTrades]=useState(1),[idea,setIdea]=useState(''),[liveCandles,setLiveCandles]=useState<Candle[]>([]),[liveStatus,setLiveStatus]=useState('Waiting for live market data'),[watchLive,setWatchLive]=useState(true),[chartWindow,setChartWindow]=useState<number>(14),[runSort,setRunSort]=useState<'newest'|'oldest'|'qualified'|'bestScore'>('newest'),[expandedRuns,setExpandedRuns]=useState<Record<string,boolean>>({}),[favLogsOpen,setFavLogsOpen]=useState(false),[favStrategiesOpen,setFavStrategiesOpen]=useState(false),[pendingDelete,setPendingDelete]=useState<null|{kind:'log'}|{kind:'run';runId:string;label:string}|{kind:'runHistory';runId:string;label:string}>(null),[deletingLog,setDeletingLog]=useState(false),[symbolNames,setSymbolNames]=useState<Record<string,string>>({}),[avatarUrl,setAvatarUrl]=useState<string|null>(null),[signupUsername,setSignupUsername]=useState(''),[signupName,setSignupName]=useState(''),[signupGender,setSignupGender]=useState(''),[renamingStrategyId,setRenamingStrategyId]=useState<string|null>(null),[renameValue,setRenameValue]=useState('')
+ const [session,setSession]=useState<any>(null),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[mode,setMode]=useState<'login'|'signup'>('login'),[msg,setMsg]=useState(''),[showPassword,setShowPassword]=useState(false),[strategies,setStrategies]=useState<Strategy[]>([]),[runs,setRuns]=useState<Run[]>([]),[selected,setSelected]=useState<Strategy|null>(null),[variations,setVariations]=useState(25000),[minTrades,setMinTrades]=useState(1),[idea,setIdea]=useState(''),[liveCandles,setLiveCandles]=useState<Candle[]>([]),[liveStatus,setLiveStatus]=useState('Waiting for live market data'),[watchLive,setWatchLive]=useState(true),[chartWindow,setChartWindow]=useState<number>(14),[runSort,setRunSort]=useState<'newest'|'oldest'|'qualified'|'bestScore'>('newest'),[expandedRuns,setExpandedRuns]=useState<Record<string,boolean>>({}),[favLogsOpen,setFavLogsOpen]=useState(false),[favStrategiesOpen,setFavStrategiesOpen]=useState(false),[pendingDelete,setPendingDelete]=useState<null|{kind:'log'}|{kind:'run';runId:string;label:string}|{kind:'runHistory';runId:string;label:string}>(null),[deletingLog,setDeletingLog]=useState(false),[symbolNames,setSymbolNames]=useState<Record<string,string>>({}),[avatarUrl,setAvatarUrl]=useState<string|null>(null),[signupUsername,setSignupUsername]=useState(''),[signupName,setSignupName]=useState(''),[signupGender,setSignupGender]=useState(''),[renamingStrategyId,setRenamingStrategyId]=useState<string|null>(null),[renameValue,setRenameValue]=useState(''),[renamingRunId,setRenamingRunId]=useState<string|null>(null),[renameRunValue,setRenameRunValue]=useState('')
  const rs=useSyncExternalStore(subscribeRun,getRunSnapshot,getRunSnapshot)
  const {running,paused,progress,feed,testLog,activeCandidate,researchCandles,activeIndex,activeTrades,rejectionCounts,tickerError,selectedRun,balance,symbol,market,runMode,speedKey:speed,completedCount,qualifiedCount}=rs
  useEffect(()=>{if(!supabase)return;supabase.auth.getSession().then(({data})=>setSession(data.session));const {data}=supabase.auth.onAuthStateChange((_e,s)=>setSession(s));return()=>data.subscription.unsubscribe()},[])
@@ -323,7 +328,7 @@ export default function Home(){
  async function loadData(){
    if(!supabase||!session?.user)return
    const isJwtIssue=(e:any)=>{const m=(e?.message||'').toLowerCase();return m.includes('jwt')||m.includes('token')}
-   const fetchAll=()=>Promise.all([supabase!.from('strategies').select('id,run_id,user_id,symbol,market,name,family,parameters,source,approved,score,metrics,explanation,test_start_at,test_end_at,created_at,favorite,seq').eq('user_id',session.user.id).order('created_at',{ascending:false}).limit(500),supabase!.from('research_runs').select('*').eq('user_id',session.user.id).order('started_at',{ascending:false}).limit(50)])
+   const fetchAll=()=>Promise.all([supabase!.from('strategies').select('id,run_id,user_id,symbol,market,name,family,parameters,source,approved,score,metrics,explanation,test_start_at,test_end_at,created_at,favorite,seq').eq('user_id',session.user.id).order('created_at',{ascending:false}).limit(20000),supabase!.from('research_runs').select('*').eq('user_id',session.user.id).order('started_at',{ascending:false}).limit(50)])
    let [{data:s,error:sErr},{data:r,error:rErr}]=await fetchAll()
    if(isJwtIssue(sErr)||isJwtIssue(rErr)){
      await supabase.auth.refreshSession()
@@ -547,7 +552,10 @@ export default function Home(){
      const existingIdx=best.findIndex(x=>x.key===key)
      if(existingIdx>=0){if(rankVal>best[existingIdx].rankVal)best[existingIdx]={family,params,candidate,rankVal,key,isMetrics,oosMetrics,folds:foldMetricsList,execution:EXECUTION,qual:{category:qual.category,reason:qual.reason}}}
      else best.push({family,params,candidate,rankVal,key,isMetrics,oosMetrics,folds:foldMetricsList,execution:EXECUTION,qual:{category:qual.category,reason:qual.reason}})
-     best.sort((a,b)=>b.rankVal-a.rankVal);if(best.length>100)best.pop()
+     // Every qualifier is kept (not just a top-N slice) so downloaded favorited
+     // logs and the strategy log always report on every single qualifier from
+     // the run, not a truncated subset.
+     best.sort((a,b)=>b.rankVal-a.rankVal)
    } else {
      rejections[qual.category]=(rejections[qual.category]||0)+1
    }
@@ -612,6 +620,21 @@ export default function Home(){
    setMsg('Run permanently deleted from your research history.')
  }
  async function toggleFavoriteStrategy(strategyId:string){if(!supabase)return;const s=strategies.find(x=>x.id===strategyId);const next=!s?.favorite;setStrategies(prev=>prev.map(x=>x.id===strategyId?{...x,favorite:next}:x));const {error}=await supabase.from('strategies').update({favorite:next}).eq('id',strategyId);if(error){setMsg(`Could not update favorite: ${error.message}. Run the latest Supabase migration.`);setStrategies(prev=>prev.map(x=>x.id===strategyId?{...x,favorite:!next}:x))}}
+ function startRenameRun(r:Run){setRenamingRunId(r.id);setRenameRunValue(runLabel(r))}
+ async function saveRenameRun(runId:string){
+   if(!supabase)return
+   const name=renameRunValue.trim()
+   setRenamingRunId(null)
+   if(!name)return
+   const prev=runs.find(x=>x.id===runId)?.name
+   setRuns(list=>list.map(x=>x.id===runId?{...x,name}:x))
+   patchRun(s=>s.selectedRun?.id===runId?{selectedRun:{...s.selectedRun,name}}:{})
+   const {error}=await supabase.from('research_runs').update({name}).eq('id',runId)
+   if(error){
+     setMsg(`Could not rename run: ${error.message}. Run the latest Supabase migration.`)
+     setRuns(list=>list.map(x=>x.id===runId?{...x,name:prev}:x))
+   }
+ }
  function startRenameStrategy(s:Strategy){setRenamingStrategyId(s.id);setRenameValue(s.name)}
  async function saveRenameStrategy(strategyId:string){
    if(!supabase)return
@@ -651,7 +674,7 @@ export default function Home(){
    const renderFavCard=(g:typeof favEntries[number])=>{const key=`fav-${g.runId}`;const isOpen=!!expandedRuns[key];return <div className={`fav-card ${isOpen?'open':''}`} key={g.runId}>
      <button className="fav-card-star" title="Unpin" onClick={()=>toggleFavoriteRun(g.runId)}>★</button>
      <button className="fav-card-body" onClick={()=>setExpandedRuns(prev=>({...prev,[key]:!prev[key]}))}>
-       <b>{g.run?.seq!=null&&<span className="strategy-id">#{g.run.seq}</span>}{g.run?`${g.run.symbol} · ${g.run.market}`:g.list[0]?.symbol}</b>
+       <b>{g.run?.seq!=null&&<span className="strategy-id">#{g.run.seq}</span>}{runLabel(g.run,g.list[0]?.symbol)}</b>
        <span>{fmtDateTime(g.when)}</span>
        <span>{g.list.length} qualified{g.run?` · ${(g.run.tested_count??g.run.variations_requested).toLocaleString()} tested`:''}</span>
        <span className={`fav-card-chevron ${isOpen?'open':''}`}>▾ {isOpen?'HIDE':'STRATEGIES'}</span>
@@ -717,14 +740,14 @@ export default function Home(){
      if(runSort==='qualified')return b.list.length-a.list.length
      return b.bestScore-a.bestScore
    })
-   const renderGroup=(g:typeof entries[number])=>{const isOpen=!!expandedRuns[g.runId];const runLabel=g.run?`${g.run.symbol} · ${g.run.market} · ${fmtDateTime(g.when)}`:`${g.list[0]?.symbol} · ${fmtDateTime(g.when)}`;const headerId=`run-group-${g.runId}`;return <div className="run-group" key={g.runId}><button id={headerId} className="run-group-header" onClick={()=>setExpandedRuns(prev=>({...prev,[g.runId]:!prev[g.runId]}))}><span className={`chevron ${isOpen?'open':''}`}>▸</span><b>{g.run?.seq!=null&&<span className="strategy-id">#{g.run.seq}</span>}{g.run?`${g.run.symbol} · ${g.run.market}`:g.list[0]?.symbol}</b><span>{fmtDateTime(g.when)}</span><span>{g.list.length} qualified</span>{g.run&&<span>{(g.run.tested_count??g.run.variations_requested).toLocaleString()} tested</span>}<span className={`star ${g.run?.favorite?'on':''}`} onClick={e=>{e.stopPropagation();g.run&&toggleFavoriteRun(g.runId)}}>{g.run?.favorite?'★':'☆'}</span><span className="run-delete" title="Delete this run" onClick={e=>{e.stopPropagation();setPendingDelete({kind:'run',runId:g.runId,label:runLabel})}}>🗑</span></button>{isOpen&&<div className="table">{g.list.map(s=><button className="row" key={s.id} style={{gridTemplateColumns:'2fr .6fr .8fr .8fr .8fr .8fr .4fr'}} onClick={()=>openStrategy(s)}><div><strong>{s.seq!=null&&<span className="strategy-id">#{s.seq}</span>}{s.name}</strong><span>{s.family} · completed {fmtDateTime(s.created_at)}</span><span className="how-it-works">{describeFamily(s.family,s.parameters)}</span></div><span>{s.metrics?.winRate?.toFixed(1)}% WR</span><span>{s.metrics?.returnPct?.toFixed(1)}% return</span><span>{s.metrics?.maxDrawdownPct?.toFixed(1)}% DD</span><span>{s.metrics?.sharpe?.toFixed(2)} Sharpe</span><span>{s.metrics?.trades} trades</span><span className={`star ${s.favorite?'on':''}`} onClick={e=>{e.stopPropagation();toggleFavoriteStrategy(s.id)}}>{s.favorite?'★':'☆'}</span></button>)}<button className="ghost back-to-top" onClick={()=>document.getElementById(headerId)?.scrollIntoView({behavior:'smooth',block:'start'})}>↑ BACK TO TOP</button></div>}</div>}
+   const renderGroup=(g:typeof entries[number])=>{const isOpen=!!expandedRuns[g.runId];const groupLabel=g.run?`${runLabel(g.run)} · ${fmtDateTime(g.when)}`:`${g.list[0]?.symbol} · ${fmtDateTime(g.when)}`;const headerId=`run-group-${g.runId}`;const isRenaming=g.run&&renamingRunId===g.run.id;return <div className="run-group" key={g.runId}><button id={headerId} className="run-group-header" onClick={()=>setExpandedRuns(prev=>({...prev,[g.runId]:!prev[g.runId]}))}><span className={`chevron ${isOpen?'open':''}`}>▸</span>{isRenaming?<span className="rename-inline" onClick={e=>e.stopPropagation()}><input value={renameRunValue} onChange={e=>setRenameRunValue(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')saveRenameRun(g.run!.id);if(e.key==='Escape')setRenamingRunId(null)}} autoFocus/><button className="ghost small-btn" onClick={()=>saveRenameRun(g.run!.id)}>SAVE</button><button className="ghost small-btn" onClick={()=>setRenamingRunId(null)}>CANCEL</button></span>:<b>{g.run?.seq!=null&&<span className="strategy-id">#{g.run.seq}</span>}{runLabel(g.run,g.list[0]?.symbol)}{g.run&&<button className="ghost small-btn rename-btn" title="Rename run" onClick={e=>{e.stopPropagation();startRenameRun(g.run!)}}>✎</button>}</b>}<span>{fmtDateTime(g.when)}</span><span>{g.list.length} qualified</span>{g.run&&<span>{(g.run.tested_count??g.run.variations_requested).toLocaleString()} tested</span>}<span className={`star ${g.run?.favorite?'on':''}`} onClick={e=>{e.stopPropagation();g.run&&toggleFavoriteRun(g.runId)}}>{g.run?.favorite?'★':'☆'}</span><span className="run-delete" title="Delete this run" onClick={e=>{e.stopPropagation();setPendingDelete({kind:'run',runId:g.runId,label:groupLabel})}}>🗑</span></button>{isOpen&&<div className="table">{g.list.map(s=><button className="row" key={s.id} style={{gridTemplateColumns:'2fr .6fr .8fr .8fr .8fr .8fr .4fr'}} onClick={()=>openStrategy(s)}><div><strong>{s.seq!=null&&<span className="strategy-id">#{s.seq}</span>}{s.name}</strong><span>{s.family} · completed {fmtDateTime(s.created_at)}</span><span className="how-it-works">{describeFamily(s.family,s.parameters)}</span></div><span>{s.metrics?.winRate?.toFixed(1)}% WR</span><span>{s.metrics?.returnPct?.toFixed(1)}% return</span><span>{s.metrics?.maxDrawdownPct?.toFixed(1)}% DD</span><span>{s.metrics?.sharpe?.toFixed(2)} Sharpe</span><span>{s.metrics?.trades} trades</span><span className={`star ${s.favorite?'on':''}`} onClick={e=>{e.stopPropagation();toggleFavoriteStrategy(s.id)}}>{s.favorite?'★':'☆'}</span></button>)}<button className="ghost back-to-top" onClick={()=>document.getElementById(headerId)?.scrollIntoView({behavior:'smooth',block:'start'})}>↑ BACK TO TOP</button></div>}</div>}
    const rest=entries.slice(6)
    return <div className="run-groups">{entries.slice(0,6).map(renderGroup)}{rest.length>0&&<details className="history-more"><summary>Show {rest.length} more run{rest.length>1?'s':''}</summary>{rest.map(renderGroup)}</details>}</div>
  })()}
  </section>
- <section className="panel run-history-panel"><div className="panel-title"><h2>RESEARCH RUN HISTORY</h2><span className="muted">Click a run for the full outcome</span></div>{runs.length===0?<div className="empty">Your completed research runs will appear here.</div>:(()=>{const renderRun=(r:Run)=>{const isSelected=selectedRun?.id===r.id;return <button className={`run-node status-${r.status}${isSelected?' selected':''}`} key={r.id} onClick={()=>patchRun({selectedRun:isSelected?null:r})}>
+ <section className="panel run-history-panel"><div className="panel-title"><h2>RESEARCH RUN HISTORY</h2><span className="muted">Click a run for the full outcome</span></div>{runs.length===0?<div className="empty">Your completed research runs will appear here.</div>:(()=>{const renderRun=(r:Run)=>{const isSelected=selectedRun?.id===r.id;const isRenaming=renamingRunId===r.id;return <button className={`run-node status-${r.status}${isSelected?' selected':''}`} key={r.id} onClick={()=>isRenaming?undefined:patchRun({selectedRun:isSelected?null:r})}>
    <span className="run-node-rail"><span className="run-node-pulse"></span></span>
-   <span className="run-node-id">{r.seq!=null&&<span className="strategy-id">#{r.seq}</span>}{r.symbol}<em>{r.market}</em></span>
+   {isRenaming?<span className="run-node-id rename-inline" onClick={e=>e.stopPropagation()}><input value={renameRunValue} onChange={e=>setRenameRunValue(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')saveRenameRun(r.id);if(e.key==='Escape')setRenamingRunId(null)}} autoFocus/><button className="ghost small-btn" onClick={()=>saveRenameRun(r.id)}>SAVE</button><button className="ghost small-btn" onClick={()=>setRenamingRunId(null)}>CANCEL</button></span>:<span className="run-node-id">{r.seq!=null&&<span className="strategy-id">#{r.seq}</span>}{r.name?.trim()?<>{r.name}<em>{r.symbol} · {r.market}</em></>:<>{r.symbol}<em>{r.market}</em></>}<button className="ghost small-btn rename-btn" title="Rename run" onClick={e=>{e.stopPropagation();startRenameRun(r)}}>✎</button></span>}
    <span className="run-node-time">{new Date(r.started_at).toLocaleString()}</span>
    <span className="run-node-stat"><b>{(r.tested_count??r.variations_requested).toLocaleString()}</b><small>tested</small></span>
    <span className="run-node-stat"><b>{(r.qualified_count||0).toLocaleString()}</b><small>qualified</small></span>
