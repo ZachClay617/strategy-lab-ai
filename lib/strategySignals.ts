@@ -1,5 +1,11 @@
-import type { Candle } from './market'
+import { fetchCandles, type Candle } from './market'
 import { computeIndicatorContext, signalForFamily, describeFamily as engineDescribeFamily, clampParamsToSession, maxHoldMsFor, sessionHoldExpired, TierKey } from '@/app/research/engine'
+
+// How many real days of history to pull for each bar size when checking a
+// favorited strategy's signal live — enough to cover typical SMA/lookback
+// periods with margin, without re-fetching a strategy's entire multi-year
+// research range on every poll.
+const LIVE_TIER_RANGE_DAYS:Record<string,number> = { '15m':10, '1h':60, '1d':400 }
 
 // Delegates to the exact same indicator math and per-bar decision rule as the
 // Research backtest engine (app/research/engine.ts's computeIndicatorContext/
@@ -52,15 +58,36 @@ export async function evaluateSymbolSignals(client:any, userId:string, symbol:st
   const openByStrategy=new Map<string,{id:string;opened_at:string}>((openPositions||[]).map((p:any)=>[p.strategy_id,p]))
   const hasOpenPositionForSymbol=(openPositions||[]).length>0
 
-  const i=candles.length-1
-  const lastClose=candles[i].close
   const created:LiveNotification[]=[]
+  // A strategy's params were tuned against whatever bar size it was actually
+  // validated on (15-minute/hourly/daily) — evaluating them against the raw
+  // 1-minute live feed (`candles`) applies e.g. a "50-period SMA" meant for
+  // 50 DAYS of daily closes to 50 minutes of 1-minute closes instead, an
+  // entirely different (and far noisier) calculation than what qualified it.
+  // Fetch and reuse one matching-bar-size series per distinct tier among this
+  // symbol's favorites instead, falling back to the live 1-minute feed only
+  // for strategies with no stored tier (older saves) or the live-mode tier.
+  const tierCandleCache=new Map<string,Candle[]>()
+  const candlesForTier=async(tierKey:string|undefined):Promise<Candle[]>=>{
+    if(!tierKey||tierKey==='live')return candles
+    if(tierCandleCache.has(tierKey))return tierCandleCache.get(tierKey)!
+    const rangeDays=LIVE_TIER_RANGE_DAYS[tierKey]||60
+    const result=await fetchCandles(symbol,{interval:tierKey,rangeDays})
+    const list='candles' in result?result.candles:[]
+    tierCandleCache.set(tierKey,list)
+    return list
+  }
 
   for(const strat of favorites){
     let params=strat.parameters
     if(typeof params==='string'){try{params=JSON.parse(params)}catch{continue}}
     if(!params)continue
-    const sig=signalFor(candles,i,strat.family,params)
+    const tier=strat.sessions?.[0]?.tier as TierKey|undefined
+    const tierCandles=await candlesForTier(tier)
+    if(tierCandles.length<2)continue
+    const ci=tierCandles.length-1
+    const tierClose=tierCandles[ci].close
+    const sig=signalFor(tierCandles,ci,strat.family,params)
     const openPos=openByStrategy.get(strat.id)
 
     if(!hasOpenPositionForSymbol&&sig.long){
@@ -69,7 +96,7 @@ export async function evaluateSymbolSignals(client:any, userId:string, symbol:st
       if(pending?.length)continue
       const {data:inserted}=await client.from('trade_notifications').insert({
         user_id:userId,strategy_id:strat.id,strategy_name:strat.name,symbol,market,action:'buy',
-        price:lastClose,reason:describeFamily(strat.family,params)
+        price:tierClose,reason:describeFamily(strat.family,params)
       }).select().maybeSingle()
       if(inserted)created.push(inserted as LiveNotification)
     } else if(openPos){
@@ -78,7 +105,6 @@ export async function evaluateSymbolSignals(client:any, userId:string, symbol:st
       // for 15-minute), so a live position left open past that isn't something the
       // backtest that qualified it would ever have let ride — it should close the
       // same way, on a "sell signal OR held too long" basis, not sell-signal-only.
-      const tier=strat.sessions?.[0]?.tier as TierKey|undefined
       const maxHoldMs=tier?maxHoldMsFor(tier):undefined
       const heldTooLong=tier==='15m'
         ? sessionHoldExpired(openPos.opened_at,new Date().toISOString())
@@ -89,7 +115,7 @@ export async function evaluateSymbolSignals(client:any, userId:string, symbol:st
         if(pending?.length)continue
         const {data:inserted}=await client.from('trade_notifications').insert({
           user_id:userId,strategy_id:strat.id,strategy_name:strat.name,symbol,market,action:'sell',
-          price:lastClose,reason:heldTooLong&&!sig.sell?`Maximum hold time reached for this strategy's bar size (${describeFamily(strat.family,params)})`:describeFamily(strat.family,params),position_id:openPos.id
+          price:tierClose,reason:heldTooLong&&!sig.sell?`Maximum hold time reached for this strategy's bar size (${describeFamily(strat.family,params)})`:describeFamily(strat.family,params),position_id:openPos.id
         }).select().maybeSingle()
         if(inserted)created.push(inserted as LiveNotification)
       }
