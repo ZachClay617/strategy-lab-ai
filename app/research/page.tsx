@@ -712,6 +712,12 @@ export default function Home(){
  })()}
  {(()=>{
    const favStrategies=strategies.filter(s=>s.favorite).sort((a,b)=>new Date(b.created_at).getTime()-new Date(a.created_at).getTime())
+   // Grouped by ticker (alphabetical) so favorites for the same symbol sit
+   // together instead of interleaved by whenever each one was favorited —
+   // within a ticker, strongest score first.
+   const byTicker:Record<string,Strategy[]>={}
+   for(const s of favStrategies)(byTicker[s.symbol]||=[]).push(s)
+   const tickerGroups=Object.entries(byTicker).map(([symbol,list])=>({symbol,list:list.slice().sort((a,b)=>b.score-a.score)})).sort((a,b)=>a.symbol.localeCompare(b.symbol))
    const renderFavStrategyCard=(s:Strategy)=><div className="fav-card" key={s.id}>
      <button className="fav-card-star" title="Unpin" onClick={()=>toggleFavoriteStrategy(s.id)}>★</button>
      <button className="fav-card-body" onClick={()=>openStrategy(s)}>
@@ -731,8 +737,11 @@ export default function Home(){
      </button>
      {favStrategiesOpen&&<div className="fav-tray">
        {favStrategies.length===0?<div className="empty">Star an individual strategy in the Successful Strategy Log below to pin it here.</div>:<>
-       <button className="ghost fav-download" onClick={()=>downloadFavoritedStrategiesDocx(`favorited-strategies-${new Date().toISOString().slice(0,10)}.docx`,favStrategies)}>⬇ DOWNLOAD FAVORITED STRATEGIES</button>
-       <div className="fav-tray-scroll">{favStrategies.map(renderFavStrategyCard)}</div></>}
+       <button className="ghost fav-download" onClick={()=>downloadFavoritedStrategiesDocx(`favorited-strategies-${new Date().toISOString().slice(0,10)}.docx`,tickerGroups.flatMap(g=>g.list))}>⬇ DOWNLOAD FAVORITED STRATEGIES</button>
+       <div className="fav-ticker-groups">{tickerGroups.map(g=><div className="fav-ticker-group" key={g.symbol}>
+         <div className="fav-ticker-heading"><span>{g.symbol}</span><small>{g.list.length} favorited</small></div>
+         <div className="fav-tray-scroll">{g.list.map(renderFavStrategyCard)}</div>
+       </div>)}</div></>}
      </div>}
    </div>
  })()}
