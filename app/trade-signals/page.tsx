@@ -93,7 +93,13 @@ export default function TradeSignalsPage(){
           if(Array.isArray(j)&&j.length){
             setCandlesByKey(prev=>({...prev,[k]:j}))
             setErrorByKey(prev=>({...prev,[k]:null}))
-            await evaluateSymbolSignals(supabase!,session.user.id,w.symbol,w.market,j)
+            // Isolated from the candle-fetch success above: a failure here (a bad
+            // saved strategy, an RLS/schema issue, whatever) must never overwrite
+            // the error state we just cleared — otherwise a working market-data
+            // fetch gets permanently mislabeled as "unavailable" every single poll
+            // because of something unrelated to fetching candles.
+            try{await evaluateSymbolSignals(supabase!,session.user.id,w.symbol,w.market,j)}
+            catch(e){console.error(`Signal check failed for ${w.symbol}`,e)}
           } else if(j?.error==='invalid_ticker'){
             setErrorByKey(prev=>({...prev,[k]:j.message||`"${w.symbol}" is not a recognized ticker symbol.`}))
           } else {
