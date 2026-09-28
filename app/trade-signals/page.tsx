@@ -31,6 +31,7 @@ export default function TradeSignalsPage(){
   const [positions,setPositions]=useState<Position[]>([])
   const [recentSignals,setRecentSignals]=useState<NotifRow[]>([])
   const [lastChecked,setLastChecked]=useState<string>('')
+  const [symbolNames,setSymbolNames]=useState<Record<string,string>>({})
 
   useEffect(()=>{
     if(!supabase)return
@@ -61,6 +62,16 @@ export default function TradeSignalsPage(){
     await loadWatchlist()
     setActiveKey(key(symbol,newMarket))
   }
+
+  // Look up company names for any watched symbols we don't have one for yet.
+  useEffect(()=>{
+    if(!session?.user||!watchlist.length)return
+    const missing=Array.from(new Set(watchlist.map(w=>w.symbol))).filter(s=>!(s in symbolNames))
+    if(!missing.length)return
+    let dead=false
+    fetch(`/api/market?names=${encodeURIComponent(missing.join(','))}`).then(r=>r.json()).then(j=>{if(!dead&&j&&typeof j==='object')setSymbolNames(prev=>({...prev,...j}))}).catch(()=>{})
+    return()=>{dead=true}
+  },[session?.user?.id,watchlist])
 
   async function removeFromWatchlist(id:string){
     if(!supabase)return
@@ -193,7 +204,7 @@ export default function TradeSignalsPage(){
     {!watchlist.length?<section className="panel"><div className="empty">Add a ticker above to start watching it — A-TAMP will check every favorited strategy tested on that symbol against live prices, on this ticker and any others you add, all at once.</div></section>:<>
       <section className="panel">
         <div className="panel-title"><h2>LIVE MARKET CHART</h2><span className="muted">{active?`${active.symbol} · ${active.market}`:''}</span></div>
-        <LiveChart candles={activeCandles} markers={markers} title={active?.symbol||''} windowSize={60}/>
+        <LiveChart candles={activeCandles} markers={markers} title={active?`${active.symbol}${symbolNames[active.symbol]?` · ${symbolNames[active.symbol]}`:''}`:''} windowSize={60}/>
         {active&&errorByKey[key(active.symbol,active.market)]&&(()=>{
           const msg=errorByKey[key(active.symbol,active.market)]!
           const retrying=msg.startsWith(RETRY_MSG)
