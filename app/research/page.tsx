@@ -4,6 +4,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx'
 import {
   STARTING_CAPITAL, FAMILIES as families, RESOLUTION_TIERS, TierKey, maxHoldMsFor, tierLabel,
   describeFamily, backtestSession, combineMetrics, hardSafetyCheck, evaluateQualification,
@@ -136,14 +137,49 @@ function makeSynthetic(symbol:string, days:number):Candle[]{const r=seeded(symbo
 // signalFor/describeFamily/backtest/aggregateMetrics/randomParams now live in ./engine
 // (single source of truth for indicators, execution, and metrics math).
 function fmtDateTime(iso?:string){if(!iso)return '—';return new Date(iso).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'})}
-function downloadJSON(filename:string,data:any){
-  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'})
+function downloadBlob(filename:string,blob:Blob){
   const url=URL.createObjectURL(blob)
   const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove()
   URL.revokeObjectURL(url)
 }
-function strategyExportRow(s:Strategy){
-  return {name:s.name,symbol:s.symbol,market:s.market,family:s.family,parameters:s.parameters,score:s.score,approved:s.approved,metrics:s.metrics,explanation:s.explanation,test_start_at:s.test_start_at,test_end_at:s.test_end_at,created_at:s.created_at}
+function strategyDocParagraphs(s:Strategy):Paragraph[]{
+  const m=s.metrics||{}
+  const num=(v:any,d=2)=>typeof v==='number'?v.toFixed(d):'—'
+  return [
+    new Paragraph({heading:HeadingLevel.HEADING_2,children:[new TextRun(`${s.seq!=null?`#${s.seq} `:''}${s.name}`)]}),
+    new Paragraph({children:[new TextRun({text:`${s.symbol} · ${s.market} · ${s.family}`,italics:true})]}),
+    new Paragraph({children:[new TextRun(`Win rate: ${num(m.winRate,1)}%   Return: ${num(m.returnPct)}%   Drawdown: ${num(m.maxDrawdownPct,1)}%   Sharpe: ${num(m.sharpe)}   Trades: ${m.trades??'—'}`)]}),
+    new Paragraph({children:[new TextRun(`Window: ${fmtDateTime(s.test_start_at||undefined)} → ${fmtDateTime(s.test_end_at||undefined)} · Saved ${fmtDateTime(s.created_at)}`)]}),
+    new Paragraph({children:[new TextRun({text:'Parameters: ',bold:true}),new TextRun(JSON.stringify(s.parameters))]}),
+    new Paragraph({children:[new TextRun(s.explanation||'')]}),
+    new Paragraph({text:''}),
+  ]
+}
+async function downloadFavoritedLogsDocx(filename:string,entries:{run?:Run|null,list:Strategy[],when?:string}[]){
+  const children:Paragraph[]=[
+    new Paragraph({heading:HeadingLevel.TITLE,children:[new TextRun('Favorited Strategy Logs')]}),
+    new Paragraph({children:[new TextRun({text:`Exported ${new Date().toLocaleString()}`,italics:true})]}),
+    new Paragraph({text:''}),
+  ]
+  for(const g of entries){
+    children.push(new Paragraph({heading:HeadingLevel.HEADING_1,children:[new TextRun(g.run?`${g.run.symbol} · ${g.run.market}`:g.list[0]?.symbol||'Run')]}))
+    if(g.run)children.push(new Paragraph({children:[new TextRun(`Started ${fmtDateTime(g.run.started_at)} · Tested ${(g.run.tested_count??g.run.variations_requested).toLocaleString()} · Qualified ${g.run.qualified_count}`)]}))
+    if(g.run?.summary)children.push(new Paragraph({children:[new TextRun(g.run.summary)]}))
+    children.push(new Paragraph({text:''}))
+    for(const s of g.list)children.push(...strategyDocParagraphs(s))
+  }
+  const blob=await Packer.toBlob(new Document({sections:[{children}]}))
+  downloadBlob(filename,blob)
+}
+async function downloadFavoritedStrategiesDocx(filename:string,list:Strategy[]){
+  const children:Paragraph[]=[
+    new Paragraph({heading:HeadingLevel.TITLE,children:[new TextRun('Favorited Strategies')]}),
+    new Paragraph({children:[new TextRun({text:`Exported ${new Date().toLocaleString()}`,italics:true})]}),
+    new Paragraph({text:''}),
+  ]
+  for(const s of list)children.push(...strategyDocParagraphs(s))
+  const blob=await Packer.toBlob(new Document({sections:[{children}]}))
+  downloadBlob(filename,blob)
 }
 function fmtClock(iso?:string){if(!iso)return '—';return new Date(iso).toLocaleTimeString('en-US',{timeZone:'America/New_York',hour:'numeric',minute:'2-digit'})}
 function etParts(iso:string){
@@ -597,7 +633,7 @@ export default function Home(){
      </button>
      {favLogsOpen&&<div className="fav-tray">
        {favEntries.length===0?<div className="empty">Star a run in the Successful Strategy Log below to pin it here.</div>:<>
-       <button className="ghost fav-download" onClick={()=>downloadJSON(`favorited-strategy-logs-${new Date().toISOString().slice(0,10)}.json`,favEntries.map(g=>({run:g.run?{symbol:g.run.symbol,market:g.run.market,started_at:g.run.started_at,finished_at:g.run.finished_at,tested:g.run.tested_count??g.run.variations_requested,qualified:g.run.qualified_count,summary:g.run.summary}:null,strategies:g.list.map(strategyExportRow)})))}>⬇ DOWNLOAD FAVORITED LOGS</button>
+       <button className="ghost fav-download" onClick={()=>downloadFavoritedLogsDocx(`favorited-strategy-logs-${new Date().toISOString().slice(0,10)}.docx`,favEntries)}>⬇ DOWNLOAD FAVORITED LOGS</button>
        <div className="fav-tray-scroll">{favEntries.map(renderFavCard)}</div></>}
      </div>}
    </div>
@@ -623,7 +659,7 @@ export default function Home(){
      </button>
      {favStrategiesOpen&&<div className="fav-tray">
        {favStrategies.length===0?<div className="empty">Star an individual strategy in the Successful Strategy Log below to pin it here.</div>:<>
-       <button className="ghost fav-download" onClick={()=>downloadJSON(`favorited-strategies-${new Date().toISOString().slice(0,10)}.json`,favStrategies.map(strategyExportRow))}>⬇ DOWNLOAD FAVORITED STRATEGIES</button>
+       <button className="ghost fav-download" onClick={()=>downloadFavoritedStrategiesDocx(`favorited-strategies-${new Date().toISOString().slice(0,10)}.docx`,favStrategies)}>⬇ DOWNLOAD FAVORITED STRATEGIES</button>
        <div className="fav-tray-scroll">{favStrategies.map(renderFavStrategyCard)}</div></>}
      </div>}
    </div>
