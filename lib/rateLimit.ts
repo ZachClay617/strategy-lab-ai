@@ -41,12 +41,21 @@ function memoryLimit(key:string,limit:number,windowMs:number):Omit<RateLimitResu
 
 // ---------- Upstash-backed limiter (one Ratelimit instance per distinct tier shape, cached) ----------
 const limiterCache=new Map<string,Ratelimit>()
+// Shared across every limiter instance on this warm serverless/edge instance.
+// @upstash/ratelimit uses this to remember identities that are ALREADY over
+// limit and skip the Redis round-trip entirely on their next request until
+// the block expires — real savings specifically during a burst/abuse spike
+// (repeated requests from one over-limit caller), which is exactly when
+// command volume would otherwise spike fastest. It doesn't reduce the cost
+// of normal, under-limit polling, which still needs a real Redis check every
+// time to enforce the limit correctly.
+const ephemeralCache=new Map<string,number>()
 function getLimiter(limit:number,windowMs:number):Ratelimit{
   const cacheKey=`${limit}:${windowMs}`
   let rl=limiterCache.get(cacheKey)
   if(!rl){
     const seconds=Math.max(1,Math.round(windowMs/1000))
-    rl=new Ratelimit({redis:redis!,limiter:Ratelimit.slidingWindow(limit,`${seconds} s`),prefix:'ratelimit',analytics:false})
+    rl=new Ratelimit({redis:redis!,limiter:Ratelimit.slidingWindow(limit,`${seconds} s`),prefix:'ratelimit',analytics:false,ephemeralCache})
     limiterCache.set(cacheKey,rl)
   }
   return rl
