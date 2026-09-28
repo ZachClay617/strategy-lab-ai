@@ -24,6 +24,26 @@ export function maxHoldMsFor(tierKey:TierKey){
   if(tierKey==='1d')return 5*24*60*60*1000
   return undefined
 }
+// ET wall-clock minutes-of-day for a timestamp — shared by the 15m session window
+// logic (research) and the live max-hold check (strategySignals), so both agree on
+// where the 9:00 AM–12:00 PM ET boundary actually falls in UTC.
+export function minutesOfDayET(iso:string):number{
+  const fmt=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',hour:'2-digit',minute:'2-digit',hour12:false})
+  const parts:any={}
+  fmt.formatToParts(new Date(iso)).forEach(p=>{if(p.type!=='literal')parts[p.type]=p.value})
+  let hour=+parts.hour; if(hour===24)hour=0
+  return hour*60+(+parts.minute)
+}
+// A 15-minute-tier strategy's "must close within the session" rule doesn't map to a
+// fixed duration — it means "by 12:00 PM ET the same day it opened, whenever that
+// is." Anything opened before today's 12:00 PM ET cutoff (or on an earlier day) is
+// overdue; the position stays open harmlessly overnight/over the weekend otherwise
+// since there's no live-monitoring equivalent of "the next session" to close it at.
+export function sessionHoldExpired(openedAtIso:string, nowIso:string):boolean{
+  const dayFmt=new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'})
+  if(dayFmt.format(new Date(nowIso))!==dayFmt.format(new Date(openedAtIso)))return true
+  return minutesOfDayET(nowIso)>=SESSION_END_MIN
+}
 // Bars-per-year used to annualize Sharpe correctly per resolution, instead of
 // always assuming daily bars (sqrt(252)). 15m uses the ~3h morning session
 // only (12 bars/day); 1h assumes a standard ~6.5h equity session.
