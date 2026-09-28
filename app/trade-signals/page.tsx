@@ -12,6 +12,7 @@ type NotifRow = { id:string; strategy_id:string|null; action:'buy'|'sell'; price
 
 const markets=['Stocks','Crypto']
 const key=(symbol:string,market:string)=>`${symbol}::${market}`
+const RETRY_MSG='Live data temporarily unavailable — retrying…'
 
 function fmtPrice(n:number){return new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:2}).format(n)}
 function fmtDateTime(iso?:string){if(!iso)return '—';return new Date(iso).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}
@@ -100,10 +101,10 @@ export default function TradeSignalsPage(){
             // through silently, leaving the chart stuck on "Waiting for market
             // data…" forever with no indication anything was wrong. Surface it and
             // keep the last good candles on screen instead of clearing them.
-            setErrorByKey(prev=>({...prev,[k]:'Live data temporarily unavailable — retrying…'}))
+            setErrorByKey(prev=>({...prev,[k]:RETRY_MSG}))
           }
         }catch{
-          if(!dead)setErrorByKey(prev=>({...prev,[k]:'Live data temporarily unavailable — retrying…'}))
+          if(!dead)setErrorByKey(prev=>({...prev,[k]:RETRY_MSG}))
         }
       }))
       if(!dead)setLastChecked(new Date().toLocaleTimeString())
@@ -186,7 +187,13 @@ export default function TradeSignalsPage(){
       <section className="panel">
         <div className="panel-title"><h2>LIVE MARKET CHART</h2><span className="muted">{active?`${active.symbol} · ${active.market}`:''}</span></div>
         <LiveChart candles={activeCandles} markers={markers} title={active?.symbol||''} windowSize={60}/>
-        {active&&errorByKey[key(active.symbol,active.market)]&&<p className="field-warning" style={{marginTop:10}}>⚠ {errorByKey[key(active.symbol,active.market)]}</p>}
+        {active&&errorByKey[key(active.symbol,active.market)]&&(()=>{
+          const msg=errorByKey[key(active.symbol,active.market)]!
+          const retrying=msg===RETRY_MSG
+          return retrying
+            ? <p className="retry-banner" style={{marginTop:10}}><span className="retry-pulse-dot"/><span className="retry-text">{msg}</span></p>
+            : <p className="field-warning" style={{marginTop:10}}>⚠ {msg}</p>
+        })()}
       </section>
 
       <section className="panel">
