@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { fetchCandles, fetchSymbolNames } from '@/lib/market'
+import { checkRateLimit, clientIp, rateLimitedPayload } from '@/lib/rateLimit'
 
 export async function GET(req:NextRequest){
+  const rl=checkRateLimit('market',clientIp(req),[
+    {limit:120,windowMs:60_000,label:'burst'},
+    {limit:2000,windowMs:3_600_000,label:'hourly'},
+  ])
+  if(!rl.ok){
+    const p=rateLimitedPayload(rl)
+    return NextResponse.json(p.body,{status:p.status,headers:p.headers})
+  }
   const namesParam=req.nextUrl.searchParams.get('names')
   if(namesParam){
     const symbols=namesParam.split(',').map(s=>s.trim()).filter(Boolean)

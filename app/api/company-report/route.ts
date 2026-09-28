@@ -3,6 +3,7 @@ import {
   fetchQuoteSummary, fetchQuoteSummaryLite, fetchCompetitorSymbols, fetchNews, fetchDailyCandles,
   raw, dateStr, sma, rsi, macd, atr, periodReturn, NOT_REPORTED, UNAVAILABLE,
 } from '@/lib/companyReport'
+import { checkRateLimit, clientIp, rateLimitedPayload } from '@/lib/rateLimit'
 
 export const dynamic = 'force-dynamic'
 // Vercel's regular serverless functions run on AWS Lambda IPs that Yahoo
@@ -42,6 +43,18 @@ const CRYPTO_NOT_SUPPORTED = (symbol: string) =>
   `Company Analysis Reports aren't available for cryptocurrencies. This report is built from real SEC filings, earnings, insider activity, and analyst estimates — none of that exists for "${symbol}", since it isn't a publicly traded company. Try a stock or ETF ticker instead.`
 
 export async function GET(req: NextRequest) {
+  // This single request fans out to several Yahoo endpoints per competitor
+  // (quoteSummary + 5 years of daily candles, times up to a handful of
+  // competitors) plus a news fetch — one of the heavier routes in the app,
+  // so it gets a tighter limit than plain candle polling.
+  const rl = checkRateLimit('company-report', clientIp(req), [
+    { limit: 15, windowMs: 60_000, label: 'burst' },
+    { limit: 100, windowMs: 3_600_000, label: 'hourly' },
+  ])
+  if (!rl.ok) {
+    const p = rateLimitedPayload(rl)
+    return NextResponse.json(p.body, { status: p.status, headers: p.headers })
+  }
   const symbol = (req.nextUrl.searchParams.get('symbol') || '').trim().toUpperCase()
   if (!symbol) return NextResponse.json({ error: 'Provide a ticker symbol.' }, { status: 400 })
   // Yahoo lists every crypto pair as SYMBOL-USD (BTC-USD, ETH-USD, ...) — catch

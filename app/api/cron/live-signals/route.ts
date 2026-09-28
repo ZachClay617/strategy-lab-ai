@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { fetchCandles } from '@/lib/market'
 import { evaluateSymbolSignals } from '@/lib/strategySignals'
+import { checkRateLimit, clientIp, rateLimitedPayload } from '@/lib/rateLimit'
 
 // Called periodically by an external scheduler (same pattern as
 // /api/cron/portfolio-snapshots) so favorited strategies keep being checked
@@ -19,6 +20,13 @@ function isAuthorized(req:NextRequest){
 }
 
 export async function GET(req:NextRequest){
+  // Ahead of the secret check on purpose — also throttles repeated wrong-secret
+  // guesses from the same IP, not just legitimate-but-excessive calls.
+  const rl=checkRateLimit('cron-live-signals',clientIp(req),[{limit:30,windowMs:3_600_000,label:'hourly'}])
+  if(!rl.ok){
+    const p=rateLimitedPayload(rl)
+    return NextResponse.json(p.body,{status:p.status,headers:p.headers})
+  }
   if(!isAuthorized(req))return NextResponse.json({error:'unauthorized'},{status:401})
 
   const url=process.env.NEXT_PUBLIC_SUPABASE_URL
