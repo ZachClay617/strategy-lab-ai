@@ -34,6 +34,13 @@ export default function TradeSignalsPage(){
   const [symbolNames,setSymbolNames]=useState<Record<string,string>>({})
   const [cronStaleMinutes,setCronStaleMinutes]=useState<number|null>(null)
   const [closingId,setClosingId]=useState<string|null>(null)
+  // Display-only: the full trading day's 15-minute candles for whichever
+  // ticker is active, fetched completely separately from candlesByKey (the
+  // 1-minute live feed the actual buy/sell signal checking loop uses below).
+  // This never touches evaluateSymbolSignals, favStrategies, positions, or
+  // errorByKey — it only decides what the chart on screen looks like.
+  const [dayChartCandles,setDayChartCandles]=useState<Candle[]>([])
+  const [dayChartError,setDayChartError]=useState<string|null>(null)
 
   useEffect(()=>{
     if(!supabase)return
@@ -204,15 +211,49 @@ export default function TradeSignalsPage(){
     return ()=>{dead=true;clearInterval(id)}
   },[session?.user?.id,favStrategies])
 
+  // Display-only chart data: the active ticker's full trading day of real
+  // 15-minute candles, fetched independently of the 1-minute live feed above
+  // (candlesByKey) that evaluateSymbolSignals actually checks for buy/sell
+  // signals. Purely cosmetic — changing this can never affect what the
+  // signal-checking code sees or does.
+  useEffect(()=>{
+    const activeItem=watchlist.find(w=>key(w.symbol,w.market)===activeKey)||null
+    if(!activeItem){setDayChartCandles([]);setDayChartError(null);return}
+    let dead=false
+    const load=async()=>{
+      try{
+        const r=await fetch(`/api/market?symbol=${encodeURIComponent(activeItem.symbol)}&interval=15m&rangeDays=5`)
+        const j=await r.json()
+        if(dead)return
+        if(!Array.isArray(j)||!j.length){setDayChartError(j?.message||j?.error||'No 15-minute data available.');return}
+        // Keep only the most recent trading day present (today's session while
+        // the market is open or has already closed today; the last completed
+        // session otherwise, e.g. over a weekend) — market hours fall inside a
+        // single UTC calendar date, so a plain date-string match is enough.
+        const lastDay=j[j.length-1].date.slice(0,10)
+        setDayChartCandles(j.filter((c:Candle)=>c.date.slice(0,10)===lastDay))
+        setDayChartError(null)
+      }catch(e){
+        if(!dead)setDayChartError(String((e as any)?.message||e))
+      }
+    }
+    load()
+    const id=setInterval(load,60000)
+    return ()=>{dead=true;clearInterval(id)}
+  },[activeKey,watchlist])
+
   if(!supabase)return <div className="shell"><p className="msg banner">Add Supabase environment variables first.</p></div>
   if(!session)return <div className="shell"><p className="msg banner">Log in on the <a href="/research">Research</a> page first, then come back here.</p></div>
 
   const active=watchlist.find(w=>key(w.symbol,w.market)===activeKey)||null
-  const activeCandles=active?candlesByKey[key(active.symbol,active.market)]||[]:[]
   const activeStrategyIds=new Set(favStrategies.filter(s=>active&&s.symbol===active.symbol&&s.market===active.market).map(s=>s.id))
+  // Markers are placed against dayChartCandles (the display-only 15-minute
+  // series) purely so they land on the right bars visually — recentSignals
+  // itself still comes from the real trade_notifications the signal-checking
+  // loop wrote, untouched by this change.
   const markers:ChartMarker[]=recentSignals.filter(s=>activeStrategyIds.has(s.strategy_id||'')).map(s=>{
-    const idx=activeCandles.findIndex(c=>new Date(c.date).getTime()>=new Date(s.created_at).getTime())
-    return {index:idx>=0?idx:activeCandles.length-1,type:s.action,price:s.price||0}
+    const idx=dayChartCandles.findIndex(c=>new Date(c.date).getTime()>=new Date(s.created_at).getTime())
+    return {index:idx>=0?idx:dayChartCandles.length-1,type:s.action,price:s.price||0}
   })
 
   return <div className="shell">
@@ -244,7 +285,8 @@ export default function TradeSignalsPage(){
     {!watchlist.length?<section className="panel"><div className="empty">Add a ticker above to start watching it — A-TAMP will check every favorited strategy tested on that symbol against live prices, on this ticker and any others you add, all at once.</div></section>:<>
       <section className="panel">
         <div className="panel-title"><h2>LIVE MARKET CHART</h2><span className="muted">{active?`${active.symbol} · ${active.market}`:''}</span></div>
-        <LiveChart candles={activeCandles} markers={markers} title={active?`${active.symbol}${symbolNames[active.symbol]?` · ${symbolNames[active.symbol]}`:''}`:''} windowSize={60}/>
+        <LiveChart candles={dayChartCandles} markers={markers} title={active?`${active.symbol}${symbolNames[active.symbol]?` · ${symbolNames[active.symbol]}`:''}`:''} windowSize={30}/>
+        {active&&!dayChartCandles.length&&dayChartError&&<p className="field-warning" style={{marginTop:10}}>⚠ {dayChartError}</p>}
         {active&&errorByKey[key(active.symbol,active.market)]&&(()=>{
           const msg=errorByKey[key(active.symbol,active.market)]!
           const retrying=msg.startsWith(RETRY_MSG)
