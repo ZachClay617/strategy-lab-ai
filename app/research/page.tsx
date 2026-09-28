@@ -323,7 +323,7 @@ export default function Home(){
  async function loadData(){
    if(!supabase||!session?.user)return
    const isJwtIssue=(e:any)=>{const m=(e?.message||'').toLowerCase();return m.includes('jwt')||m.includes('token')}
-   const fetchAll=()=>Promise.all([supabase!.from('strategies').select('id,run_id,user_id,symbol,market,name,family,parameters,source,approved,score,metrics,explanation,test_start_at,test_end_at,created_at,favorite,seq').eq('user_id',session.user.id).order('created_at',{ascending:false}).limit(500),supabase!.from('research_runs').select('*').eq('user_id',session.user.id).order('started_at',{ascending:false}).limit(50)])
+   const fetchAll=()=>Promise.all([supabase!.from('strategies').select('id,run_id,user_id,symbol,market,name,family,parameters,source,approved,score,metrics,explanation,test_start_at,test_end_at,created_at,favorite,seq').eq('user_id',session.user.id).order('created_at',{ascending:false}).limit(20000),supabase!.from('research_runs').select('*').eq('user_id',session.user.id).order('started_at',{ascending:false}).limit(50)])
    let [{data:s,error:sErr},{data:r,error:rErr}]=await fetchAll()
    if(isJwtIssue(sErr)||isJwtIssue(rErr)){
      await supabase.auth.refreshSession()
@@ -547,7 +547,10 @@ export default function Home(){
      const existingIdx=best.findIndex(x=>x.key===key)
      if(existingIdx>=0){if(rankVal>best[existingIdx].rankVal)best[existingIdx]={family,params,candidate,rankVal,key,isMetrics,oosMetrics,folds:foldMetricsList,execution:EXECUTION,qual:{category:qual.category,reason:qual.reason}}}
      else best.push({family,params,candidate,rankVal,key,isMetrics,oosMetrics,folds:foldMetricsList,execution:EXECUTION,qual:{category:qual.category,reason:qual.reason}})
-     best.sort((a,b)=>b.rankVal-a.rankVal);if(best.length>100)best.pop()
+     // Every qualifier is kept (not just a top-N slice) so downloaded favorited
+     // logs and the strategy log always report on every single qualifier from
+     // the run, not a truncated subset.
+     best.sort((a,b)=>b.rankVal-a.rankVal)
    } else {
      rejections[qual.category]=(rejections[qual.category]||0)+1
    }
