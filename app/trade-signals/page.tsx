@@ -32,6 +32,7 @@ export default function TradeSignalsPage(){
   const [recentSignals,setRecentSignals]=useState<NotifRow[]>([])
   const [lastChecked,setLastChecked]=useState<string>('')
   const [symbolNames,setSymbolNames]=useState<Record<string,string>>({})
+  const [cronStaleMinutes,setCronStaleMinutes]=useState<number|null>(null)
 
   useEffect(()=>{
     if(!supabase)return
@@ -72,6 +73,25 @@ export default function TradeSignalsPage(){
     fetch(`/api/market?names=${encodeURIComponent(missing.join(','))}`).then(r=>r.json()).then(j=>{if(!dead&&j&&typeof j==='object')setSymbolNames(prev=>({...prev,...j}))}).catch(()=>{})
     return()=>{dead=true}
   },[session?.user?.id,watchlist])
+
+  // Warns if the always-on background job (GitHub Actions, every ~5 min) has
+  // gone stale — it auto-disables after 60 days of repo inactivity, and a
+  // CRON_SECRET mismatch between GitHub and Vercel fails it silently. This is
+  // the only signal the user gets that background monitoring stopped, since
+  // nothing emails/texts on it; missing entirely (migration not run yet, or
+  // the job has genuinely never fired) is treated as "unknown," not "stale."
+  useEffect(()=>{
+    if(!supabase||!session?.user)return
+    let dead=false
+    const check=async()=>{
+      const {data}=await supabase!.from('cron_heartbeats').select('last_run_at').eq('name','live-signals').maybeSingle()
+      if(dead)return
+      setCronStaleMinutes(data?.last_run_at?Math.round((Date.now()-new Date(data.last_run_at).getTime())/60000):null)
+    }
+    check()
+    const id=setInterval(check,120000)
+    return ()=>{dead=true;clearInterval(id)}
+  },[session?.user?.id])
 
   async function removeFromWatchlist(id:string){
     if(!supabase)return
@@ -177,6 +197,7 @@ export default function TradeSignalsPage(){
   })
 
   return <div className="shell">
+    {cronStaleMinutes!=null&&cronStaleMinutes>15&&<p className="msg banner" style={{marginBottom:16}}>⚠ Background signal checks haven't run in {cronStaleMinutes} minutes (expected every ~5). Buy/sell checks are still running normally while this page stays open, but favorited strategies may go unchecked while you're away. This usually means the scheduled GitHub Actions job stopped — check the Actions tab in the repo, or that CRON_SECRET still matches between GitHub and Vercel.</p>}
     <section className="hero"><div><div className="eyebrow">ALWAYS-ON SIGNAL ENGINE</div><h1>Trade <span>Signals.</span></h1><p className="muted">Add every ticker you want watched. A-TAMP checks each one's favorited strategies against live prices at once and tells you exactly when to buy or sell on whatever platform you trade with — even while you're on another page.</p></div></section>
 
     <section className="panel">
