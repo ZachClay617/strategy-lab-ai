@@ -1,5 +1,6 @@
 import './globals.css'
 import type { Metadata } from 'next'
+import { Analytics } from '@vercel/analytics/next'
 import NavBar from './components/NavBar'
 import TradeSignalToast from './components/TradeSignalToast'
 
@@ -16,5 +17,6 @@ export default function RootLayout({children}:{children:React.ReactNode}) {
     <NavBar/>
     {children}
     <TradeSignalToast/>
+    <Analytics />
   </body></html>
 }
