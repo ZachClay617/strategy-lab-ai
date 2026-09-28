@@ -147,6 +147,7 @@ function strategyDocParagraphs(s:Strategy):Paragraph[]{
   const num=(v:any,d=2)=>typeof v==='number'?v.toFixed(d):'—'
   return [
     new Paragraph({heading:HeadingLevel.HEADING_2,children:[new TextRun(`${s.seq!=null?`#${s.seq} `:''}${s.name}`)]}),
+    new Paragraph({children:[new TextRun({text:`Strategy ID: #${s.seq??'—'}  (record ${s.id})`,bold:true})]}),
     new Paragraph({children:[new TextRun({text:`${s.symbol} · ${s.market} · ${s.family}`,italics:true})]}),
     new Paragraph({children:[new TextRun(`Win rate: ${num(m.winRate,1)}%   Return: ${num(m.returnPct)}%   Drawdown: ${num(m.maxDrawdownPct,1)}%   Sharpe: ${num(m.sharpe)}   Trades: ${m.trades??'—'}`)]}),
     new Paragraph({children:[new TextRun(`Window: ${fmtDateTime(s.test_start_at||undefined)} → ${fmtDateTime(s.test_end_at||undefined)} · Saved ${fmtDateTime(s.created_at)}`)]}),
@@ -163,6 +164,7 @@ async function downloadFavoritedLogsDocx(filename:string,entries:{run?:Run|null,
   ]
   for(const g of entries){
     children.push(new Paragraph({heading:HeadingLevel.HEADING_1,children:[new TextRun(g.run?`${g.run.symbol} · ${g.run.market}`:g.list[0]?.symbol||'Run')]}))
+    if(g.run)children.push(new Paragraph({children:[new TextRun({text:`Run ID: ${g.run.id}`,bold:true})]}))
     if(g.run)children.push(new Paragraph({children:[new TextRun(`Started ${fmtDateTime(g.run.started_at)} · Tested ${(g.run.tested_count??g.run.variations_requested).toLocaleString()} · Qualified ${g.run.qualified_count}`)]}))
     if(g.run?.summary)children.push(new Paragraph({children:[new TextRun(g.run.summary)]}))
     children.push(new Paragraph({text:''}))
