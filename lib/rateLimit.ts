@@ -1,14 +1,19 @@
 // Rate limiter for API routes. Uses Upstash Redis (a real distributed store —
 // shared across every serverless/edge instance, so the limit is an actual
-// guarantee, not a per-instance approximation) when UPSTASH_REDIS_REST_URL and
-// UPSTASH_REDIS_REST_TOKEN are configured, and transparently falls back to an
-// in-memory per-instance limiter otherwise so every route keeps working (with
-// the weaker guarantee described below) before those env vars are set.
+// guarantee, not a per-instance approximation) when the REST URL/token are
+// configured, and transparently falls back to an in-memory per-instance
+// limiter otherwise so every route keeps working (with the weaker guarantee
+// described below) before those env vars are set.
+//
+// Vercel's own "Upstash"/KV marketplace integration names these
+// KV_REST_API_URL/KV_REST_API_TOKEN; a manually-created Upstash database
+// instead uses UPSTASH_REDIS_REST_URL/UPSTASH_REDIS_REST_TOKEN by convention.
+// Accept either so this works regardless of how the database was provisioned.
 import { Redis } from '@upstash/redis'
 import { Ratelimit } from '@upstash/ratelimit'
 
-const redisUrl=process.env.UPSTASH_REDIS_REST_URL
-const redisToken=process.env.UPSTASH_REDIS_REST_TOKEN
+const redisUrl=process.env.KV_REST_API_URL||process.env.UPSTASH_REDIS_REST_URL
+const redisToken=process.env.KV_REST_API_TOKEN||process.env.UPSTASH_REDIS_REST_TOKEN
 const redis=redisUrl&&redisToken?new Redis({url:redisUrl,token:redisToken}):null
 
 export type RateLimitResult = { ok:boolean; limit:number; remaining:number; resetAt:number; label?:string }
