@@ -1,0 +1,25 @@
+name: Live signal checks
+
+# Calls the deployed /api/cron/live-signals endpoint on a schedule so favorited
+# strategies keep getting checked against live prices even when nobody has the
+# Trade Signals page open or is logged in. Vercel's own Cron Jobs can't run
+# sub-daily on the Hobby plan, so this repo uses GitHub Actions' scheduler
+# instead (same approach the portfolio-snapshots cron is designed for).
+#
+# Requires a repository secret named CRON_SECRET whose value matches the
+# CRON_SECRET environment variable set in the Vercel project — see
+# Settings → Secrets and variables → Actions in this repo.
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  ping-live-signals:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call /api/cron/live-signals
+        run: |
+          curl -sS -f --max-time 30 \
+            "https://strategy-lab-ai.vercel.app/api/cron/live-signals?secret=${{ secrets.CRON_SECRET }}"
