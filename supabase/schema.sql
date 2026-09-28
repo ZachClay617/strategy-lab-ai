@@ -12,6 +12,7 @@ create table if not exists public.profiles (
 create table if not exists public.research_runs (
   id uuid primary key,
   user_id uuid not null references auth.users(id) on delete cascade,
+  name text,
   symbol text not null,
   market text not null,
   modes text[] not null default '{}',
