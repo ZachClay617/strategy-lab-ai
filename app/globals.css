@@ -317,6 +317,8 @@
 .notif-ack-tag{flex-shrink:0;font-size:11px;font-weight:800;color:#5de1a4;background:#5de1a41a;padding:6px 12px;border-radius:999px}
 .notif-confirm{flex-shrink:0;background:linear-gradient(90deg,#54dcff,#8d73ff);border:0;border-radius:10px;padding:10px 16px;color:#050713;font-weight:900;font-size:12px;cursor:pointer}
 .notif-confirm:disabled{opacity:.6;cursor:default}
+.notif-actions{display:flex;flex-direction:column;gap:6px;align-items:stretch;flex-shrink:0}
+.notif-dismiss{font-size:11px;padding:8px 12px}
 @media(max-width:900px){.notif-card{flex-direction:column;align-items:flex-start}.notif-time{margin-left:0}}
 
 .watchlist-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
