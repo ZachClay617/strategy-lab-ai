@@ -69,10 +69,9 @@ export default function HomePage(){
   async function loadBriefingStats(userId:string){
     if(!supabase)return
     const sevenDaysAgo=new Date(Date.now()-7*24*60*60*1000).toISOString()
-    const seenAt=localStorage.getItem('notificationsSeenAt')||new Date(0).toISOString()
     const [{data:runs},{data:signals},{count:pending},{data:watched}]=await Promise.all([
       supabase.from('research_runs').select('symbol,tested_count,variations_requested').eq('user_id',userId).gte('started_at',sevenDaysAgo),
-      supabase.from('trade_notifications').select('symbol').eq('user_id',userId).gt('created_at',seenAt),
+      supabase.from('trade_notifications').select('symbol').eq('user_id',userId).eq('acknowledged',false),
       supabase.from('trade_notifications').select('id',{count:'exact',head:true}).eq('user_id',userId).eq('acknowledged',false),
       supabase.from('watchlist_symbols').select('symbol').eq('user_id',userId),
     ])
@@ -179,7 +178,7 @@ export default function HomePage(){
     ?`Your best mover today is ${topHoldingToday.symbol}, ${topHoldingToday.pct>=0?'up':'down'} ${Math.abs(topHoldingToday.pct).toFixed(2)}% (${fmtDollar(topHoldingToday.dollar)}).`
     :null
   const testsLine=`I've run ${testsLast7Days.toLocaleString()} strategy test${testsLast7Days===1?'':'s'} for you in the last 7 days across ${testStockCount.toLocaleString()} stock${testStockCount===1?'':'s'}.`
-  const signalsLine=`I've found and fired trade signals on ${signalStockCount.toLocaleString()} stock${signalStockCount===1?'':'s'} since you last checked.`
+  const signalsLine=`I've found and fired trade signals on ${signalStockCount.toLocaleString()} stock${signalStockCount===1?'':'s'} you haven't confirmed yet.`
   const trackedLine=trackedStockCount>0
     ?`My eyes are on ${trackedStockCount.toLocaleString()} stock${trackedStockCount===1?'':'s'} right now, watching every tick for a signal worth your attention.`
     :`I'm not watching any stocks for signals yet — add tickers to your watchlist and I'll start scanning them around the clock.`
