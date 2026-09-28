@@ -4,6 +4,24 @@ const MAX_RANGE_DAYS:Record<string,number> = { '1m':7, '15m':55, '30m':55, '1h':
 export type Candle = { date:string; open:number; high:number; low:number; close:number; volume:number }
 export type MarketResult = { candles:Candle[] } | { error:string; message?:string }
 
+// A real browser User-Agent (plus matching Accept headers) rather than a custom
+// client identifier — Yahoo's undocumented chart endpoint is well known to reject
+// or rate-limit requests that don't look like an actual browser, and that block
+// rate is far more noticeable from a cloud/datacenter IP (e.g. Vercel's serverless
+// functions) than from a residential connection, which was making live 1-minute
+// polling (the most frequent caller) fail with 502s much more than occasional
+// historical requests.
+const BROWSER_HEADERS={
+  'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Accept':'application/json, text/plain, */*',
+  'Accept-Language':'en-US,en;q=0.9',
+}
+async function fetchJson(url:string){
+  const r=await fetch(url,{headers:BROWSER_HEADERS,cache:'no-store'})
+  const j=await r.json().catch(()=>null)
+  return {r,j}
+}
+
 export async function fetchCandles(symbol:string, opts:{ live?:boolean; interval?:string; rangeDays?:number }={}):Promise<MarketResult>{
   const live=!!opts.live
   const intervalKey=opts.interval||(live?'1m':'1d')
@@ -14,8 +32,14 @@ export async function fetchCandles(symbol:string, opts:{ live?:boolean; interval
     const now=Math.floor(Date.now()/1000)
     const period1=live?now-86400*2:Math.floor((Date.now()-days*86400000)/1000)
     const url=`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?period1=${period1}&period2=${now}&interval=${yInterval}&events=div%2Csplits&includeAdjustedClose=true`
-    const r=await fetch(url,{headers:{'User-Agent':'StrategyLabAI/3.0'},cache:'no-store'})
-    const j=await r.json().catch(()=>null)
+    let {r,j}=await fetchJson(url)
+    // A transient block/rate-limit (5xx, or no body at all) is worth one quick
+    // retry before giving up — a real ticker shouldn't be reported "invalid" or
+    // "unavailable" over what's often a one-off upstream hiccup.
+    if((!r.ok&&r.status>=500)||!j){
+      await new Promise(res=>setTimeout(res,400))
+      ;({r,j}=await fetchJson(url))
+    }
     const x=j?.chart?.result?.[0]
     if(!x){
       const description=j?.chart?.error?.description
@@ -34,8 +58,7 @@ export async function fetchCandles(symbol:string, opts:{ live?:boolean; interval
 export async function fetchSymbolName(symbol:string):Promise<string|null>{
   try{
     const url=`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1d&interval=1d`
-    const r=await fetch(url,{headers:{'User-Agent':'StrategyLabAI/3.0'},cache:'no-store'})
-    const j=await r.json().catch(()=>null)
+    const {j}=await fetchJson(url)
     const meta=j?.chart?.result?.[0]?.meta
     return meta?.longName||meta?.shortName||null
   }catch{return null}
