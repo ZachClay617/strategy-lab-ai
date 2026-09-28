@@ -68,8 +68,16 @@ export async function checkRateLimit(routeKey:string, id:string, tiers:{limit:nu
     const key=`${routeKey}:${t.label}:${id}`
     let r:Omit<RateLimitResult,'label'>
     if(redis){
-      const res=await getLimiter(t.limit,t.windowMs).limit(key)
-      r={ok:res.success,limit:t.limit,remaining:res.remaining,resetAt:res.reset}
+      // Fail open to the in-memory limiter rather than letting a Redis outage
+      // or misconfigured credentials 500 every single API route in the app —
+      // a degraded (per-instance) rate limit beats no working app at all.
+      try{
+        const res=await getLimiter(t.limit,t.windowMs).limit(key)
+        r={ok:res.success,limit:t.limit,remaining:res.remaining,resetAt:res.reset}
+      }catch(e){
+        console.error('Redis rate limit check failed, falling back to in-memory',e)
+        r=memoryLimit(key,t.limit,t.windowMs)
+      }
     } else {
       r=memoryLimit(key,t.limit,t.windowMs)
     }
