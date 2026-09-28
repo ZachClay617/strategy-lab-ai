@@ -33,6 +33,15 @@ export async function GET(req:NextRequest){
   const serviceKey=process.env.SUPABASE_SERVICE_ROLE_KEY
   if(!url||!serviceKey)return NextResponse.json({error:'Supabase service role key is not configured'},{status:500})
   const admin=createClient(url,serviceKey)
+  // Stamped as soon as the endpoint is confirmed reachable/authorized (not
+  // gated on there being any favorites to check) — the Trade Signals page
+  // reads this to warn if the scheduled GitHub Actions job has gone stale
+  // (auto-disabled after 60 days of repo inactivity, a rotated CRON_SECRET
+  // mismatch, etc). Never let a heartbeat-write hiccup fail the actual job.
+  // Awaited (not fire-and-forget) — a serverless function can be frozen the
+  // instant it returns its response, which would drop an unawaited write.
+  const {error:heartbeatErr}=await admin.from('cron_heartbeats').upsert({name:'live-signals',last_run_at:new Date().toISOString()})
+  if(heartbeatErr)console.error('cron heartbeat write failed',heartbeatErr)
 
   const {data:favorites,error:favErr}=await admin.from('strategies').select('id,user_id,symbol,market').eq('favorite',true)
   if(favErr)return NextResponse.json({error:favErr.message},{status:500})
