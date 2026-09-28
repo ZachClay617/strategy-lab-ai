@@ -76,7 +76,14 @@ export default function TradeSignalsPage(){
     if(!supabase||!session?.user||!watchlist.length)return
     let dead=false
     const tick=async()=>{
-      await Promise.all(watchlist.map(async w=>{
+      // Firing every watchlisted symbol's request at once in a single burst is far
+      // more likely to trip the upstream market data provider's rate limiting than
+      // the research page's single-symbol fetch, which was making this page's live
+      // data noticeably less reliable. A small stagger spreads the same requests
+      // out over ~2s instead of hitting the provider all at once.
+      await Promise.all(watchlist.map(async (w,idx)=>{
+        if(idx>0)await new Promise(res=>setTimeout(res,idx*220))
+        if(dead)return
         const k=key(w.symbol,w.market)
         try{
           const r=await fetch(`/api/market?symbol=${encodeURIComponent(w.symbol)}&live=1`)
@@ -88,8 +95,16 @@ export default function TradeSignalsPage(){
             await evaluateSymbolSignals(supabase!,session.user.id,w.symbol,w.market,j)
           } else if(j?.error==='invalid_ticker'){
             setErrorByKey(prev=>({...prev,[k]:j.message||`"${w.symbol}" is not a recognized ticker symbol.`}))
+          } else {
+            // Any other failure (upstream fetch error, bad JSON, etc.) used to fall
+            // through silently, leaving the chart stuck on "Waiting for market
+            // data…" forever with no indication anything was wrong. Surface it and
+            // keep the last good candles on screen instead of clearing them.
+            setErrorByKey(prev=>({...prev,[k]:'Live data temporarily unavailable — retrying…'}))
           }
-        }catch{}
+        }catch{
+          if(!dead)setErrorByKey(prev=>({...prev,[k]:'Live data temporarily unavailable — retrying…'}))
+        }
       }))
       if(!dead)setLastChecked(new Date().toLocaleTimeString())
     }
