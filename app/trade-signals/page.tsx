@@ -216,7 +216,7 @@ export default function TradeSignalsPage(){
   })
 
   return <div className="shell">
-    {cronStaleMinutes!=null&&cronStaleMinutes>15&&<p className="msg banner" style={{marginBottom:16}}>⚠ Background signal checks haven't run in {cronStaleMinutes} minutes (expected every ~5). Buy/sell checks are still running normally while this page stays open, but favorited strategies may go unchecked while you're away. This usually means the scheduled GitHub Actions job stopped — check the Actions tab in the repo, or that CRON_SECRET still matches between GitHub and Vercel.</p>}
+    {cronStaleMinutes!=null&&cronStaleMinutes>30&&<p className="msg banner" style={{marginBottom:16}}>⚠ Background signal checks haven't run in {cronStaleMinutes} minutes (expected every ~5, though GitHub Actions' scheduler can drift 15-25 minutes under normal load — this only fires well past that). Buy/sell checks are still running normally while this page stays open, but favorited strategies may go unchecked while you're away. Check the Actions tab in the repo for a failed/disabled run, or that CRON_SECRET still matches between GitHub and Vercel.</p>}
     <section className="hero"><div><div className="eyebrow">ALWAYS-ON SIGNAL ENGINE</div><h1>Trade <span>Signals.</span></h1><p className="muted">Add every ticker you want watched. A-TAMP checks each one's favorited strategies against live prices at once and tells you exactly when to buy or sell on whatever platform you trade with — even while you're on another page.</p></div></section>
 
     <section className="panel">
