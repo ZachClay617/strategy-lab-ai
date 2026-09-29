@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx'
 import {
@@ -317,8 +316,7 @@ async function waitWhilePaused(){
 }
 
 export default function Home(){
- const router=useRouter()
- const [session,setSession]=useState<any>(null),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[mode,setMode]=useState<'login'|'signup'>('login'),[msg,setMsg]=useState(''),[showPassword,setShowPassword]=useState(false),[strategies,setStrategies]=useState<Strategy[]>([]),[runs,setRuns]=useState<Run[]>([]),[selected,setSelected]=useState<Strategy|null>(null),[variations,setVariations]=useState(25000),[minTrades,setMinTrades]=useState(1),[idea,setIdea]=useState(''),[liveCandles,setLiveCandles]=useState<Candle[]>([]),[liveStatus,setLiveStatus]=useState('Waiting for live market data'),[watchLive,setWatchLive]=useState(true),[chartWindow,setChartWindow]=useState<number>(14),[runSort,setRunSort]=useState<'newest'|'oldest'|'qualified'|'bestScore'>('newest'),[expandedRuns,setExpandedRuns]=useState<Record<string,boolean>>({}),[favLogsOpen,setFavLogsOpen]=useState(false),[favStrategiesOpen,setFavStrategiesOpen]=useState(false),[pendingDelete,setPendingDelete]=useState<null|{kind:'log'}|{kind:'run';runId:string;label:string}|{kind:'runHistory';runId:string;label:string}>(null),[deletingLog,setDeletingLog]=useState(false),[symbolNames,setSymbolNames]=useState<Record<string,string>>({}),[avatarUrl,setAvatarUrl]=useState<string|null>(null),[signupUsername,setSignupUsername]=useState(''),[signupName,setSignupName]=useState(''),[signupGender,setSignupGender]=useState(''),[renamingStrategyId,setRenamingStrategyId]=useState<string|null>(null),[renameValue,setRenameValue]=useState(''),[renamingRunId,setRenamingRunId]=useState<string|null>(null),[renameRunValue,setRenameRunValue]=useState('')
+ const [session,setSession]=useState<any>(null),[msg,setMsg]=useState(''),[strategies,setStrategies]=useState<Strategy[]>([]),[runs,setRuns]=useState<Run[]>([]),[selected,setSelected]=useState<Strategy|null>(null),[variations,setVariations]=useState(25000),[minTrades,setMinTrades]=useState(1),[idea,setIdea]=useState(''),[liveCandles,setLiveCandles]=useState<Candle[]>([]),[liveStatus,setLiveStatus]=useState('Waiting for live market data'),[watchLive,setWatchLive]=useState(true),[chartWindow,setChartWindow]=useState<number>(14),[runSort,setRunSort]=useState<'newest'|'oldest'|'qualified'|'bestScore'>('newest'),[expandedRuns,setExpandedRuns]=useState<Record<string,boolean>>({}),[favLogsOpen,setFavLogsOpen]=useState(false),[favStrategiesOpen,setFavStrategiesOpen]=useState(false),[pendingDelete,setPendingDelete]=useState<null|{kind:'log'}|{kind:'run';runId:string;label:string}|{kind:'runHistory';runId:string;label:string}>(null),[deletingLog,setDeletingLog]=useState(false),[symbolNames,setSymbolNames]=useState<Record<string,string>>({}),[avatarUrl,setAvatarUrl]=useState<string|null>(null),[renamingStrategyId,setRenamingStrategyId]=useState<string|null>(null),[renameValue,setRenameValue]=useState(''),[renamingRunId,setRenamingRunId]=useState<string|null>(null),[renameRunValue,setRenameRunValue]=useState('')
  const rs=useSyncExternalStore(subscribeRun,getRunSnapshot,getRunSnapshot)
  const {running,paused,progress,feed,testLog,activeCandidate,researchCandles,activeIndex,activeTrades,rejectionCounts,tickerError,selectedRun,balance,symbol,market,runMode,speedKey:speed,completedCount,qualifiedCount}=rs
  useEffect(()=>{if(!supabase)return;supabase.auth.getSession().then(({data})=>setSession(data.session));const {data}=supabase.auth.onAuthStateChange((_e,s)=>setSession(s));return()=>data.subscription.unsubscribe()},[])
@@ -366,47 +364,6 @@ export default function Home(){
    if(!supabase)return
    const {data,error}=await supabase.from('strategies').select('*').eq('id',s.id).maybeSingle()
    if(!error&&data)setSelected(data as Strategy)
- }
- async function resolveLoginEmail(identifier:string):Promise<{email?:string;error?:string}>{
-   const id=identifier.trim()
-   if(id.includes('@'))return {email:id}
-   const {data,error}=await supabase!.rpc('get_email_for_username',{uname:id})
-   if(error)return {error:error.message}
-   if(!data)return {error:'No account found with that username.'}
-   return {email:data as string}
- }
- async function auth(e:React.FormEvent){
-   e.preventDefault();setMsg('')
-   if(!supabase){setMsg('Add Supabase environment variables first.');return}
-   if(mode==='signup'){
-     if(!signupName.trim()){setMsg('Enter your name.');return}
-     if(!signupUsername.trim()){setMsg('Choose a username.');return}
-     if(!signupGender){setMsg('Select your gender.');return}
-     const res=await supabase.auth.signUp({email,password})
-     if(res.error){setMsg(res.error.message);return}
-     if(res.data.user){
-       const {error:profErr}=await supabase.from('profiles').upsert({id:res.data.user.id,username:signupUsername.trim(),full_name:signupName.trim(),gender:signupGender})
-       if(profErr){setMsg(`Account created, but your profile details could not be saved (${profErr.message}). You can set them later in Account settings.`);return}
-     }
-     if(res.data.session){router.push('/home');return}
-     setMsg('Account created. Check your email if confirmation is enabled.')
-     return
-   }
-   const resolved=await resolveLoginEmail(email)
-   if(resolved.error){setMsg(resolved.error);return}
-   const res=await supabase.auth.signInWithPassword({email:resolved.email!,password})
-   if(res.error){setMsg(res.error.message);return}
-   router.push('/home')
- }
- async function forgotPassword(){
-   setMsg('')
-   if(!supabase){setMsg('Add Supabase environment variables first.');return}
-   if(!email.trim()){setMsg('Enter your email or username above first, then click "Forgot password?" again.');return}
-   const resolved=await resolveLoginEmail(email)
-   if(resolved.error){setMsg(resolved.error);return}
-   const {error}=await supabase.auth.resetPasswordForEmail(resolved.email!,{redirectTo:`${window.location.origin}/reset-password`})
-   if(error){setMsg(error.message);return}
-   setMsg('Password reset email sent. Check your inbox for a link to set a new password.')
  }
  async function saveEvent(runId:string,message:string,level='info',pct=0){if(!supabase||!session?.user)return;const {error}=await supabase.from('run_events').insert({run_id:runId,user_id:session.user.id,message,level,progress:pct});if(error)console.error('saveEvent failed',error)}
  async function runResearch(){if(!supabase||!session?.user||runSnapshot.running)return;startBackgroundKeepAlive();stopFlag=false;pauseFlag=false;skipFlag=false;speedMsFlag=speeds.find(s=>s.key===runSnapshot.speedKey)?.ms??1000;patchRun({paused:false,running:true,progress:0,feed:[],testLog:[],selectedRun:null,activeCandidate:null,rejectionCounts:{},completedCount:0,qualifiedCount:0});const runId=crypto.randomUUID();patchRun({currentRunId:runId});const started=new Date().toISOString();const startingCapitalForRun=balance;const {error:runInsertError}=await supabase.from('research_runs').insert({id:runId,user_id:session.user.id,symbol:symbol.toUpperCase(),market,modes:[runMode],variations_requested:variations,status:'running',started_at:started,starting_balance:startingCapitalForRun,current_balance:startingCapitalForRun,tested_count:0,qualified_count:0,summary:'AI research started.',capital_events:[]});
@@ -666,7 +623,10 @@ export default function Home(){
      setSelected(sel=>sel&&sel.id===strategyId?{...sel,name:prev||sel.name}:sel)
    }
  }
- if(!session)return <main className="shell auth"><section className="auth-card"><div className="eyebrow">PERSISTENT RESEARCH PLATFORM</div><h1>Find strategies. <span>Test everything.</span></h1><p className="muted">Accounts and research data are stored in Supabase. Sessions persist across reloads and devices.</p><form onSubmit={auth} className="auth-form"><input type={mode==='signup'?'email':'text'} placeholder={mode==='signup'?'you@example.com':'Email or username'} value={email} onChange={e=>setEmail(e.target.value)} required/>{mode==='signup'&&<><input type="text" placeholder="Name" value={signupName} onChange={e=>setSignupName(e.target.value)} required/><input type="text" placeholder="Username" value={signupUsername} onChange={e=>setSignupUsername(e.target.value.replace(/\s/g,''))} required/><select value={signupGender} onChange={e=>setSignupGender(e.target.value)} required><option value="" disabled>Gender…</option><option value="male">Male</option><option value="female">Female</option></select></>}<div className="password-field"><input type={showPassword?'text':'password'} placeholder="Password (8+ characters)" value={password} onChange={e=>setPassword(e.target.value)} minLength={8} required/><button type="button" className="password-toggle" onClick={()=>setShowPassword(s=>!s)}>{showPassword?'HIDE':'SHOW'}</button></div><button className="primary">{mode==='login'?'ENTER LAB':'CREATE ACCOUNT'}</button></form><div className="auth-links"><button className="link" onClick={()=>setMode(mode==='login'?'signup':'login')}>{mode==='login'?'Need an account? Create one':'Already have an account? Sign in'}</button>{mode==='login'&&<button className="link" onClick={forgotPassword}>Forgot password?</button>}</div>{msg&&<div className="msg">{msg}</div>}</section></main>
+ // proxy.ts already redirects a logged-out visitor to /login before this
+ // page's own code ever runs — this is just the brief moment before the
+ // client's own session state catches up for an actually-logged-in user.
+ if(!session)return null
  return <main className="shell">
  {msg&&<div className="msg banner"><span>{msg}</span><button className="msg-dismiss" onClick={()=>setMsg('')} aria-label="Dismiss">✕</button></div>}
  <section className="hero"><div><div className="eyebrow">AI STRATEGY RESEARCH ENGINE</div><h1>Build. Break. <span>Repeat.</span></h1><p className="muted">Watch the engine generate, test, buy and sell, reject weak ideas, and save the strategies that pass the rules.</p></div><div className="balance"><small>AI RESEARCH CAPITAL</small><strong style={{fontSize:balanceFontSize(fmtMoney(balance))}}>{fmtMoney(balance)}</strong>{(()=>{const pl=balance-STARTING_CAPITAL;const plPct=pl/STARTING_CAPITAL*100;const up=pl>=0;return <div className={`pl ${up?'up':'down'}`}>{up?'▲':'▼'} {fmtMoney(Math.abs(pl))} ({up?'+':'-'}{Math.abs(plPct).toFixed(2)}%)</div>})()}<button onClick={resetBalance}>RESET TO {fmtMoney(STARTING_CAPITAL)}</button></div></section>

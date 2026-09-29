@@ -194,7 +194,7 @@ export default function CompanyReportPage() {
         <button className="run cta-glow" type="submit" disabled={loading || !session} style={{ marginTop: 0 }}>{loading ? 'GENERATING…' : 'MAKE A-TAMP GENERATE COMPANY REPORT'}</button>
       </form>
       <p className="field-warning">Running this costs real money — it calls a paid AI model to write the analysis sections of the report.</p>
-      {!session && <p className="muted" style={{ marginTop: 12 }}>Log in on the <a href="/research">Research</a> page to generate and save company reports.</p>}
+      {!session && <p className="muted" style={{ marginTop: 12 }}><a href="/login">Log in</a> to generate and save company reports.</p>}
       {error && <p className="msg banner" style={{ marginTop: 16 }}>{error}</p>}
     </section>
 
