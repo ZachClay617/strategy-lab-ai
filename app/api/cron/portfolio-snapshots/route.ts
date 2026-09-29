@@ -13,12 +13,14 @@ type Holding = { id:string; portfolio_id:string; symbol:string; weight:number; e
 type ClosedTrade = { portfolio_id:string; shares:number; entry_price:number; realized_pl:number }
 
 function isAuthorized(req:NextRequest){
+  // Header-only, on purpose — a URL query string (including ?secret=...) can
+  // end up in hosting/proxy access logs and browser history. See
+  // .github/workflows/portfolio-snapshots-cron.yml, which sends the secret
+  // as an Authorization header, not a query param.
   const secret=process.env.CRON_SECRET
   if(!secret)return false
   const header=req.headers.get('authorization')
-  if(header===`Bearer ${secret}`)return true
-  const queryToken=req.nextUrl.searchParams.get('secret')
-  return queryToken===secret
+  return header===`Bearer ${secret}`
 }
 
 export async function GET(req:NextRequest){
