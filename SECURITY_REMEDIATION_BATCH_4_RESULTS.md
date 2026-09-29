@@ -1,7 +1,7 @@
 # SECURITY_REMEDIATION_BATCH_4_RESULTS.md
 
 **Batch:** 4 — Supabase RLS/schema/migration/cron-hardening proposals
-**Status: FILES PREPARED AND TESTED LOCALLY — NOT APPLIED ANYWHERE.** Nothing in this batch has touched your real Supabase project, or any staging project. Applying either migration below requires your separate, explicit approval (see the APPROVAL REQUEST at the end of this file).
+**Status: `migration_v31_ticker_binding_guard.sql` has been APPLIED to the production Supabase project**, run directly by Zachary via the Supabase SQL Editor after explicit approval ("i approve to run"), confirmed successful ("Success. No rows returned."). `migration_v32_yahoo_cache_rls.sql` has **not** been applied — still pending, optional, low priority.
 
 ## Exact changed-file list
 
@@ -81,7 +81,11 @@ No remote service, production data, paid API, deployment, cron job, environment 
 
 ---
 
-## APPROVAL REQUEST — applying `migration_v31_ticker_binding_guard.sql`
+## Post-apply note
+
+Applied to production on Zachary's explicit approval. Recommended next step (not yet confirmed): favorite a strategy and confirm a buy/sell signal through the normal Trade Signals page flow to verify nothing regressed for legitimate use — expected to be invisible/no behavior change, per the local test results above.
+
+## APPROVAL REQUEST (historical — already approved and applied for v31 above; kept for the record) — applying `migration_v31_ticker_binding_guard.sql`
 
 1. **Action requested:** Run this SQL file's contents (a function + two triggers) against a Supabase project's SQL Editor.
 2. **Target environment:** Ideally a staging/practice Supabase project first (see "Blockers" below — I don't yet know if you have one). If you tell me to skip straight to production, that's your call to make, but it's not what I'd recommend as the first run.
