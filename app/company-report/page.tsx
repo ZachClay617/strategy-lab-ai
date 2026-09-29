@@ -132,7 +132,7 @@ export default function CompanyReportPage() {
       setLoading(false)
       setNarrativeLoading(true)
       try {
-        const nr = await fetch('/api/company-report/narrative', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(j) })
+        const nr = await fetch('/api/company-report/narrative', { method: 'POST', headers: { 'content-type': 'application/json', ...(session?.access_token ? { authorization: `Bearer ${session.access_token}` } : {}) }, body: JSON.stringify(j) })
         const nj = await nr.json()
         const finalReport = { ...j, narrative: nj.narrative }
         setReport((prev: any) => prev ? finalReport : prev)

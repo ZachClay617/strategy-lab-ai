@@ -1,4 +1,5 @@
 import { NOT_REPORTED, UNAVAILABLE } from './companyReport'
+import { sanitizeStrings } from './sanitizeText'
 
 // Caps the data actually sent to the AI so cost stays flat regardless of how
 // much news/insider activity a given company happens to have. The full,
@@ -66,7 +67,7 @@ Return ONLY strict JSON, no markdown, in exactly this shape (keep every field wi
     if (!text || text.indexOf('{') === -1) { console.error('company-report AI response had no usable text', JSON.stringify(j).slice(0, 1500)); return { mode: 'template', ...fallback } }
     try {
       const parsed = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1))
-      return { mode: 'ai', ...parsed }
+      return { mode: 'ai', ...sanitizeStrings(parsed) }
     } catch (parseErr) {
       console.error('company-report AI JSON.parse failed on text:', text.slice(0, 2000))
       return { mode: 'template', ...fallback }
