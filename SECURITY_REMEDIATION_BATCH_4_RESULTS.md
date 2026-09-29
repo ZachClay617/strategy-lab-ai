@@ -1,7 +1,9 @@
 # SECURITY_REMEDIATION_BATCH_4_RESULTS.md
 
 **Batch:** 4 — Supabase RLS/schema/migration/cron-hardening proposals
-**Status: `migration_v31_ticker_binding_guard.sql` has been APPLIED to the production Supabase project**, run directly by Zachary via the Supabase SQL Editor after explicit approval ("i approve to run"), confirmed successful ("Success. No rows returned."). `migration_v32_yahoo_cache_rls.sql` has **not** been applied — still pending, optional, low priority.
+**Status: BOTH migrations have been APPLIED to the production Supabase project**, run directly by Zachary via the Supabase SQL Editor, both confirmed successful ("Success. No rows returned."):
+- `migration_v31_ticker_binding_guard.sql` — applied after explicit approval ("i approve to run").
+- `migration_v32_yahoo_cache_rls.sql` — applied after explicit approval ("give migration then start batch 5"), confirmed working.
 
 ## Exact changed-file list
 
