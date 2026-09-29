@@ -44,6 +44,12 @@ The plan is: sign up → land in the app → get prompted to pay. This exact str
 
 This entire piece of work lives on its own branch, not yet merged — if anything looks wrong on preview, nothing needs undoing; we just don't merge it, or fix forward on the same branch before merging. If it somehow already reached production and needed reverting, the same Vercel "Promote to Production" approach from the Batch 6 checklist applies.
 
+## Follow-up decision: full httpOnly session hardening
+
+Discussed with Zachary whether to go further and make session tokens fully invisible to browser JavaScript (`httpOnly` cookies), which would close even a *theoretical* token-theft path if an XSS vulnerability were ever introduced later. On inspection, this app's architecture makes that a much larger undertaking than a follow-up patch: nearly every page (Research, Portfolios, Trade Signals, Notifications, Account, Home) queries Supabase directly from the browser using the user's own session token, relying on RLS for authorization. A fully `httpOnly` token would be unreadable by that browser-side code, breaking those direct queries — the real fix would require routing all data access through new server-side API endpoints instead, touching nearly every page in the app.
+
+**Decision: hold off.** No actual XSS vulnerability exists in this app today (checked in the original audit — no unsafe HTML/script rendering sink was found), so this would be closing a theoretical gap at a very high implementation cost right now. Revisit as its own dedicated, carefully-scoped project later — a natural time would be alongside the future payment-system build, since that work will already be touching a lot of the same ground.
+
 ## Confirmation
 
 No production deployment, database change, or provider setting was touched. This branch has been pushed to GitHub for a preview build only.
