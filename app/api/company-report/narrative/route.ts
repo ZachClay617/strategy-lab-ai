@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
   // logged-in account can't rack up unlimited paid calls just by staying
   // under the burst/hourly pace.
   const userRl = await checkRateLimit('narrative-user', userId, [
-    { limit: 15, windowMs: 86_400_000, label: 'daily' },
+    { limit: 10, windowMs: 86_400_000, label: 'daily' },
   ])
   if (!userRl.ok) {
     const p = rateLimitedPayload(userRl, "You've reached today's report-narrative limit for your account — please try again tomorrow.")

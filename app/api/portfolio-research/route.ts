@@ -81,7 +81,7 @@ export async function POST(req:NextRequest){
 
   // A per-account daily ceiling on top of the per-IP limit above.
   const userRl=await checkRateLimit('portfolio-research-user',userId,[
-    {limit:30,windowMs:86_400_000,label:'daily'},
+    {limit:15,windowMs:86_400_000,label:'daily'},
   ])
   if(!userRl.ok){
     const p=rateLimitedPayload(userRl,"You've reached today's portfolio research limit for your account — please try again tomorrow.")

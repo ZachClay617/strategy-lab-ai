@@ -47,11 +47,11 @@ describe('/api/company-report/narrative auth + cost controls', () => {
 
   it('allows a logged-in user up to the daily cap, then rejects further calls that same day', async () => {
     vi.mocked(getAuthedUserId).mockResolvedValue('narrative-test-user')
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < 10; i++) {
       const res = await POST(makeReq({ authed: true, ip: `10.0.0.${i}` }))
       expect(res.status).toBe(200)
     }
-    const res16 = await POST(makeReq({ authed: true, ip: '10.0.0.99' }))
-    expect(res16.status).toBe(429)
+    const res11 = await POST(makeReq({ authed: true, ip: '10.0.0.99' }))
+    expect(res11.status).toBe(429)
   })
 })

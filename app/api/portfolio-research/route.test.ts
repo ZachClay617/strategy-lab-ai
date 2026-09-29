@@ -45,15 +45,15 @@ describe('/api/portfolio-research auth + cost controls', () => {
     // stub that out so this test never makes a network call, regardless of
     // how many "allowed" iterations run below.
     const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue({ json: async () => ({}) } as any)
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 15; i++) {
       const res = await POST(makeReq({ authed: true, ip: `10.1.0.${i}` }))
       // Each allowed call proceeds past the gate (to the stubbed market-data
       // fetch above, which yields no usable data) — asserting it's not
       // itself a 401/429 is enough to prove the gate let it through.
       expect([401, 429]).not.toContain(res.status)
     }
-    const res31 = await POST(makeReq({ authed: true, ip: '10.1.0.199' }))
-    expect(res31.status).toBe(429)
+    const res16 = await POST(makeReq({ authed: true, ip: '10.1.0.199' }))
+    expect(res16.status).toBe(429)
     fetchSpy.mockRestore()
   })
 })
