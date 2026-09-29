@@ -112,7 +112,10 @@ export default function Account(){
   }
 
   if(!supabase)return <div className="shell"><p className="msg banner">Add Supabase environment variables first.</p></div>
-  if(!session)return <div className="shell"><p className="msg banner">Log in on the <a href="/research">Research</a> page first, then come back here.</p></div>
+  // proxy.ts already redirects a logged-out visitor to /login before
+  // this page's own code ever runs — this is just the brief moment before
+  // the client's own session state catches up for an actually-logged-in user.
+  if(!session)return null
 
   return <div className="shell">
     <section className="hero"><div><div className="eyebrow">YOUR ACCOUNT</div><h1>Account <span>settings.</span></h1><p className="muted">Manage your profile picture, name, password, and preferred currency.</p></div></section>

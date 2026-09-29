@@ -363,7 +363,10 @@ export default function Portfolios(){
   }
 
   if(!supabase)return <div className="shell"><p className="msg banner">Add Supabase environment variables first.</p></div>
-  if(!session)return <div className="shell"><p className="msg banner">Log in on the <a href="/research">Research</a> page first, then come back here.</p></div>
+  // proxy.ts already redirects a logged-out visitor to /login before
+  // this page's own code ever runs — this is just the brief moment before
+  // the client's own session state catches up for an actually-logged-in user.
+  if(!session)return null
 
   const selected=portfolios.find(p=>p.id===selectedId)
   const effectiveShares=(h:Holding)=>h.shares!=null?h.shares:1
