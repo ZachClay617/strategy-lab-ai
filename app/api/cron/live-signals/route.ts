@@ -12,11 +12,14 @@ import { checkRateLimit, clientIp, rateLimitedPayload } from '@/lib/rateLimit'
 export const dynamic = 'force-dynamic'
 
 function isAuthorized(req:NextRequest){
+  // Header-only, on purpose — a URL query string (including ?secret=...) can
+  // end up in hosting/proxy access logs and browser history. See
+  // .github/workflows/live-signals-cron.yml, which sends the secret as an
+  // Authorization header, not a query param.
   const secret=process.env.CRON_SECRET
   if(!secret)return false
   const header=req.headers.get('authorization')
-  if(header===`Bearer ${secret}`)return true
-  return req.nextUrl.searchParams.get('secret')===secret
+  return header===`Bearer ${secret}`
 }
 
 export async function GET(req:NextRequest){

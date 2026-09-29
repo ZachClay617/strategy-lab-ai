@@ -123,16 +123,17 @@ export default function CompanyReportPage() {
   async function generate(e: React.FormEvent) {
     e.preventDefault()
     if (!symbol.trim()) return
+    if (!session?.user) { setError('Please log in to generate a company report.'); return }
     setLoading(true); setError(''); setReport(null)
     try {
-      const r = await fetch(`/api/company-report?symbol=${encodeURIComponent(symbol.trim().toUpperCase())}`)
+      const r = await fetch(`/api/company-report?symbol=${encodeURIComponent(symbol.trim().toUpperCase())}`, { headers: session?.access_token ? { authorization: `Bearer ${session.access_token}` } : {} })
       const j = await r.json()
       if (!r.ok) { setError(j.error || 'Could not generate report.'); setLoading(false); return }
       setReport({ ...j, narrative: PENDING_NARRATIVE })
       setLoading(false)
       setNarrativeLoading(true)
       try {
-        const nr = await fetch('/api/company-report/narrative', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(j) })
+        const nr = await fetch('/api/company-report/narrative', { method: 'POST', headers: { 'content-type': 'application/json', ...(session?.access_token ? { authorization: `Bearer ${session.access_token}` } : {}) }, body: JSON.stringify(j) })
         const nj = await nr.json()
         const finalReport = { ...j, narrative: nj.narrative }
         setReport((prev: any) => prev ? finalReport : prev)
@@ -189,11 +190,11 @@ export default function CompanyReportPage() {
 
     <section className="panel">
       <form onSubmit={generate} className="add-holding-grid" style={{ gridTemplateColumns: '2fr 1fr', alignItems: 'end' }}>
-        <label>Ticker symbol<input value={symbol} onChange={e => setSymbol(e.target.value.toUpperCase())} placeholder="e.g. AAPL (stocks and ETFs only, not crypto)" required /></label>
-        <button className="run cta-glow" type="submit" disabled={loading} style={{ marginTop: 0 }}>{loading ? 'GENERATING…' : 'MAKE A-TAMP GENERATE COMPANY REPORT'}</button>
+        <label>Ticker symbol<input value={symbol} onChange={e => setSymbol(e.target.value.toUpperCase())} placeholder="e.g. AAPL (stocks and ETFs only, not crypto)" required disabled={!session} /></label>
+        <button className="run cta-glow" type="submit" disabled={loading || !session} style={{ marginTop: 0 }}>{loading ? 'GENERATING…' : 'MAKE A-TAMP GENERATE COMPANY REPORT'}</button>
       </form>
       <p className="field-warning">Running this costs real money — it calls a paid AI model to write the analysis sections of the report.</p>
-      {!session && <p className="muted" style={{ marginTop: 12 }}>Log in on the <a href="/research">Research</a> page to save reports and revisit them here later.</p>}
+      {!session && <p className="muted" style={{ marginTop: 12 }}>Log in on the <a href="/research">Research</a> page to generate and save company reports.</p>}
       {error && <p className="msg banner" style={{ marginTop: 16 }}>{error}</p>}
     </section>
 
