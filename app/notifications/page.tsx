@@ -75,15 +75,15 @@ export default function NotificationsPage(){
   const pendingCount=notifications.filter(n=>!n.acknowledged).length
 
   return <div className="shell notif-page">
-    <section className="hero notif-hero">
+    <div className="page-head">
       <div>
-        <div className="eyebrow notif-eyebrow"><span className="notif-pulse"/>SIGNAL FEED · LIVE</div>
-        <h1>Notification <span>Center.</span></h1>
-        <p className="muted">Every buy/sell signal A-TAMP has ever fired across your favorited strategies, streamed in real time.</p>
-        <p className="tiny legal-notice">{NOTICE_SIGNALS} Confirming a signal only updates your own tracking record — no order is placed anywhere.</p>
+        <div className="eyebrow notif-eyebrow"><span className="notif-pulse"/>Signal feed · live</div>
+        <h1 style={{marginTop:8}}>Inbox</h1>
+        <p className="sub">Every buy/sell signal A-TAMP has fired across your favorited strategies, streamed in real time.</p>
+        <p className="tiny legal-notice" style={{marginBottom:0}}>{NOTICE_SIGNALS} Confirming a signal only updates your own tracking record — no order is placed anywhere.</p>
       </div>
-      <div className="notif-stat"><small>PENDING ACTION</small><strong>{pendingCount}</strong></div>
-    </section>
+      <div className="notif-stat"><small>Pending action</small><strong>{pendingCount}</strong></div>
+    </div>
 
     <div className="notif-filters">
       {(['all','pending','buy','sell'] as const).map(f=><button key={f} className={filter===f?'active':''} onClick={()=>setFilter(f)}>{f.toUpperCase()}</button>)}

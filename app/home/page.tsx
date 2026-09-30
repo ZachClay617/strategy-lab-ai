@@ -188,109 +188,104 @@ export default function HomePage(){
   const notifLine=`You have ${notificationCount.toLocaleString()} notification${notificationCount===1?'':'s'} waiting for your review.`
 
   return <div className="shell home-page">
-    <section className="hero home-hero">
+    <div className="page-head">
       <div>
-        <div className="online-badge"><span className="online-dot"></span>A-TAMP ONLINE</div>
-        <h1 className="home-greeting">{greeting(profile,session.user.email)}</h1>
-        <p className="muted home-tagline">A-TAMP is online and ready to be at your service.</p>
+        <div className="online-badge"><span className="online-dot"></span>A-TAMP online</div>
+        <h1 style={{marginTop:12}}>{greeting(profile,session.user.email)}</h1>
+        <p className="sub">Your research, portfolios, and signals at a glance.</p>
       </div>
-    </section>
-
-    <section className="ai-briefing">
-      <div className="ai-briefing-scanline"></div>
-      <div className="ai-briefing-head">
-        <span className="ai-briefing-avatar"><span className="ai-briefing-avatar-core"></span></span>
-        <div>
-          <div className="ai-briefing-label">A-TAMP BRIEFING</div>
-          <div className="ai-briefing-sub">{loading?'Compiling your briefing…':'Live · compiled just now'}</div>
-        </div>
-      </div>
-      {!loading&&<div className="ai-briefing-body">
-        <p><span className={`ai-briefing-caret ${perfDir}`}>▸</span>{perfLine}</p>
-        {dayLine&&<p><span className={`ai-briefing-caret ${dayDir}`}>▸</span>{dayLine}</p>}
-        {topHoldingLine&&<p><span className={`ai-briefing-caret ${topHoldingToday!.pct>=0?'up':'down'}`}>▸</span>{topHoldingLine}</p>}
-        <p><span className="ai-briefing-caret">▸</span>{testsLine}</p>
-        <p><span className="ai-briefing-caret">▸</span>{signalsLine}</p>
-        <p><span className="ai-briefing-caret">▸</span>{trackedLine}</p>
-        <p><span className="ai-briefing-caret">▸</span>{notifLine}<span className="ai-briefing-cursor"></span></p>
-      </div>}
-    </section>
+    </div>
 
     {msg&&<p className="msg banner">{msg}</p>}
 
-    <div className="service-grid">
-      <Link href="/research" className="service-card">
-        <span className="service-icon">
-          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <defs><linearGradient id="ic-research" x1="0" y1="0" x2="24" y2="24"><stop offset="0" stopColor="#8ff3ff"/><stop offset="1" stopColor="#8b72ff"/></linearGradient></defs>
-            <circle cx="11" cy="11" r="7" stroke="url(#ic-research)" strokeWidth="1.6"/>
-            <circle cx="11" cy="11" r="3.4" stroke="url(#ic-research)" strokeWidth="1.2" opacity=".7"/>
-            <circle cx="11" cy="11" r="1.1" fill="url(#ic-research)"/>
-            <path d="M16.2 16.2L21 21" stroke="url(#ic-research)" strokeWidth="1.8" strokeLinecap="round"/>
-            <path d="M11 4.4V2.6M17.6 11h1.8M11 17.6v1.8M4.4 11H2.6" stroke="url(#ic-research)" strokeWidth="1.1" strokeLinecap="round" opacity=".55"/>
-          </svg>
-        </span>
-        <h2>Research</h2>
-        <p>Generate and backtest strategies against real historical and live market data.</p>
-        <span className="service-cta">ENTER RESEARCH →</span>
-      </Link>
-      <Link href="/portfolios" className="service-card">
-        <span className="service-icon">
-          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <defs><linearGradient id="ic-portfolios" x1="0" y1="0" x2="24" y2="24"><stop offset="0" stopColor="#8ff3ff"/><stop offset="1" stopColor="#8b72ff"/></linearGradient></defs>
-            <rect x="3.2" y="13.2" width="4.2" height="7.4" rx="1" fill="url(#ic-portfolios)" opacity=".85"/>
-            <rect x="9.9" y="8.4" width="4.2" height="12.2" rx="1" fill="url(#ic-portfolios)"/>
-            <rect x="16.6" y="4.4" width="4.2" height="16.2" rx="1" fill="url(#ic-portfolios)" opacity=".85"/>
-            <path d="M3 9.6L9 5l4.5 3 7.5-5.6" stroke="url(#ic-portfolios)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-            <path d="M17 2.4h4v4" stroke="url(#ic-portfolios)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </span>
-        <h2>Portfolios</h2>
-        <p>Speak your intent to A-TAMP in plain language and watch it materialize a live portfolio — real holdings, real returns, tracked in real time.</p>
-        <span className="service-cta">ENTER PORTFOLIOS →</span>
-      </Link>
-      <Link href="/company-report" className="service-card">
-        <span className="service-icon">
-          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <defs><linearGradient id="ic-reports" x1="0" y1="0" x2="24" y2="24"><stop offset="0" stopColor="#8ff3ff"/><stop offset="1" stopColor="#8b72ff"/></linearGradient></defs>
-            <path d="M6 2.6h8.4L19 7.2V21a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3.6a1 1 0 0 1 1-1Z" stroke="url(#ic-reports)" strokeWidth="1.5" strokeLinejoin="round"/>
-            <path d="M14.2 2.6V6.4a1 1 0 0 0 1 1H19" stroke="url(#ic-reports)" strokeWidth="1.5" strokeLinejoin="round"/>
-            <path d="M7.6 17.4v-3.2M11 17.4v-5.6M14.4 17.4v-2.3M17.8 17.4V9.8" stroke="url(#ic-reports)" strokeWidth="1.5" strokeLinecap="round"/>
-          </svg>
-        </span>
-        <h2>Reports</h2>
-        <p>Generate a full equity research report on any publicly traded company.</p>
-        <span className="service-cta">ENTER REPORTS →</span>
-      </Link>
-      <Link href="/trade-signals" className="service-card">
-        <span className="service-icon">
-          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <defs><linearGradient id="ic-signals" x1="0" y1="0" x2="24" y2="24"><stop offset="0" stopColor="#8ff3ff"/><stop offset="1" stopColor="#8b72ff"/></linearGradient></defs>
-            <path d="M2 13h3.6l1.8-5.4 3 10.8 2.4-8.4 1.6 3h6.6" stroke="url(#ic-signals)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-            <circle className="icon-pulse-dot" cx="19.6" cy="13" r="1.8" fill="url(#ic-signals)"/>
-          </svg>
-        </span>
-        <h2>Trade Signals</h2>
-        <p>Watch your favorited strategies against live prices and get alerted the moment a strategy rule triggers.</p>
-        <span className="service-cta">ENTER TRADE SIGNALS →</span>
-      </Link>
+    <div className="stat-row">
+      <div className="stat-card"><span>Total value</span><b className="stat-value">{hasAnyData?fmtExact(overview.value):'—'}</b></div>
+      <div className="stat-card"><span>Total return</span><b className={`stat-value ${overview.returnPct==null?'':overview.returnPct>=0?'up':'down'}`}>{overview.returnPct==null?'—':fmtPct(overview.returnPct)}</b><i className={`stat-delta ${overview.returnPct==null?'':overview.returnPct>=0?'up':'down'}`}>{overview.returnPct==null?'':fmtDollar(overview.returnDollar)}</i></div>
+      <div className="stat-card"><span>Day&apos;s return</span><b className={`stat-value ${overview.dayReturnPct==null?'':overview.dayReturnPct>=0?'up':'down'}`}>{overview.dayReturnPct==null?'—':fmtPct(overview.dayReturnPct)}</b><i className={`stat-delta ${overview.dayReturnPct==null?'':overview.dayReturnPct>=0?'up':'down'}`}>{overview.dayReturnPct==null?'':fmtDollar(overview.dayReturnDollar)}</i></div>
+      <div className="stat-card"><span>Unrealized</span><b className={`stat-value ${overview.unrealizedPct==null?'':overview.unrealizedPct>=0?'up':'down'}`}>{overview.unrealizedPct==null?'—':fmtPct(overview.unrealizedPct)}</b><i className={`stat-delta ${overview.unrealizedPct==null?'':overview.unrealizedPct>=0?'up':'down'}`}>{overview.unrealizedPct==null?'':fmtDollar(overview.unrealizedDollar)}</i></div>
+      <div className="stat-card"><span>Realized</span><b className={`stat-value ${overview.realizedPct==null?'':overview.realizedPct>=0?'up':'down'}`}>{overview.realizedPct==null?'—':fmtPct(overview.realizedPct)}</b><i className={`stat-delta ${overview.realizedPct==null?'':overview.realizedPct>=0?'up':'down'}`}>{overview.realizedPct==null?'':fmtDollar(overview.realizedDollar)}</i></div>
     </div>
 
-    <section className="panel">
-      <div className="panel-title"><h2>ALL PORTFOLIOS OVERVIEW</h2><span className="muted">Across all portfolios</span></div>
-      {loading?<div className="empty">Loading your portfolio overview…</div>:!hasAnyData?<div className="empty">No portfolio holdings yet. <Link href="/portfolios">Create a portfolio</Link> to see your overview here.</div>:
-      <div className="metrics" style={{gridTemplateColumns:'repeat(5,1fr)'}}>
-        <div><span>DAY'S RETURN</span><b className={overview.dayReturnPct==null?'':overview.dayReturnPct>=0?'up':'down'}>{overview.dayReturnPct==null?'—':`${fmtPct(overview.dayReturnPct)} (${fmtDollar(overview.dayReturnDollar)})`}</b></div>
-        <div><span>TOTAL VALUE</span><b>{fmtExact(overview.value)}</b></div>
-        <div><span>REALIZED RETURN</span><b className={overview.realizedPct==null?'':overview.realizedPct>=0?'up':'down'}>{overview.realizedPct==null?'—':`${fmtPct(overview.realizedPct)} (${fmtDollar(overview.realizedDollar)})`}</b></div>
-        <div><span>UNREALIZED RETURN</span><b className={overview.unrealizedPct==null?'':overview.unrealizedPct>=0?'up':'down'}>{overview.unrealizedPct==null?'—':`${fmtPct(overview.unrealizedPct)} (${fmtDollar(overview.unrealizedDollar)})`}</b></div>
-        <div><span>TOTAL RETURN</span><b className={overview.returnPct==null?'':overview.returnPct>=0?'up':'down'}>{overview.returnPct==null?'—':`${fmtPct(overview.returnPct)} (${fmtDollar(overview.returnDollar)})`}</b></div>
-      </div>}
-      {!loading&&hasAnyData&&<div className="metrics" style={{gridTemplateColumns:'repeat(3,1fr)',marginTop:14}}>
-        <div><span>TOP-PERFORMING PORTFOLIO</span><b className={!topPortfolio?'':topPortfolio.pct>=0?'up':'down'}>{topPortfolio?`${topPortfolio.name} (${fmtPct(topPortfolio.pct)}, ${fmtDollar(topPortfolio.dollar)})`:'—'}</b></div>
-        <div><span>TOP HOLDING · ALL TIME</span><b className={!topHoldingAllTime?'':topHoldingAllTime.pct>=0?'up':'down'}>{topHoldingAllTime?`${topHoldingAllTime.symbol} (${fmtPct(topHoldingAllTime.pct)}, ${fmtDollar(topHoldingAllTime.dollar)})`:'—'}</b></div>
-        <div><span>TOP HOLDING · TODAY</span><b className={!topHoldingToday?'':topHoldingToday.pct>=0?'up':'down'}>{topHoldingToday?`${topHoldingToday.symbol} (${fmtPct(topHoldingToday.pct)}, ${fmtDollar(topHoldingToday.dollar)})`:'—'}</b></div>
-      </div>}
-    </section>
+    <div className="dash">
+      <div className="dash-main">
+        <section className="panel frame">
+          <div className="panel-title"><h2>Leaders</h2><span className="tiny">Across all portfolios</span></div>
+          {loading?<div className="empty">Loading your portfolio overview…</div>:!hasAnyData?<div className="empty">No portfolio holdings yet. <Link href="/portfolios">Create a portfolio</Link> to see your overview here.</div>:
+          <div className="metrics" style={{gridTemplateColumns:'repeat(3,1fr)',marginBottom:0}}>
+            <div><span>Top portfolio</span><b className={!topPortfolio?'':topPortfolio.pct>=0?'up':'down'}>{topPortfolio?`${topPortfolio.name} (${fmtPct(topPortfolio.pct)}, ${fmtDollar(topPortfolio.dollar)})`:'—'}</b></div>
+            <div><span>Top holding · all time</span><b className={!topHoldingAllTime?'':topHoldingAllTime.pct>=0?'up':'down'}>{topHoldingAllTime?`${topHoldingAllTime.symbol} (${fmtPct(topHoldingAllTime.pct)}, ${fmtDollar(topHoldingAllTime.dollar)})`:'—'}</b></div>
+            <div><span>Top holding · today</span><b className={!topHoldingToday?'':topHoldingToday.pct>=0?'up':'down'}>{topHoldingToday?`${topHoldingToday.symbol} (${fmtPct(topHoldingToday.pct)}, ${fmtDollar(topHoldingToday.dollar)})`:'—'}</b></div>
+          </div>}
+        </section>
+
+        <div className="service-grid" style={{gridTemplateColumns:'repeat(2,1fr)'}}>
+          <Link href="/research" className="service-card">
+            <span className="service-icon">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.5"/>
+                <path d="M16.2 16.2L21 21M11 7.5v7M7.5 11h7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square"/>
+              </svg>
+            </span>
+            <h2>Research</h2>
+            <p>Generate and backtest strategies against real historical and live market data.</p>
+            <span className="service-cta">Open research →</span>
+          </Link>
+          <Link href="/portfolios" className="service-card">
+            <span className="service-icon">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 17.5 8.5 11l4 3.5L21 5.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square"/>
+                <path d="M3 20.5h18M16.5 5.5H21V10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square"/>
+              </svg>
+            </span>
+            <h2>Portfolios</h2>
+            <p>Describe a theme in plain language and review an example allocation built from real data.</p>
+            <span className="service-cta">Open portfolios →</span>
+          </Link>
+          <Link href="/company-report" className="service-card">
+            <span className="service-icon">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M6 2.5h8.4L19 7.2V21.5H6V2.5Z" stroke="currentColor" strokeWidth="1.5"/>
+                <path d="M14 2.5V7.5h5M8.5 17v-3M12 17v-6M15.5 17v-4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square"/>
+              </svg>
+            </span>
+            <h2>Reports</h2>
+            <p>Generate a full equity research report on any publicly traded company.</p>
+            <span className="service-cta">Open reports →</span>
+          </Link>
+          <Link href="/trade-signals" className="service-card">
+            <span className="service-icon">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M2 13h3.6l1.8-5.4 3 10.8 2.4-8.4 1.6 3h6.6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square" strokeLinejoin="round"/>
+                <rect className="icon-pulse-dot" x="18" y="11.4" width="3.2" height="3.2" fill="currentColor"/>
+              </svg>
+            </span>
+            <h2>Trade signals</h2>
+            <p>Watch favorited strategies against live prices and get alerted when a rule triggers.</p>
+            <span className="service-cta">Open signals →</span>
+          </Link>
+        </div>
+      </div>
+
+      <aside className="dash-rail">
+        <section className="ai-briefing">
+          <div className="ai-briefing-head">
+            <span className="ai-briefing-avatar"><span className="ai-briefing-avatar-core"></span></span>
+            <div>
+              <div className="ai-briefing-label">A-TAMP briefing</div>
+              <div className="ai-briefing-sub">{loading?'Compiling…':'Live · compiled just now'}</div>
+            </div>
+          </div>
+          {!loading&&<div className="ai-briefing-body">
+            <p><span className={`ai-briefing-caret ${perfDir}`}>▸</span>{perfLine}</p>
+            {dayLine&&<p><span className={`ai-briefing-caret ${dayDir}`}>▸</span>{dayLine}</p>}
+            {topHoldingLine&&<p><span className={`ai-briefing-caret ${topHoldingToday!.pct>=0?'up':'down'}`}>▸</span>{topHoldingLine}</p>}
+            <p><span className="ai-briefing-caret">▸</span>{testsLine}</p>
+            <p><span className="ai-briefing-caret">▸</span>{signalsLine}</p>
+            <p><span className="ai-briefing-caret">▸</span>{trackedLine}</p>
+            <p><span className="ai-briefing-caret">▸</span>{notifLine}<span className="ai-briefing-cursor"></span></p>
+          </div>}
+        </section>
+      </aside>
+    </div>
   </div>
 }

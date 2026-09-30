@@ -185,9 +185,9 @@ export default function Account(){
   if(!session)return null
 
   return <div className="shell">
-    <section className="hero"><div><div className="eyebrow">YOUR ACCOUNT</div><h1>Account <span>settings.</span></h1><p className="muted">Manage your profile picture, name, password, and preferred currency.</p></div></section>
+    <div className="page-head"><div><h1>Account settings</h1><p className="sub">Manage your profile, security, preferences, and data.</p></div></div>
     {msg&&<p className="msg banner">{msg}</p>}
-    <div className="grid">
+    <div className="account-grid">
       <section className="panel">
         <div className="panel-title"><h2>PROFILE PICTURE</h2></div>
         <div style={{display:'flex',alignItems:'center',gap:16}}>

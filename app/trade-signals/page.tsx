@@ -262,7 +262,7 @@ export default function TradeSignalsPage(){
 
   return <div className="shell">
     {cronStaleMinutes!=null&&cronStaleMinutes>30&&<p className="msg banner" style={{marginBottom:16}}>⚠ Background signal checks haven't run in {cronStaleMinutes} minutes (expected every ~5, though GitHub Actions' scheduler can drift 15-25 minutes under normal load — this only fires well past that). Buy/sell checks are still running normally while this page stays open, but favorited strategies may go unchecked while you're away. Check the Actions tab in the repo for a failed/disabled run, or that CRON_SECRET still matches between GitHub and Vercel.</p>}
-    <section className="hero"><div><div className="eyebrow">ALWAYS-ON SIGNAL ENGINE</div><h1>Trade <span>Signals.</span></h1><p className="muted">Add every ticker you want watched. A-TAMP checks each one's favorited strategies against live prices at once and alerts you when a strategy's pre-set rule triggers — even while you're on another page. Whether to trade, and how, is always your decision.</p><p className="tiny legal-notice">{NOTICE_SIGNALS}</p></div></section>
+    <div className="page-head"><div><h1>Trade signals</h1><p className="sub">Add every ticker you want watched. A-TAMP checks each one's favorited strategies against live prices and alerts you when a rule triggers — even while you're on another page. Whether to trade is always your decision.</p><p className="tiny legal-notice" style={{marginBottom:0}}>{NOTICE_SIGNALS}</p></div></div>
 
     <section className="panel">
       <div className="panel-title"><h2>WATCHLIST</h2><span className="muted">{watchlist.length} ticker{watchlist.length===1?'':'s'} watched{lastChecked?` · checked ${lastChecked}`:''}</span></div>

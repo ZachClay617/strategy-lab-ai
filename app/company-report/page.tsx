@@ -159,9 +159,9 @@ export default function CompanyReportPage() {
   const favCount = savedReports.filter(r => r.favorite).length
 
   return <div className="shell">
-    <section className="hero">
-      <div><div className="eyebrow">EQUITY RESEARCH</div><h1>Company <span>Analysis Report.</span></h1><p className="muted">Enter a publicly traded ticker to generate a comprehensive report built entirely from real, free market data — nothing is invented, and any metric a company doesn't publicly report is labeled as such.</p></div>
-      {session && <div className="vault-wrap">
+    <div className="page-head">
+      <div><h1>Company reports</h1><p className="sub">Enter a publicly traded ticker to generate a comprehensive report built entirely from real market data — nothing is invented, and any metric a company doesn't publicly report is labeled as such.</p></div>
+      {session && <div className="vault-wrap page-head-actions">
         <button className="vault-trigger" onClick={() => setReportsOpen(o => !o)}>
           <span className="vault-trigger-icon">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.4" opacity=".5"/><circle cx="12" cy="12" r="9" stroke="url(#vault-grad)" strokeWidth="1.4" strokeDasharray="8 46" strokeLinecap="round"/><defs><linearGradient id="vault-grad" x1="0" y1="0" x2="24" y2="24"><stop offset="0" stopColor="#8ff3ff"/><stop offset="1" stopColor="#8b72ff"/></linearGradient></defs><path d="M8.5 12.5l2.2 2.2L16 9.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -194,7 +194,7 @@ export default function CompanyReportPage() {
           </div>
         </>}
       </div>}
-    </section>
+    </div>
 
     <section className="panel">
       <form onSubmit={generate} className="add-holding-grid" style={{ gridTemplateColumns: '2fr 1fr', alignItems: 'end' }}>
@@ -207,9 +207,9 @@ export default function CompanyReportPage() {
       {error && <p className="msg banner" style={{ marginTop: 16 }}>{error}</p>}
     </section>
 
-    {report && <>
+    {report && <div className="report-doc"><nav className="report-outline" aria-label="Report sections"><a href="#sec-1">1. Overview</a><a href="#sec-2">2. Competitive</a><a href="#sec-3">3. Customers</a><a href="#sec-4">4. Brand</a><a href="#sec-5">5. SWOT</a><a href="#sec-6">6. Summary</a><a href="#sec-7">7. Financials</a><a href="#sec-8">8. Management</a><a href="#sec-9">9. News</a><a href="#sec-10">10. Catalysts</a><a href="#sec-11">11. Technicals</a><a href="#sec-12">12. Returns</a><a href="#sec-13">13. Analysis</a></nav><div className="report-body">
       {/* 1. COMPANY & BUSINESS OVERVIEW */}
-      <section className="panel">
+      <section id="sec-1" className="panel report-section">
         <div className="panel-title"><h2>1. COMPANY &amp; BUSINESS OVERVIEW</h2><span className="muted">Price as of {report.overview.priceAsOf}</span><button className="ghost" onClick={() => setReport(null)} style={{ marginLeft: 'auto' }}>✕ CLOSE REPORT</button></div>
         <div className="metrics" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
           <div><span>Company</span><b>{report.overview.name}</b></div>
@@ -231,7 +231,7 @@ export default function CompanyReportPage() {
       </section>
 
       {/* 2. COMPETITIVE COMPARISON */}
-      <section className="panel">
+      <section id="sec-2" className="panel report-section">
         <div className="panel-title"><h2>2. COMPETITIVE COMPARISON</h2></div>
         {report.competitors.length > 1 ? <Table
           head={['Company', 'Price', 'Mkt Cap', 'P/E', 'Rev Growth', 'Gross Mgn', 'Op Mgn', 'Net Mgn', 'FCF', '1Y Return']}
@@ -246,14 +246,14 @@ export default function CompanyReportPage() {
       </section>
 
       {/* 3. CUSTOMER GROWTH ANALYSIS */}
-      <section className="panel">
+      <section id="sec-3" className="panel report-section">
         <div className="panel-title"><h2>3. CUSTOMER GROWTH ANALYSIS</h2></div>
         <p className="muted">{report.customerGrowth.status}</p>
         <p className="tiny">{report.narrative.customerGrowthAnalysis ?? (report.narrative.mode==='pending' ? 'Generating analysis…' : '')}</p>
       </section>
 
       {/* 4. BRAND STRENGTH ANALYSIS */}
-      <section className="panel">
+      <section id="sec-4" className="panel report-section">
         <div className="panel-title"><h2>4. BRAND STRENGTH ANALYSIS</h2></div>
         <div className="section-label"><b>DOCUMENTED FACTS</b></div>
         <ul style={{ margin: '8px 0', paddingLeft: 20, color: 'var(--muted)', fontSize: 13, lineHeight: 1.7 }}>
@@ -266,7 +266,7 @@ export default function CompanyReportPage() {
       </section>
 
       {/* 5. SWOT */}
-      <section className="panel">
+      <section id="sec-5" className="panel report-section">
         <div className="panel-title"><h2>5. SWOT ANALYSIS</h2></div>
         <div className="metrics" style={{ gridTemplateColumns: 'repeat(2,1fr)', gap: 14 }}>
           {(['strengths', 'weaknesses', 'opportunities', 'threats'] as const).map(k => <div key={k} style={{ textAlign: 'left' }}>
@@ -280,13 +280,13 @@ export default function CompanyReportPage() {
       </section>
 
       {/* 6. EXECUTIVE SUMMARY */}
-      <section className="panel">
+      <section id="sec-6" className="panel report-section">
         <div className="panel-title"><h2>6. EXECUTIVE SUMMARY</h2></div>
         <p className="muted" style={{ lineHeight: 1.7 }}>{report.narrative.executiveSummary ?? (report.narrative.mode==='pending' ? 'Generating analysis…' : '')}</p>
       </section>
 
       {/* 7. FINANCIAL HEALTH */}
-      <section className="panel">
+      <section id="sec-7" className="panel report-section">
         <div className="panel-title"><h2>7. FINANCIAL HEALTH</h2><span className="muted">As of {report.financialHealth.asOf}</span></div>
         <div className="section-label"><b>INCOME STATEMENT (TTM)</b></div>
         <div className="metrics" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
@@ -319,7 +319,7 @@ export default function CompanyReportPage() {
       </section>
 
       {/* 8. MANAGEMENT & INSIDER ACTIVITY */}
-      <section className="panel">
+      <section id="sec-8" className="panel report-section">
         <div className="panel-title"><h2>8. MANAGEMENT &amp; INSIDER ACTIVITY</h2></div>
         <div className="metrics" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
           <div><span>CEO</span><b>{report.management.ceo === 'Not publicly reported' ? 'Not publicly reported' : `${report.management.ceo.name} · ${fmtMoney(report.management.ceo.totalPay)} total pay`}</b></div>
@@ -337,7 +337,7 @@ export default function CompanyReportPage() {
       </section>
 
       {/* 9. RECENT NEWS & EVENTS */}
-      <section className="panel">
+      <section id="sec-9" className="panel report-section">
         <div className="panel-title"><h2>9. RECENT NEWS &amp; EVENTS</h2></div>
         {report.news.length ? report.news.map((n: any, i: number) => {
           const commentary = (report.narrative.newsCommentary || []).find((c: any) => c.title === n.title)
@@ -357,7 +357,7 @@ export default function CompanyReportPage() {
       </section>
 
       {/* 10. UPCOMING CATALYSTS */}
-      <section className="panel">
+      <section id="sec-10" className="panel report-section">
         <div className="panel-title"><h2>10. UPCOMING CATALYSTS</h2></div>
         <div className="metrics" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
           <div><span>Next earnings date</span><b><Val v={report.catalysts.nextEarningsDate} />{report.catalysts.isEstimate ? ' (estimate)' : ''}</b></div>
@@ -372,7 +372,7 @@ export default function CompanyReportPage() {
       </section>
 
       {/* 11. TECHNICAL ANALYSIS */}
-      <section className="panel">
+      <section id="sec-11" className="panel report-section">
         <div className="panel-title"><h2>11. TECHNICAL ANALYSIS</h2></div>
         <div className="metrics" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
           <div><span>Price</span><b><Val v={report.technicals.price} money /></b></div>
@@ -399,7 +399,7 @@ export default function CompanyReportPage() {
       </section>
 
       {/* 12. SHAREHOLDER RETURNS */}
-      <section className="panel">
+      <section id="sec-12" className="panel report-section">
         <div className="panel-title"><h2>12. SHAREHOLDER RETURNS</h2></div>
         <div className="metrics" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
           <div><span>Dividend yield</span><b><Val v={report.shareholderReturns.dividendYieldPct} pct alreadyPct /></b></div>
@@ -417,11 +417,11 @@ export default function CompanyReportPage() {
       </section>
 
       {/* 13. ANALYSIS */}
-      <section className="panel">
+      <section id="sec-13" className="panel report-section">
         <div className="panel-title"><h2>13. ANALYSIS</h2></div>
         <p className="muted" style={{ lineHeight: 1.7 }}>{report.narrative.finalAnalysis ?? (report.narrative.mode==='pending' ? 'Generating analysis…' : '')}</p>
         {report.narrative.mode === 'template' && <p className="tiny" style={{ marginTop: 12 }}>Written synthesis sections use a plain template because no ANTHROPIC_API_KEY is configured for this deployment — every number shown throughout this report is still real and independently sourced/computed.</p>}
       </section>
-    </>}
+    </div></div>}
   </div>
 }

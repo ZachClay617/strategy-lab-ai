@@ -32,10 +32,11 @@ export default function ResetPassword(){
 
   if(!supabase)return <div className="shell"><p className="msg banner">Add Supabase environment variables first.</p></div>
 
-  return <main className="shell auth">
+  return <main className="auth">
+    <div className="auth-split" style={{gridTemplateColumns:'1fr',maxWidth:560}}>
     <section className="auth-card">
-      <div className="eyebrow">ACCOUNT RECOVERY</div>
-      <h1>Set a <span>new password.</span></h1>
+      <div className="eyebrow" style={{marginBottom:10}}>Account recovery</div>
+      <h2>Set a new password</h2>
       {!ready?<p className="muted">Open this page using the password reset link from your email.</p>:done?<p className="muted">Password updated. Redirecting you to sign in…</p>:<>
         <p className="muted">Choose a new password for your account.</p>
         <form onSubmit={submit} className="auth-form">
@@ -49,5 +50,6 @@ export default function ResetPassword(){
       </>}
       {msg&&<div className="msg">{msg}</div>}
     </section>
+    </div>
   </main>
 }

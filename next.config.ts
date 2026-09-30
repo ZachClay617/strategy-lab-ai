@@ -15,7 +15,7 @@ const supabaseWs = supabaseOrigin.replace(/^https:/, 'wss:')
 const csp = [
   "default-src 'self'",
   // Next.js App Router injects inline bootstrap scripts; dev mode needs eval.
-  `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : ''}`,
+  `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV !== 'production' ? " 'unsafe-eval'" : ''}`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "font-src 'self' data:",

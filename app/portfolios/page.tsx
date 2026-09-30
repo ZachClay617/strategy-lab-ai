@@ -440,7 +440,7 @@ export default function Portfolios(){
   const overview=sumMetrics(Object.values(allHoldings).flat(),Object.values(allClosedTrades).flat())
 
   return <div className="shell portfolios-page">
-    <section className="hero"><div><div className="eyebrow">AI PORTFOLIO STUDIO</div><h1>Describe it. Track it. <span>Visualize it.</span></h1><p className="muted">Give the AI a plain-language description of a portfolio theme. It proposes an example portfolio of real symbols for you to review, tracks the holdings you record, and logs every change. Educational tool — not investment advice, and nothing is traded for you.</p></div></section>
+    <div className="page-head"><div><h1>Portfolios</h1><p className="sub">Describe a theme in plain language, review the example allocation A-TAMP proposes, and track the holdings you record. Educational tool — not investment advice, and nothing is traded for you.</p></div></div>
     {msg&&<p className="msg banner"><span>{msg}</span><button className="msg-dismiss" onClick={()=>setMsg('')} aria-label="Dismiss">✕</button></p>}
     <div className="grid">
       <section className="panel">
@@ -456,7 +456,7 @@ export default function Portfolios(){
       <section className="panel">
         {view==='overview'?<>
           <div className="panel-title"><h2>OVERVIEW</h2></div>
-          <div className="metrics" style={{gridTemplateColumns:'repeat(6,1fr)'}}>
+          <div className="metrics" style={{gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))'}}>
             <div><span>Total holdings tracked</span><b>{overview.holdings}</b></div>
             <div><span>Total value</span><b>{overview.value>0?`$${overview.value.toFixed(2)}`:'—'}</b></div>
             <div><span>TOTAL RETURN</span><b className={overview.returnPct==null?'':overview.returnPct>=0?'up':'down'}>{overview.returnPct==null?'—':`${fmtPct(overview.returnPct)} (${fmtDollar(overview.returnDollar)})`}</b></div>
@@ -505,7 +505,7 @@ export default function Portfolios(){
               {editingName?<div className="portfolio-name-edit"><input value={nameDraft} onChange={e=>setNameDraft(e.target.value)} autoFocus/><button className="ghost" onClick={saveName} disabled={!nameDraft.trim()}>SAVE</button><button className="ghost" onClick={()=>{setEditingName(false);setNameDraft(selected.name)}}>CANCEL</button></div>:<h2>{selected.name.toUpperCase()}<button className="ghost portfolio-name-btn" onClick={()=>{setNameDraft(selected.name);setEditingName(true)}} title="Rename portfolio">RENAME</button><button className="ghost danger-ghost portfolio-name-btn" onClick={()=>setShowDeletePortfolio(true)} title="Delete this portfolio"><TrashIcon/> DELETE</button></h2>}
               <span className="muted">Updated {fmtDateTime(selected.updated_at)}</span>
             </div>
-            <div className="metrics" style={{gridTemplateColumns:'repeat(7,1fr)'}}>
+            <div className="metrics" style={{gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))'}}>
               <div><span>Holdings</span><b>{holdings.length}</b></div>
               <div><span>Total weight</span><b>{totalWeight.toFixed(1)}%</b></div>
               <div><span>Total value</span><b>{sharesValueTotal>0?`$${totalValue.toFixed(2)}`:'—'}</b></div>

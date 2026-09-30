@@ -76,11 +76,23 @@ function LoginForm() {
 
   if (!supabase) return <div className="shell"><p className="msg banner">Add Supabase environment variables first.</p></div>
 
-  return <main className="shell auth">
-    <section className="auth-card">
-      <div className="eyebrow">PERSISTENT RESEARCH PLATFORM</div>
-      <h1>Find strategies. <span>Test everything.</span></h1>
-      <p className="muted">Backtest rule-based trading strategies against years of real market data, track portfolios, and get alerted when your rules trigger. Your research is saved to your account and follows you across devices.</p>
+  return <main className="auth">
+    <div className="auth-split">
+      <section className="auth-side" aria-hidden="true">
+        <div>
+          <div className="eyebrow">Strategy research platform</div>
+          <h1>Test everything.<br/><span>Trust the out-of-sample.</span></h1>
+          <p className="muted">Backtest rule-based strategies against up to ten years of real market data, track portfolios, and get alerted the moment your rules trigger. Every result is validated on data the strategy never saw.</p>
+        </div>
+        <div className="auth-side-stats">
+          <div><span>Historical depth</span><b>10 YRS</b></div>
+          <div><span>Validation</span><b>OUT-OF-SAMPLE</b></div>
+          <div><span>Signal checks</span><b>24/7</b></div>
+        </div>
+      </section>
+      <section className="auth-card">
+      <h2>{mode === 'login' ? 'Sign in' : 'Create your account'}</h2>
+      <p className="muted">{mode === 'login' ? 'Welcome back to the lab.' : 'Free while in early access.'}</p>
       <form onSubmit={auth} className="auth-form">
         <input type={mode === 'signup' ? 'email' : 'text'} placeholder={mode === 'signup' ? 'you@example.com' : 'Email or username'} value={email} onChange={e => setEmail(e.target.value)} aria-label={mode === 'signup' ? 'Email address' : 'Email or username'} required />
         {mode === 'signup' && <>
@@ -107,7 +119,8 @@ function LoginForm() {
         {mode === 'login' && <button className="link" onClick={forgotPassword}>Forgot password?</button>}
       </div>
       {msg && <div className="msg" role="status">{msg}</div>}
-    </section>
+      </section>
+    </div>
   </main>
 }
 
