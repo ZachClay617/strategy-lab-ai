@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { CURRENCIES } from '@/lib/currencies'
@@ -42,6 +43,10 @@ export default function Account(){
   const [confirmPassword,setConfirmPassword]=useState('')
   const [showPassword,setShowPassword]=useState(false)
   const [msg,setMsg]=useState('')
+  const [exporting,setExporting]=useState(false)
+  const [deleting,setDeleting]=useState(false)
+  const [showDeleteAccount,setShowDeleteAccount]=useState(false)
+  const [deleteConfirmText,setDeleteConfirmText]=useState('')
   const fileInput=useRef<HTMLInputElement>(null)
 
   useEffect(()=>{if(!supabase)return;supabase.auth.getSession().then(({data})=>setSession(data.session));const {data}=supabase.auth.onAuthStateChange((_e,s)=>setSession(s));return()=>data.subscription.unsubscribe()},[])
@@ -111,6 +116,67 @@ export default function Account(){
     router.push('/')
   }
 
+  // Privacy Policy §8.1 promises self-service export: pull every row this
+  // user owns and hand it over as a single JSON download.
+  async function exportData(){
+    if(!supabase||!session?.user)return
+    setExporting(true);setMsg('')
+    try{
+      const uid=session.user.id
+      const byUser=(table:string,select='*')=>supabase!.from(table).select(select).eq('user_id',uid)
+      const [profileRes,runsRes,strategiesRes,capitalRes,portfoliosRes,reportsRes,positionsRes,notificationsRes,watchlistRes]=await Promise.all([
+        supabase.from('profiles').select('*').eq('id',uid).maybeSingle(),
+        byUser('research_runs'),byUser('strategies'),byUser('capital_events'),
+        byUser('portfolios'),byUser('company_reports'),byUser('live_positions'),
+        byUser('trade_notifications'),byUser('watchlist_symbols'),
+      ])
+      const portfolioIds=((portfoliosRes.data||[]) as unknown as {id:string}[]).map(p=>p.id)
+      const byPortfolio=(table:string)=>portfolioIds.length?supabase!.from(table).select('*').in('portfolio_id',portfolioIds).then(r=>r.data||[]):Promise.resolve([])
+      const [holdings,portfolioLog,snapshots,realizedTrades]=await Promise.all([
+        byPortfolio('portfolio_holdings'),byPortfolio('portfolio_log'),byPortfolio('portfolio_snapshots'),byPortfolio('portfolio_realized_trades'),
+      ])
+      const payload={
+        exportedAt:new Date().toISOString(),
+        account:{id:uid,email:session.user.email},
+        profile:profileRes.data||null,
+        researchRuns:runsRes.data||[],
+        strategies:strategiesRes.data||[],
+        capitalEvents:capitalRes.data||[],
+        portfolios:portfoliosRes.data||[],
+        portfolioHoldings:holdings,
+        portfolioLog:portfolioLog,
+        portfolioSnapshots:snapshots,
+        portfolioRealizedTrades:realizedTrades,
+        companyReports:reportsRes.data||[],
+        livePositions:positionsRes.data||[],
+        tradeNotifications:notificationsRes.data||[],
+        watchlist:watchlistRes.data||[],
+      }
+      const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'})
+      const url=URL.createObjectURL(blob)
+      const a=document.createElement('a');a.href=url;a.download=`strategy-lab-ai-export-${new Date().toISOString().slice(0,10)}.json`;document.body.appendChild(a);a.click();a.remove()
+      URL.revokeObjectURL(url)
+      setMsg('Your data export has been downloaded.')
+    }catch(e:any){setMsg(`Export failed: ${e?.message||e}`)}
+    setExporting(false)
+  }
+
+  // Privacy Policy §8.1 promises self-service deletion. delete_my_account()
+  // (migration v32) removes the auth user; every user table cascades from it.
+  async function deleteAccount(){
+    if(!supabase||!session?.user)return
+    if(deleteConfirmText.trim().toUpperCase()!=='DELETE'){setMsg('Type DELETE in the confirmation box to permanently delete your account.');return}
+    setDeleting(true);setMsg('')
+    const {error}=await supabase.rpc('delete_my_account')
+    if(error){
+      setDeleting(false)
+      setMsg(`Could not delete your account: ${error.message}. Run migration_v32_privacy_hardening.sql in Supabase, or email privacy@strategylabai.net and we will delete it for you within 30 days.`)
+      return
+    }
+    await supabase.auth.signOut()
+    router.push('/research')
+  }
+
   if(!supabase)return <div className="shell"><p className="msg banner">Add Supabase environment variables first.</p></div>
   if(!session)return <div className="shell"><p className="msg banner">Log in on the <a href="/research">Research</a> page first, then come back here.</p></div>
 
@@ -133,8 +199,8 @@ export default function Account(){
         <label>Name<input value={nameDraft} onChange={e=>setNameDraft(e.target.value)} placeholder="e.g. Zach Clay"/></label>
         <button className="ghost" onClick={saveName} disabled={nameDraft===(profile?.full_name||'')}>SAVE NAME</button>
 
-        <div className="section-label">GENDER</div>
-        <label>Gender<select value={genderDraft} onChange={e=>setGenderDraft(e.target.value)}><option value="" disabled>Select…</option><option value="male">Male</option><option value="female">Female</option></select></label>
+        <div className="section-label">GENDER (OPTIONAL)</div>
+        <label>Only used for how we address you in greetings — you can leave it blank or remove it any time<select value={genderDraft} onChange={e=>setGenderDraft(e.target.value)}><option value="">Prefer not to say</option><option value="male">Male</option><option value="female">Female</option></select></label>
         <button className="ghost" onClick={saveGender} disabled={genderDraft===(profile?.gender||'')}>SAVE GENDER</button>
 
         <div className="section-label">USERNAME</div>
@@ -158,7 +224,26 @@ export default function Account(){
 
         <div className="section-label">SESSION</div>
         <button className="ghost" onClick={signOut}>LOG OUT</button>
+
+        <div className="section-label">PRIVACY &amp; LEGAL</div>
+        <p className="tiny">Read the <Link href="/terms">Terms of Service</Link>, <Link href="/privacy">Privacy Policy</Link>, <Link href="/disclaimer">Investment &amp; Trading Disclaimer</Link>, and <Link href="/refunds">Refund &amp; Cancellation Policy</Link>. Privacy questions: privacy@strategylabai.net.</p>
+        <button className="ghost" onClick={exportData} disabled={exporting}>{exporting?'PREPARING EXPORT…':'⬇ EXPORT MY DATA (JSON)'}</button>
+        <p className="tiny">Downloads a copy of everything saved to your account: profile, research runs, strategies, portfolios, reports, signals, and watchlist.</p>
+        <button className="ghost danger-ghost" onClick={()=>{setShowDeleteAccount(true);setDeleteConfirmText('')}}>🗑 DELETE MY ACCOUNT</button>
+        <p className="tiny">Permanently deletes your account and all saved data. This cannot be undone.</p>
       </section>
     </div>
+    {showDeleteAccount&&<div className="confirm-overlay" onClick={()=>!deleting&&setShowDeleteAccount(false)}>
+      <div className="confirm-card" onClick={e=>e.stopPropagation()}>
+        <div className="confirm-icon">⚠</div>
+        <h3>Delete your account permanently?</h3>
+        <p className="muted">This immediately and permanently deletes your account and everything in it — profile, research runs, strategies, portfolios, reports, signals, notifications, and watchlist. There is no way to recover it. Consider exporting your data first.</p>
+        <label>Type DELETE to confirm<input value={deleteConfirmText} onChange={e=>setDeleteConfirmText(e.target.value)} placeholder="DELETE" autoFocus/></label>
+        <div className="confirm-actions">
+          <button className="ghost" onClick={()=>setShowDeleteAccount(false)} disabled={deleting}>CANCEL</button>
+          <button className="danger-confirm" onClick={deleteAccount} disabled={deleting||deleteConfirmText.trim().toUpperCase()!=='DELETE'}>{deleting?'DELETING…':'YES, PERMANENTLY DELETE'}</button>
+        </div>
+      </div>
+    </div>}
   </div>
 }

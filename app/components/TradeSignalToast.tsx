@@ -66,7 +66,8 @@ export default function TradeSignalToast(){
         <span className="signal-toast-symbol">{n.symbol}</span>
       </div>
       <div className="signal-toast-body">
-        <b>{n.strategy_name}</b> signals {n.action} at <b>{fmtPrice(n.price)}</b>
+        <b>{n.strategy_name}</b> rule triggered: {n.action} at <b>{fmtPrice(n.price)}</b>
+        <span className="signal-toast-note">Automated alert, not a recommendation. You decide.</span>
       </div>
       <button className="signal-toast-confirm" disabled={busyId===n.id} onClick={()=>n.action==='buy'?confirmBuy(n):confirmSell(n)}>
         {busyId===n.id?'SAVING…':n.action==='buy'?'✓ I BOUGHT IT':'✓ I SOLD IT'}

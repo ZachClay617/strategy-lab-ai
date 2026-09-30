@@ -11,12 +11,12 @@ import { checkRateLimit, clientIp, rateLimitedPayload } from '@/lib/rateLimit'
 // this reads/writes data for every user via the service role key.
 export const dynamic = 'force-dynamic'
 
+// Header-only on purpose: a secret in a query string gets recorded in host,
+// proxy, and analytics logs; an Authorization header does not.
 function isAuthorized(req:NextRequest){
   const secret=process.env.CRON_SECRET
   if(!secret)return false
-  const header=req.headers.get('authorization')
-  if(header===`Bearer ${secret}`)return true
-  return req.nextUrl.searchParams.get('secret')===secret
+  return req.headers.get('authorization')===`Bearer ${secret}`
 }
 
 export async function GET(req:NextRequest){

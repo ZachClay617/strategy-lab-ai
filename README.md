@@ -3,7 +3,7 @@
 This version adds persistent Supabase storage, long/short research simulation, an animated candlestick research arena, live stock market-data visualization, detailed test/rejection explanations, a persistent successful-strategy log, and detailed research-run history.
 
 ## Important
-The research capital is a simulated balance of $1,000,000,000,000,000,000 (one quintillion dollars). It is not real money. The live market chart does not place orders. Actual paper/live execution will require exchange/broker adapters and risk controls later.
+The research capital is a simulated balance of $100,000. It is not real money. The live market chart does not place orders, and nothing in the app ever places a real trade. The legal documents published at /terms, /privacy, /disclaimer, and /refunds are sourced from `legal/content/*.md` — keep those in sync with `lib/legal.ts` (LEGAL_VERSION) whenever they change.
 
 ## Setup
 1. Create a Supabase project.

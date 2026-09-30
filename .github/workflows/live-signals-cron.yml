@@ -22,4 +22,5 @@ jobs:
       - name: Call /api/cron/live-signals
         run: |
           curl -sS --fail-with-body --max-time 30 \
-            "https://strategylabai.net/api/cron/live-signals?secret=${{ secrets.CRON_SECRET }}"
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://strategylabai.net/api/cron/live-signals"

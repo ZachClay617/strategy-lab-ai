@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { NOTICE_AI_PORTFOLIO } from '@/lib/legal'
 
 type Portfolio = { id:string; name:string; description:string; created_at:string; updated_at:string }
 type Holding = { id:string; portfolio_id:string; symbol:string; weight:number; added_by:string; added_at:string; entry_price?:number|null; shares?:number|null }
@@ -435,7 +436,7 @@ export default function Portfolios(){
   const overview=sumMetrics(Object.values(allHoldings).flat(),Object.values(allClosedTrades).flat())
 
   return <div className="shell portfolios-page">
-    <section className="hero"><div><div className="eyebrow">AI PORTFOLIO AUTOPILOT</div><h1>Describe it. Track it. <span>Visualize it.</span></h1><p className="muted">Give the AI a plain-language description of what you want a portfolio to do. It builds and maintains a real-symbol portfolio against that description, on your command, and logs every change.</p></div></section>
+    <section className="hero"><div><div className="eyebrow">AI PORTFOLIO STUDIO</div><h1>Describe it. Track it. <span>Visualize it.</span></h1><p className="muted">Give the AI a plain-language description of a portfolio theme. It proposes an example portfolio of real symbols for you to review, tracks the holdings you record, and logs every change. Educational tool — not investment advice, and nothing is traded for you.</p></div></section>
     {msg&&<p className="msg banner"><span>{msg}</span><button className="msg-dismiss" onClick={()=>setMsg('')} aria-label="Dismiss">✕</button></p>}
     <div className="grid">
       <section className="panel">
@@ -445,7 +446,7 @@ export default function Portfolios(){
         <form onSubmit={createPortfolio}>
           <label>Portfolio name<input value={newName} onChange={e=>setNewName(e.target.value)} placeholder="e.g. Dividend Compounders" required/></label>
           <label>Description — tell the AI what this portfolio should do<textarea value={newDesc} onChange={e=>setNewDesc(e.target.value)} placeholder="e.g. Aggressive growth tech and AI names, willing to accept high volatility for upside."/></label>
-          <button className="run cta-glow" type="submit">+ MAKE A-TAMP GENERATE PORTFOLIO</button>
+          <button className="run cta-glow" type="submit">+ CREATE PORTFOLIO</button>
         </form>
       </section>
       <section className="panel">
@@ -488,7 +489,7 @@ export default function Portfolios(){
                 <span>Created {fmtDateTime(p.created_at)}</span>
                 <div className="portfolio-card-actions" onClick={e=>e.stopPropagation()}>
                   <button className="run cta-glow" style={{marginTop:0}} onClick={()=>viewPortfolio(p.id)}>OPEN →</button>
-                  <button className="ghost" onClick={()=>researchPortfolio(p.id)} title="Costs real money — calls a paid AI model">A-TAMP</button>
+                  <button className="ghost" onClick={()=>researchPortfolio(p.id)} title="Uses paid AI and market-data resources on each run">A-TAMP</button>
                 </div>
               </div>
             </div>
@@ -596,13 +597,15 @@ export default function Portfolios(){
           <button className="ghost" onClick={saveDescription} disabled={descDraft===selected.description}>SAVE DESCRIPTION</button>
 
           <div className="section-label">A-TAMP AI RESEARCH</div>
-          <p className="field-warning">Running this costs real money — it calls a paid AI model and pulls live market data on every run.</p>
-          <button className="run" onClick={runResearch} disabled={researching}>{researching?'A-TAMP IS PRINTING…':'LET A-TAMP RESEARCH & REBALANCE'}</button>
-          <p className="tiny">A-Tamp (Autonomous Trading Agent Money Printer) pulls real live/historical prices across a broad multi-sector universe of stocks, scores them against your description (with full AI reasoning when an ANTHROPIC_API_KEY is configured, otherwise a rules-based momentum/volatility screen), and proposes portfolio changes for you to apply.</p>
+          <p className="field-warning">Each run consumes paid AI and market-data resources, so runs may be rate-limited.</p>
+          <button className="run" onClick={runResearch} disabled={researching}>{researching?'A-TAMP IS RESEARCHING…':'RUN A-TAMP RESEARCH'}</button>
+          <p className="tiny">A-TAMP (Automated Trading Analysis &amp; Monitoring Platform) pulls real live/historical prices across a broad multi-sector universe of stocks, scores them against your description (with full AI reasoning when an ANTHROPIC_API_KEY is configured, otherwise a rules-based momentum/volatility screen), and proposes an example set of portfolio changes for you to review and apply or discard.</p>
+          <p className="tiny legal-notice">{NOTICE_AI_PORTFOLIO}</p>
 
           {proposal&&<div className="run-detail">
-            <h3>Proposed portfolio ({proposal.mode==='ai'?'AI reasoning':'heuristic screen'} · {proposal.universeSize} real candidates scanned)</h3>
+            <h3>Proposed example portfolio ({proposal.mode==='ai'?'AI reasoning':'heuristic screen'} · {proposal.universeSize} real candidates scanned)</h3>
             <p>{proposal.summary}</p>
+            <p className="tiny legal-notice">{NOTICE_AI_PORTFOLIO}</p>
             <div className="table">{proposal.holdings.map((h:any)=><div className="row" key={h.symbol} style={{gridTemplateColumns:'.4fr 2fr'}}><span><b>{h.symbol} · {h.weight}%</b></span><span className="how-it-works">{h.rationale}</span></div>)}</div>
             <div className="run-controls" style={{gridTemplateColumns:'1fr 1fr'}}>
               <button className="run" onClick={applyProposal}>APPLY CHANGES</button>

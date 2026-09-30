@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { NOTICE_COMPANY_REPORT } from '@/lib/legal'
 
 function fmtDateTime(iso?: string): string {
   if (!iso) return '—'
@@ -192,7 +193,8 @@ export default function CompanyReportPage() {
         <label>Ticker symbol<input value={symbol} onChange={e => setSymbol(e.target.value.toUpperCase())} placeholder="e.g. AAPL (stocks and ETFs only, not crypto)" required /></label>
         <button className="run cta-glow" type="submit" disabled={loading} style={{ marginTop: 0 }}>{loading ? 'GENERATING…' : 'MAKE A-TAMP GENERATE COMPANY REPORT'}</button>
       </form>
-      <p className="field-warning">Running this costs real money — it calls a paid AI model to write the analysis sections of the report.</p>
+      <p className="field-warning">Each report consumes paid AI and market-data resources, so requests may be rate-limited.</p>
+      <p className="tiny legal-notice">{NOTICE_COMPANY_REPORT}</p>
       {!session && <p className="muted" style={{ marginTop: 12 }}>Log in on the <a href="/research">Research</a> page to save reports and revisit them here later.</p>}
       {error && <p className="msg banner" style={{ marginTop: 16 }}>{error}</p>}
     </section>

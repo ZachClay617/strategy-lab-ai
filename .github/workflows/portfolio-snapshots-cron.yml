@@ -20,4 +20,5 @@ jobs:
       - name: Call /api/cron/portfolio-snapshots
         run: |
           curl -sS -f --max-time 30 \
-            "https://strategylabai.net/api/cron/portfolio-snapshots?secret=${{ secrets.CRON_SECRET }}"
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://strategylabai.net/api/cron/portfolio-snapshots"

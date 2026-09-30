@@ -268,7 +268,7 @@ export default function HomePage(){
           </svg>
         </span>
         <h2>Trade Signals</h2>
-        <p>Watch your favorited strategies against live prices and get told exactly when to buy or sell.</p>
+        <p>Watch your favorited strategies against live prices and get alerted the moment a strategy rule triggers.</p>
         <span className="service-cta">ENTER TRADE SIGNALS →</span>
       </Link>
     </div>

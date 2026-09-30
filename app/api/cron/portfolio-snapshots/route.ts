@@ -12,13 +12,12 @@ export const dynamic = 'force-dynamic'
 type Holding = { id:string; portfolio_id:string; symbol:string; weight:number; entry_price:number|null; shares:number|null }
 type ClosedTrade = { portfolio_id:string; shares:number; entry_price:number; realized_pl:number }
 
+// Header-only on purpose: a secret in a query string gets recorded in host,
+// proxy, and analytics logs; an Authorization header does not.
 function isAuthorized(req:NextRequest){
   const secret=process.env.CRON_SECRET
   if(!secret)return false
-  const header=req.headers.get('authorization')
-  if(header===`Bearer ${secret}`)return true
-  const queryToken=req.nextUrl.searchParams.get('secret')
-  return queryToken===secret
+  return req.headers.get('authorization')===`Bearer ${secret}`
 }
 
 export async function GET(req:NextRequest){

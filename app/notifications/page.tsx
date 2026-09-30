@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { NOTICE_SIGNALS } from '@/lib/legal'
 import { confirmBuySignal, confirmSellSignal, dismissSignal } from '@/lib/tradeConfirm'
 
 type Notification = {
@@ -76,6 +77,7 @@ export default function NotificationsPage(){
         <div className="eyebrow notif-eyebrow"><span className="notif-pulse"/>SIGNAL FEED · LIVE</div>
         <h1>Notification <span>Center.</span></h1>
         <p className="muted">Every buy/sell signal A-TAMP has ever fired across your favorited strategies, streamed in real time.</p>
+        <p className="tiny legal-notice">{NOTICE_SIGNALS} Confirming a signal only updates your own tracking record — no order is placed anywhere.</p>
       </div>
       <div className="notif-stat"><small>PENDING ACTION</small><strong>{pendingCount}</strong></div>
     </section>
