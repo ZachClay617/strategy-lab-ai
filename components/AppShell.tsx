@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import SiteFooter from '@/components/SiteFooter'
 import LegalGate from '@/components/LegalGate'
-import { HomeIcon, ResearchIcon, PortfolioIcon, ReportIcon, SignalIcon, BellIcon, UserIcon, SignOutIcon, LogoMark } from '@/components/navIcons'
+import { HomeIcon, ResearchIcon, PortfolioIcon, ReportIcon, SignalIcon, BellIcon, UserIcon, SignOutIcon, LogoMark, MenuIcon } from '@/components/navIcons'
 
 // Application chrome: fixed left sidebar + header bar for signed-in pages,
 // a minimal public header for /login, /reset-password and the legal pages,
@@ -47,6 +47,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [unread, setUnread] = useState(0)
   const [now, setNow] = useState<Date | null>(null)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+
+  useEffect(() => {
+    if (localStorage.getItem('sl-sidebar-open') === '0') setSidebarOpen(false)
+  }, [])
+
+  function toggleSidebar() {
+    setSidebarOpen(open => {
+      const next = !open
+      localStorage.setItem('sl-sidebar-open', next ? '1' : '0')
+      return next
+    })
+  }
 
   useEffect(() => {
     if (!supabase) return
@@ -91,7 +104,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return <>
       <header className="pub-header">
         <Link href={userId ? '/home' : '/login'} className="pub-brand" aria-label="Strategy Lab AI">
-          <LogoMark /> <span>STRATEGY LAB<em>/AI</em></span>
+          <LogoMark /> <span>STRATEGY LAB<em>AI</em></span>
         </Link>
         {!userId && pathname !== '/login' && <Link href="/login" className="pub-signin">Sign in</Link>}
         {userId && <Link href="/home" className="pub-signin">Open app</Link>}
@@ -104,11 +117,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const mkt = now ? marketState(now) : null
   const title = PAGE_TITLES[Object.keys(PAGE_TITLES).find(p => pathname.startsWith(p)) || ''] || 'Strategy Lab'
 
-  return <div className="app">
+  return <div className={`app${sidebarOpen ? '' : ' nav-collapsed'}`}>
     <LegalGate userId={userId} />
-    <aside className="sidebar">
+    <aside className="sidebar" id="app-sidebar">
       <Link href="/home" className="side-brand" aria-label="Strategy Lab AI — overview">
-        <LogoMark /> <span>STRATEGY LAB<em>/AI</em></span>
+        <LogoMark /> <span>STRATEGY LAB<em>AI</em></span>
       </Link>
       <nav className="side-nav" aria-label="Main navigation">
         {NAV.map(({ href, label, icon: Icon }) => {
@@ -132,6 +145,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     <div className="app-main">
       <header className="app-header">
         <div className="app-header-title">
+          <button type="button" className="nav-toggle" onClick={toggleSidebar} aria-label={sidebarOpen ? 'Hide navigation' : 'Show navigation'} aria-expanded={sidebarOpen} aria-controls="app-sidebar">
+            <MenuIcon />
+          </button>
+          <Link href="/home" className="hdr-brand" aria-label="Strategy Lab AI — overview">
+            <LogoMark size={18} /> <span>STRATEGY LAB<em>AI</em></span>
+          </Link>
           <h1>{title}</h1>
         </div>
         <div className="app-header-tools">

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { CURRENCIES } from '@/lib/currencies'
 import { TrashIcon, WarnIcon, DownloadIcon } from '@/components/icons'
+import { USERNAME_REQUIREMENTS, isValidUsername, normalizeUsername } from '@/lib/username'
 
 type Profile = { id:string; email:string|null; full_name:string|null; avatar_url:string|null; currency:string; username:string|null; gender:string|null }
 
@@ -83,7 +84,10 @@ export default function Account(){
 
   async function saveUsername(){
     if(!supabase||!session?.user)return
-    const {error}=await supabase.from('profiles').upsert({id:session.user.id,username:usernameDraft.trim()||null})
+    const username=normalizeUsername(usernameDraft)
+    if(!username){setMsg('Username is required and cannot be removed.');return}
+    if(!isValidUsername(username)){setMsg(USERNAME_REQUIREMENTS);return}
+    const {error}=await supabase.from('profiles').upsert({id:session.user.id,username})
     if(error){setMsg(error.code==='23505'?'That username is already taken.':`Could not save username: ${error.message}`);return}
     setMsg('Username updated.');await loadProfile()
   }
@@ -208,7 +212,7 @@ export default function Account(){
         <button className="ghost" onClick={saveGender} disabled={genderDraft===(profile?.gender||'')}>SAVE GENDER</button>
 
         <div className="section-label">USERNAME</div>
-        <label>Log in with this instead of your email<input value={usernameDraft} onChange={e=>setUsernameDraft(e.target.value.replace(/\s/g,''))} placeholder="e.g. zachclay"/></label>
+        <label>Log in with this instead of your email<input value={usernameDraft} onChange={e=>setUsernameDraft(e.target.value.replace(/\s/g,''))} placeholder="e.g. zachclay" title={USERNAME_REQUIREMENTS} pattern="[A-Za-z][A-Za-z0-9_]{2,19}" minLength={3} maxLength={20} required/></label>
         <button className="ghost" onClick={saveUsername} disabled={usernameDraft===(profile?.username||'')}>SAVE USERNAME</button>
       </section>
 

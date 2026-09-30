@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { LEGAL_VERSION, SIGNUP_CONSENT_TEXT } from '@/lib/legal'
+import { USERNAME_REQUIREMENTS, isValidUsername, normalizeUsername } from '@/lib/username'
 
 function LoginForm() {
   const router = useRouter()
@@ -37,11 +38,26 @@ function LoginForm() {
     try {
       if (mode === 'signup') {
         if (!consentChecked) { setMsg('Please read and accept the Terms of Service, Privacy Policy, and Investment and Trading Disclaimer to create an account.'); return }
-        const res = await supabase.auth.signUp({ email, password })
+        const username = normalizeUsername(signupUsername)
+        if (!username) { setMsg('Please choose a username.'); return }
+        if (!isValidUsername(username)) { setMsg(USERNAME_REQUIREMENTS); return }
+        const { data: available, error: availErr } = await supabase.rpc('is_username_available', { uname: username })
+        if (!availErr && available === false) { setMsg('That username is already taken.'); return }
+        // The database is the source of truth for this requirement (see
+        // migration_v34_require_username.sql): the signup trigger reads
+        // `username` from this metadata and rejects the whole signup —
+        // rolling back the auth.users row too — if it's missing, malformed,
+        // or already taken, so a client-side bypass can never create an
+        // account without one.
+        const res = await supabase.auth.signUp({
+          email,
+          password,
+          options: { data: { username, full_name: signupName.trim() || undefined, gender: signupGender || undefined } },
+        })
         if (res.error) { setMsg(res.error.message); return }
         if (res.data.user) {
-          const { error: profErr } = await supabase.from('profiles').upsert({ id: res.data.user.id, username: signupUsername.trim() || null, full_name: signupName.trim() || null, gender: signupGender || null, accepted_legal_at: new Date().toISOString(), accepted_legal_version: LEGAL_VERSION })
-          if (profErr) { setMsg(`Account created, but your profile details could not be saved (${profErr.message}). You can set them later in Account settings.`); return }
+          const { error: profErr } = await supabase.from('profiles').upsert({ id: res.data.user.id, accepted_legal_at: new Date().toISOString(), accepted_legal_version: LEGAL_VERSION })
+          if (profErr) { setMsg(`Account created, but we couldn't record your policy acceptance (${profErr.message}). Please contact support.`); return }
         }
         if (res.data.session) { router.push(next); return }
         setMsg('Account created. Check your email if confirmation is enabled.')
@@ -97,7 +113,7 @@ function LoginForm() {
         <input type={mode === 'signup' ? 'email' : 'text'} placeholder={mode === 'signup' ? 'you@example.com' : 'Email or username'} value={email} onChange={e => setEmail(e.target.value)} aria-label={mode === 'signup' ? 'Email address' : 'Email or username'} required />
         {mode === 'signup' && <>
           <input type="text" placeholder="Name (optional)" value={signupName} onChange={e => setSignupName(e.target.value)} aria-label="Name (optional)" />
-          <input type="text" placeholder="Username (optional)" value={signupUsername} onChange={e => setSignupUsername(e.target.value.replace(/\s/g, ''))} aria-label="Username (optional)" />
+          <input type="text" placeholder="Username" value={signupUsername} onChange={e => setSignupUsername(e.target.value.replace(/\s/g, ''))} aria-label="Username" title={USERNAME_REQUIREMENTS} pattern="[A-Za-z][A-Za-z0-9_]{2,19}" minLength={3} maxLength={20} required />
           <select value={signupGender} onChange={e => setSignupGender(e.target.value)} aria-label="Gender (optional)">
             <option value="">Gender (optional)…</option>
             <option value="male">Male</option>

@@ -31,6 +31,9 @@ export const UserIcon = ({ size = 18, className }: P) => (
 export const SignOutIcon = ({ size = 16, className }: P) => (
   <svg {...base(size)} className={className}><path d="M12.5 6.5V3.5h-9v13h9v-3M8 10h9M14.5 7.5 17 10l-2.5 2.5"/></svg>
 )
+export const MenuIcon = ({ size = 18, className }: P) => (
+  <svg {...base(size)} className={className}><path d="M3 5.5h14M3 10h14M3 14.5h14"/></svg>
+)
 export const LogoMark = ({ size = 22, className }: P) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
     <path d="M3 3h4M3 3v4M21 3h-4M21 3v4M3 21h4M3 21v-4M21 21h-4M21 21v-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square"/>
