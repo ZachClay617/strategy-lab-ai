@@ -334,6 +334,10 @@ button.row:hover,.row:hover{background:rgba(158,173,201,.05)}
 .row-head{background:rgba(5,6,9,.5);border-bottom:1px solid var(--line);padding:8px 14px;margin:0}
 .row-head:hover{background:rgba(5,6,9,.5)}
 .row-head span{color:var(--text-3);font-size:10px;letter-spacing:.12em;text-transform:uppercase;font-weight:620}
+.sort-head{background:transparent;border:0;padding:0;margin:0;display:inline-flex;align-items:center;gap:4px;color:var(--text-3);font-size:10px;letter-spacing:.12em;text-transform:uppercase;font-weight:620;cursor:pointer;transition:color .14s}
+.sort-head:hover{color:var(--text)}
+.sort-head.active{color:var(--accent-bright)}
+.sort-head-arrow{font-size:9px;opacity:.75}
 .back-to-top{justify-self:center;margin:8px 0;font-size:11.5px}
 .how-it-works{display:block;color:var(--text-3);font-size:11.5px;margin-top:3px;max-width:520px;white-space:normal;line-height:1.5}
 

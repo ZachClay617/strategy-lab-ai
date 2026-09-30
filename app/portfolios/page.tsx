@@ -56,6 +56,11 @@ export default function Portfolios(){
   const [editingName,setEditingName]=useState(false)
   const [showDeletePortfolio,setShowDeletePortfolio]=useState(false)
   const [deletingPortfolio,setDeletingPortfolio]=useState(false)
+  const [pendingDeleteTrade,setPendingDeleteTrade]=useState<ClosedTrade|null>(null)
+  const [deletingTrade,setDeletingTrade]=useState(false)
+  const [showClearTradeHistory,setShowClearTradeHistory]=useState(false)
+  const [clearingTradeHistory,setClearingTradeHistory]=useState(false)
+  const [holdingsSort,setHoldingsSort]=useState<{key:'weight'|'equity'|'return'|'dayReturn';dir:'desc'|'asc'}|null>(null)
   const [addSymbol,setAddSymbol]=useState('')
   const [addShares,setAddShares]=useState('')
   const [addAvgCost,setAddAvgCost]=useState('')
@@ -130,6 +135,13 @@ export default function Portfolios(){
     if(hErr||lErr){setMsg(`Could not load portfolio detail: ${hErr?.message||lErr?.message}`);return}
     setHoldings((h||[]) as Holding[]);setLog((l||[]) as LogEntry[])
     setClosedTrades(cErr?[]:(c||[]) as ClosedTrade[])
+    // Keep the cross-portfolio overview (allHoldings/allClosedTrades, used by
+    // sumMetrics for totals shown outside this detail view) in sync with
+    // whatever we just fetched — otherwise a holding/trade edited or removed
+    // here would still be counted in those totals until the next full
+    // portfolios-list reload, even though the detail view above is correct.
+    setAllHoldings(prev=>({...prev,[id]:(h||[]) as Holding[]}))
+    setAllClosedTrades(prev=>({...prev,[id]:cErr?[]:(c||[]) as ClosedTrade[]}))
     const p=portfolios.find(x=>x.id===id);setDescDraft(p?.description||'');setNameDraft(p?.name||'')
   }
   async function loadPrices(symbols:string[]){
@@ -326,11 +338,15 @@ export default function Portfolios(){
     await addLog(selectedId,'user','holding_removed',`Removed ${h.symbol} (was ${h.shares!=null?`${h.shares} shares`:`${h.weight}% weight`}).`,{symbol:h.symbol,weight:h.weight,shares:h.shares})
     await loadPortfolio(selectedId)
   }
-  async function deleteClosedTrade(ct:ClosedTrade){
-    if(!supabase||!selectedId)return
+  async function deleteClosedTrade(){
+    const ct=pendingDeleteTrade
+    if(!supabase||!selectedId||!ct)return
+    setDeletingTrade(true)
     const {error}=await supabase.from('portfolio_realized_trades').delete().eq('id',ct.id)
+    setDeletingTrade(false)
     if(error){setMsg(`Could not remove that trade from history: ${error.message}`);return}
-    await addLog(selectedId,'user','trade_history_removed',`Removed ${ct.symbol} (${ct.shares} sh, ${fmtDollar(ct.realized_pl)}) from realized trade history — no longer counted toward total return. Use this if a holding was added by accident.`,{symbol:ct.symbol,shares:ct.shares,entryPrice:ct.entry_price,exitPrice:ct.exit_price,realizedPl:ct.realized_pl})
+    await addLog(selectedId,'user','trade_history_removed',`Permanently deleted ${ct.symbol} (${ct.shares} sh, ${fmtDollar(ct.realized_pl)}) from realized trade history — no longer counted toward total return anywhere. Use this if a trade was added by accident.`,{symbol:ct.symbol,shares:ct.shares,entryPrice:ct.entry_price,exitPrice:ct.exit_price,realizedPl:ct.realized_pl})
+    setPendingDeleteTrade(null)
     await loadPortfolio(selectedId)
   }
   function startEditTrade(ct:ClosedTrade){
@@ -358,9 +374,13 @@ export default function Portfolios(){
   }
   async function clearTradeHistory(){
     if(!supabase||!selectedId||!closedTrades.length)return
+    setClearingTradeHistory(true)
+    const count=closedTrades.length
     const {error}=await supabase.from('portfolio_realized_trades').delete().eq('portfolio_id',selectedId)
+    setClearingTradeHistory(false)
     if(error){setMsg(`Could not clear trade history: ${error.message}`);return}
-    await addLog(selectedId,'user','trade_history_cleared',`Cleared all ${closedTrades.length} realized trade(s) from this portfolio's history — total return no longer includes past sells.`,{count:closedTrades.length})
+    await addLog(selectedId,'user','trade_history_cleared',`Permanently deleted all ${count} realized trade(s) from this portfolio's history — no longer counted toward total return anywhere.`,{count})
+    setShowClearTradeHistory(false)
     await loadPortfolio(selectedId)
   }
   function toggleDesc(id:string,e:React.MouseEvent){e.stopPropagation();setExpandedDesc(prev=>({...prev,[id]:!prev[id]}))}
@@ -421,6 +441,32 @@ export default function Portfolios(){
   const weightOf=(h:Holding)=>{const v=holdingValue(h);return v!=null&&sharesValueTotal>0?v/sharesValueTotal*100:h.weight}
   const totalValue=sharesValueTotal
   const totalWeight=holdings.reduce((s,h)=>s+weightOf(h),0)
+  function toggleHoldingsSort(key:'weight'|'equity'|'return'|'dayReturn'){
+    setHoldingsSort(prev=>prev&&prev.key===key?{key,dir:prev.dir==='desc'?'asc':'desc'}:{key,dir:'desc'})
+  }
+  function sortHeadButton(label:string,key:'weight'|'equity'|'return'|'dayReturn'){
+    const active=holdingsSort?.key===key
+    return <button type="button" className={`sort-head${active?' active':''}`} onClick={()=>toggleHoldingsSort(key)} title={`Sort by ${label}`}>
+      {label}<span className="sort-head-arrow">{active?(holdingsSort!.dir==='desc'?'▼':'▲'):'⇅'}</span>
+    </button>
+  }
+  function holdingsSortValue(h:Holding,key:'weight'|'equity'|'return'|'dayReturn'):number|null{
+    const p=prices[h.symbol]
+    if(key==='weight')return weightOf(h)
+    if(key==='equity')return holdingValue(h)
+    if(key==='return')return p&&h.entry_price?(p.last/h.entry_price-1)*100:null
+    return p&&p.prevClose?(p.last/p.prevClose-1)*100:null
+  }
+  // Nulls (no live price yet, no entry price set) always sort to the bottom
+  // regardless of direction — otherwise "least to most" would put unknown
+  // values at the top, which reads as them being the smallest.
+  const sortedHoldings=holdingsSort?[...holdings].sort((a,b)=>{
+    const va=holdingsSortValue(a,holdingsSort.key),vb=holdingsSortValue(b,holdingsSort.key)
+    if(va==null&&vb==null)return 0
+    if(va==null)return 1
+    if(vb==null)return -1
+    return holdingsSort.dir==='desc'?vb-va:va-vb
+  }):holdings
   // All-time total return: unrealized gain/loss on currently open holdings
   // PLUS realized gain/loss already locked in from past (sold) trades, as a
   // share of everything ever invested — so closing a position doesn't erase
@@ -564,15 +610,15 @@ export default function Portfolios(){
           {holdings.length>0&&<div className="row row-head" style={{gridTemplateColumns:'minmax(0,.8fr) minmax(0,.55fr) minmax(0,.55fr) minmax(0,.7fr) minmax(0,.75fr) minmax(0,.65fr) minmax(0,1.1fr) minmax(0,1.1fr) minmax(0,1fr)'}}>
             <span>Symbol</span>
             <span>Shares</span>
-            <span>Weight</span>
-            <span>Equity</span>
+            <span>{sortHeadButton('Weight','weight')}</span>
+            <span>{sortHeadButton('Equity','equity')}</span>
             <span>Average Cost</span>
             <span>Current Price</span>
-            <span>TOTAL RETURN</span>
-            <span>DAYS' RETURN</span>
+            <span>{sortHeadButton('TOTAL RETURN','return')}</span>
+            <span>{sortHeadButton("DAYS' RETURN",'dayReturn')}</span>
             <span></span>
           </div>}
-          <div className="table">{holdings.map(h=>{
+          <div className="table">{sortedHoldings.map(h=>{
             const p=prices[h.symbol]
             const sh=effectiveShares(h)
             const equity=holdingValue(h)
@@ -597,7 +643,7 @@ export default function Portfolios(){
 
           <div className="panel-title" style={{marginBottom:8,marginTop:18}}>
             <h2 className="section-label" style={{margin:0}}>TRADE HISTORY (SOLD POSITIONS)</h2>
-            {closedTrades.length>0&&<button className="ghost" onClick={clearTradeHistory}>CLEAR ALL</button>}
+            {closedTrades.length>0&&<button className="ghost" onClick={()=>setShowClearTradeHistory(true)}>CLEAR ALL</button>}
           </div>
           {closedTrades.length>0&&<>
             <p className="tiny">Counted toward TOTAL RETURN and REALIZED RETURN above and in the chart below. Added a stock by accident and sold it to clean up? Remove it here so it stops being counted.</p>
@@ -621,7 +667,7 @@ export default function Portfolios(){
                 <span className={pl>=0?'up':'down'}>{fmtDollar(pl)}{plPct!=null?` (${fmtPct(plPct)})`:''}</span>
                 <span>{fmtDateTime(ct.closed_at)}</span>
                 <span><b>{ct.symbol}</b></span>
-                {isEditingTrade?<div className="holding-actions"><button className="ghost" onClick={()=>saveEditTrade(ct)}>SAVE</button><button className="ghost" onClick={cancelEditTrade}>CANCEL</button></div>:<div className="holding-actions"><button className="ghost" onClick={()=>startEditTrade(ct)}>EDIT</button><button className="ghost" onClick={()=>deleteClosedTrade(ct)} title="Remove this trade so it no longer counts toward total return">REMOVE</button></div>}
+                {isEditingTrade?<div className="holding-actions"><button className="ghost" onClick={()=>saveEditTrade(ct)}>SAVE</button><button className="ghost" onClick={cancelEditTrade}>CANCEL</button></div>:<div className="holding-actions"><button className="ghost" onClick={()=>startEditTrade(ct)}>EDIT</button><button className="ghost" onClick={()=>setPendingDeleteTrade(ct)} title="Permanently delete this trade so it no longer counts toward total return anywhere">REMOVE</button></div>}
               </div>
             })}</div>
           </>}
@@ -676,6 +722,28 @@ export default function Portfolios(){
         <div className="confirm-actions">
           <button className="ghost" onClick={()=>setShowDeletePortfolio(false)} disabled={deletingPortfolio}>CANCEL</button>
           <button className="danger-confirm" onClick={deletePortfolio} disabled={deletingPortfolio}>{deletingPortfolio?'DELETING…':'YES, PERMANENTLY DELETE'}</button>
+        </div>
+      </div>
+    </div>}
+    {pendingDeleteTrade&&<div className="confirm-overlay" onClick={()=>!deletingTrade&&setPendingDeleteTrade(null)}>
+      <div className="confirm-card" onClick={e=>e.stopPropagation()}>
+        <div className="confirm-icon"><WarnIcon/></div>
+        <h3>Delete this {pendingDeleteTrade.symbol} trade?</h3>
+        <p className="muted">This permanently deletes this closed trade ({pendingDeleteTrade.shares} sh, entry ${pendingDeleteTrade.entry_price.toFixed(2)} → exit ${pendingDeleteTrade.exit_price.toFixed(2)}, {fmtDollar(pendingDeleteTrade.realized_pl)}) from your trade history. It will no longer be counted toward total return or realized return anywhere in this portfolio or in your overview totals. This cannot be undone.</p>
+        <div className="confirm-actions">
+          <button className="ghost" onClick={()=>setPendingDeleteTrade(null)} disabled={deletingTrade}>CANCEL</button>
+          <button className="danger-confirm" onClick={deleteClosedTrade} disabled={deletingTrade}>{deletingTrade?'DELETING…':'YES, PERMANENTLY DELETE'}</button>
+        </div>
+      </div>
+    </div>}
+    {showClearTradeHistory&&<div className="confirm-overlay" onClick={()=>!clearingTradeHistory&&setShowClearTradeHistory(false)}>
+      <div className="confirm-card" onClick={e=>e.stopPropagation()}>
+        <div className="confirm-icon"><WarnIcon/></div>
+        <h3>Clear all {closedTrades.length} closed trade{closedTrades.length===1?'':'s'}?</h3>
+        <p className="muted">This permanently deletes every closed trade in this portfolio's history. None of it will be counted toward total return or realized return anywhere, in this portfolio or in your overview totals. This cannot be undone.</p>
+        <div className="confirm-actions">
+          <button className="ghost" onClick={()=>setShowClearTradeHistory(false)} disabled={clearingTradeHistory}>CANCEL</button>
+          <button className="danger-confirm" onClick={clearTradeHistory} disabled={clearingTradeHistory}>{clearingTradeHistory?'CLEARING…':'YES, PERMANENTLY DELETE ALL'}</button>
         </div>
       </div>
     </div>}
