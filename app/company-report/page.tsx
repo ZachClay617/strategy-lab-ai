@@ -45,7 +45,7 @@ function RevenueChart({ history }: { history: any[] }) {
   const barW = (w - padL - padR) / rows.length * 0.5
   return <div className="chart-wrap rh">
     <div className="chart-head"><div><b>Revenue &amp; Net Income by Year</b><span>ANNUAL, REAL REPORTED FIGURES</span></div></div>
-    <svg className="chart" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+    <svg className="chart" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" role="img" aria-label="Annual revenue and net income bar chart">
       {rows.map((r, i) => {
         const barH = (r.revenue / max) * (h - padT - padB)
         const niH = r.netIncome != null ? (Math.max(r.netIncome, 0) / max) * (h - padT - padB) : 0
@@ -191,7 +191,7 @@ export default function CompanyReportPage() {
     <section className="panel">
       <form onSubmit={generate} className="add-holding-grid" style={{ gridTemplateColumns: '2fr 1fr', alignItems: 'end' }}>
         <label>Ticker symbol<input value={symbol} onChange={e => setSymbol(e.target.value.toUpperCase())} placeholder="e.g. AAPL (stocks and ETFs only, not crypto)" required /></label>
-        <button className="run cta-glow" type="submit" disabled={loading} style={{ marginTop: 0 }}>{loading ? 'GENERATING…' : 'MAKE A-TAMP GENERATE COMPANY REPORT'}</button>
+        <button className="run cta-glow" type="submit" disabled={loading} style={{ marginTop: 0 }}>{loading ? 'GENERATING…' : 'GENERATE A-TAMP REPORT'}</button>
       </form>
       <p className="field-warning">Each report consumes paid AI and market-data resources, so requests may be rate-limited.</p>
       <p className="tiny legal-notice">{NOTICE_COMPANY_REPORT}</p>

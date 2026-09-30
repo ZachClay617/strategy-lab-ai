@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { CURRENCIES } from '@/lib/currencies'
+import { TrashIcon, WarnIcon, DownloadIcon } from '@/components/icons'
 
 type Profile = { id:string; email:string|null; full_name:string|null; avatar_url:string|null; currency:string; username:string|null; gender:string|null }
 
@@ -227,15 +228,15 @@ export default function Account(){
 
         <div className="section-label">PRIVACY &amp; LEGAL</div>
         <p className="tiny">Read the <Link href="/terms">Terms of Service</Link>, <Link href="/privacy">Privacy Policy</Link>, <Link href="/disclaimer">Investment &amp; Trading Disclaimer</Link>, and <Link href="/refunds">Refund &amp; Cancellation Policy</Link>. Privacy questions: privacy@strategylabai.net.</p>
-        <button className="ghost" onClick={exportData} disabled={exporting}>{exporting?'PREPARING EXPORT…':'⬇ EXPORT MY DATA (JSON)'}</button>
+        <button className="ghost" onClick={exportData} disabled={exporting}>{exporting?'PREPARING EXPORT…':<><DownloadIcon/> EXPORT MY DATA (JSON)</>}</button>
         <p className="tiny">Downloads a copy of everything saved to your account: profile, research runs, strategies, portfolios, reports, signals, and watchlist.</p>
-        <button className="ghost danger-ghost" onClick={()=>{setShowDeleteAccount(true);setDeleteConfirmText('')}}>🗑 DELETE MY ACCOUNT</button>
+        <button className="ghost danger-ghost" onClick={()=>{setShowDeleteAccount(true);setDeleteConfirmText('')}}><TrashIcon/> DELETE MY ACCOUNT</button>
         <p className="tiny">Permanently deletes your account and all saved data. This cannot be undone.</p>
       </section>
     </div>
     {showDeleteAccount&&<div className="confirm-overlay" onClick={()=>!deleting&&setShowDeleteAccount(false)}>
       <div className="confirm-card" onClick={e=>e.stopPropagation()}>
-        <div className="confirm-icon">⚠</div>
+        <div className="confirm-icon"><WarnIcon/></div>
         <h3>Delete your account permanently?</h3>
         <p className="muted">This immediately and permanently deletes your account and everything in it — profile, research runs, strategies, portfolios, reports, signals, notifications, and watchlist. There is no way to recover it. Consider exporting your data first.</p>
         <label>Type DELETE to confirm<input value={deleteConfirmText} onChange={e=>setDeleteConfirmText(e.target.value)} placeholder="DELETE" autoFocus/></label>

@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { NOTICE_AI_PORTFOLIO } from '@/lib/legal'
+import { TrashIcon, WarnIcon } from '@/components/icons'
 
 type Portfolio = { id:string; name:string; description:string; created_at:string; updated_at:string }
 type Holding = { id:string; portfolio_id:string; symbol:string; weight:number; added_by:string; added_at:string; entry_price?:number|null; shares?:number|null }
@@ -28,7 +29,7 @@ function ReturnChart({points,title}:{points:{date:string;returnPct:number}[];tit
   const timeTicks=Array.from({length:timeTickCount}).map((_,k)=>{const i=Math.round(k*(points.length-1)/Math.max(1,timeTickCount-1));return {i,label:new Date(points[i].date).toLocaleDateString('en-US',{month:'short',day:'numeric'})}})
   return <div className="chart-wrap rh">
     <div className="chart-head"><div><b>{title}</b><span>RETURN % OVER TIME</span></div><strong className={up?'up':'down'}>{fmtPct(points[points.length-1].returnPct)}</strong></div>
-    <svg className="chart" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+    <svg className="chart" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" role="img" aria-label={`${title} — portfolio return percentage over time chart`}>
       {Array.from({length:gridLines}).map((_,i)=>{const v=adjMin+(range*i)/(gridLines-1);const yy=y(v);return <g key={i}><line x1={padL} x2={w-padR} y1={yy} y2={yy} stroke="#ffffff" strokeOpacity=".06" strokeWidth="1"/><text x={padL-8} y={yy+4} fill="#6b7690" fontSize="11" textAnchor="end">{v.toFixed(1)}%</text></g>})}
       {adjMin<0&&adjMax>0&&<line x1={padL} x2={w-padR} y1={y(0)} y2={y(0)} stroke="#8fa0b8" strokeDasharray="4 4" strokeWidth="1"/>}
       <path d={path} fill="none" stroke="#4fc3f7" strokeWidth="2"/>
@@ -498,7 +499,7 @@ export default function Portfolios(){
         </>:!selected?<div className="empty">Select or create a portfolio to see its detail.</div>:<>
           <div className="portfolio-sticky">
             <div className="panel-title">
-              {editingName?<div className="portfolio-name-edit"><input value={nameDraft} onChange={e=>setNameDraft(e.target.value)} autoFocus/><button className="ghost" onClick={saveName} disabled={!nameDraft.trim()}>SAVE</button><button className="ghost" onClick={()=>{setEditingName(false);setNameDraft(selected.name)}}>CANCEL</button></div>:<h2>{selected.name.toUpperCase()}<button className="ghost portfolio-name-btn" onClick={()=>{setNameDraft(selected.name);setEditingName(true)}} title="Rename portfolio">RENAME</button><button className="ghost danger-ghost portfolio-name-btn" onClick={()=>setShowDeletePortfolio(true)} title="Delete this portfolio">🗑 DELETE</button></h2>}
+              {editingName?<div className="portfolio-name-edit"><input value={nameDraft} onChange={e=>setNameDraft(e.target.value)} autoFocus/><button className="ghost" onClick={saveName} disabled={!nameDraft.trim()}>SAVE</button><button className="ghost" onClick={()=>{setEditingName(false);setNameDraft(selected.name)}}>CANCEL</button></div>:<h2>{selected.name.toUpperCase()}<button className="ghost portfolio-name-btn" onClick={()=>{setNameDraft(selected.name);setEditingName(true)}} title="Rename portfolio">RENAME</button><button className="ghost danger-ghost portfolio-name-btn" onClick={()=>setShowDeletePortfolio(true)} title="Delete this portfolio"><TrashIcon/> DELETE</button></h2>}
               <span className="muted">Updated {fmtDateTime(selected.updated_at)}</span>
             </div>
             <div className="metrics" style={{gridTemplateColumns:'repeat(7,1fr)'}}>
@@ -621,7 +622,7 @@ export default function Portfolios(){
     </div>
     {showDeletePortfolio&&selected&&<div className="confirm-overlay" onClick={()=>!deletingPortfolio&&setShowDeletePortfolio(false)}>
       <div className="confirm-card" onClick={e=>e.stopPropagation()}>
-        <div className="confirm-icon">⚠</div>
+        <div className="confirm-icon"><WarnIcon/></div>
         <h3>Delete "{selected.name}"?</h3>
         <p className="muted">This permanently deletes the entire portfolio — every holding, closed trade, return snapshot, and change log entry — for good. This cannot be undone.</p>
         <div className="confirm-actions">

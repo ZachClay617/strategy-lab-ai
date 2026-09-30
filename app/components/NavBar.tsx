@@ -35,16 +35,33 @@ export default function NavBar(){
     return ()=>{dead=true;clearInterval(id)}
   },[userId,pathname])
 
-  return <nav className="topnav">
-    <Link href="/home" className="topnav-brand">◈ STRATEGY LAB <em>AI</em></Link>
+  const links:[string,string,boolean][]=[
+    ['/home','Home',pathname==='/home'],
+    ['/research','Research',pathname==='/research'],
+    ['/portfolios','Portfolios',!!pathname?.startsWith('/portfolios')],
+    ['/company-report','Reports',!!pathname?.startsWith('/company-report')],
+    ['/trade-signals','Trade Signals',!!pathname?.startsWith('/trade-signals')],
+    ['/notifications','Notifications',!!pathname?.startsWith('/notifications')],
+    ['/account','Account',!!pathname?.startsWith('/account')],
+  ]
+
+  return <nav className="topnav" aria-label="Main navigation">
+    <Link href="/home" className="topnav-brand" aria-label="Strategy Lab AI home">
+      <svg className="brand-mark" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+        <defs><linearGradient id="brand-grad" x1="0" y1="0" x2="24" y2="24"><stop offset="0" stopColor="#53d6ff"/><stop offset="1" stopColor="#b394ff"/></linearGradient></defs>
+        <rect x="2.2" y="2.2" width="19.6" height="19.6" rx="6" stroke="url(#brand-grad)" strokeWidth="1.6"/>
+        <path d="M6.5 14.6l3.2-3.6 2.6 2.2 4.9-5.6" stroke="url(#brand-grad)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
+        <circle cx="17.2" cy="7.6" r="1.5" fill="url(#brand-grad)"/>
+      </svg>
+      STRATEGY LAB <em>AI</em>
+    </Link>
     <div className="topnav-links">
-      <Link href="/home" className={pathname==='/home'?'active':''}>Home</Link>
-      <Link href="/research" className={pathname==='/research'?'active':''}>Research</Link>
-      <Link href="/portfolios" className={pathname?.startsWith('/portfolios')?'active':''}>Portfolios</Link>
-      <Link href="/company-report" className={pathname?.startsWith('/company-report')?'active':''}>Reports</Link>
-      <Link href="/trade-signals" className={pathname?.startsWith('/trade-signals')?'active':''}>Trade Signals</Link>
-      <Link href="/notifications" className={pathname?.startsWith('/notifications')?'active':''}>Notifications{unreadCount>0&&<span className="nav-badge">{unreadCount>9?'9+':unreadCount}</span>}</Link>
-      <Link href="/account" className={pathname?.startsWith('/account')?'active':''}>Account</Link>
+      {links.map(([href,label,active])=>
+        <Link key={href} href={href} className={active?'active':''} aria-current={active?'page':undefined}>
+          {label}
+          {href==='/notifications'&&unreadCount>0&&<span className="nav-badge" aria-label={`${unreadCount} unread notifications`}>{unreadCount>9?'9+':unreadCount}</span>}
+        </Link>
+      )}
     </div>
   </nav>
 }
