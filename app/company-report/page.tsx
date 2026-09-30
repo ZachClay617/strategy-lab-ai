@@ -123,9 +123,10 @@ export default function CompanyReportPage() {
   async function generate(e: React.FormEvent) {
     e.preventDefault()
     if (!symbol.trim()) return
+    if (!session?.user) { setError('Please log in to generate a company report.'); return }
     setLoading(true); setError(''); setReport(null)
     try {
-      const r = await fetch(`/api/company-report?symbol=${encodeURIComponent(symbol.trim().toUpperCase())}`)
+      const r = await fetch(`/api/company-report?symbol=${encodeURIComponent(symbol.trim().toUpperCase())}`, { headers: session?.access_token ? { authorization: `Bearer ${session.access_token}` } : {} })
       const j = await r.json()
       if (!r.ok) { setError(j.error || 'Could not generate report.'); setLoading(false); return }
       // The AI-written analysis requires a signed-in account (the narrative
@@ -197,12 +198,12 @@ export default function CompanyReportPage() {
 
     <section className="panel">
       <form onSubmit={generate} className="add-holding-grid" style={{ gridTemplateColumns: '2fr 1fr', alignItems: 'end' }}>
-        <label>Ticker symbol<input value={symbol} onChange={e => setSymbol(e.target.value.toUpperCase())} placeholder="e.g. AAPL (stocks and ETFs only, not crypto)" required /></label>
-        <button className="run cta-glow" type="submit" disabled={loading} style={{ marginTop: 0 }}>{loading ? 'GENERATING…' : 'GENERATE A-TAMP REPORT'}</button>
+        <label>Ticker symbol<input value={symbol} onChange={e => setSymbol(e.target.value.toUpperCase())} placeholder="e.g. AAPL (stocks and ETFs only, not crypto)" required disabled={!session} /></label>
+        <button className="run cta-glow" type="submit" disabled={loading || !session} style={{ marginTop: 0 }}>{loading ? 'GENERATING…' : 'GENERATE A-TAMP REPORT'}</button>
       </form>
       <p className="field-warning">Each report consumes paid AI and market-data resources, so requests may be rate-limited.</p>
       <p className="tiny legal-notice">{NOTICE_COMPANY_REPORT}</p>
-      {!session && <p className="muted" style={{ marginTop: 12 }}>Log in on the <a href="/research">Research</a> page to save reports and revisit them here later.</p>}
+      {!session && <p className="muted" style={{ marginTop: 12 }}><a href="/login">Log in</a> to generate and save company reports.</p>}
       {error && <p className="msg banner" style={{ marginTop: 16 }}>{error}</p>}
     </section>
 

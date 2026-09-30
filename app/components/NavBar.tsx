@@ -46,7 +46,7 @@ export default function NavBar(){
   ]
 
   return <nav className="topnav" aria-label="Main navigation">
-    <Link href="/home" className="topnav-brand" aria-label="Strategy Lab AI home">
+    <Link href={userId?'/home':'/login'} className="topnav-brand" aria-label="Strategy Lab AI home">
       <svg className="brand-mark" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
         <defs><linearGradient id="brand-grad" x1="0" y1="0" x2="24" y2="24"><stop offset="0" stopColor="#53d6ff"/><stop offset="1" stopColor="#b394ff"/></linearGradient></defs>
         <rect x="2.2" y="2.2" width="19.6" height="19.6" rx="6" stroke="url(#brand-grad)" strokeWidth="1.6"/>
@@ -56,12 +56,12 @@ export default function NavBar(){
       STRATEGY LAB <em>AI</em>
     </Link>
     <div className="topnav-links">
-      {links.map(([href,label,active])=>
+      {userId?links.map(([href,label,active])=>
         <Link key={href} href={href} className={active?'active':''} aria-current={active?'page':undefined}>
           {label}
           {href==='/notifications'&&unreadCount>0&&<span className="nav-badge" aria-label={`${unreadCount} unread notifications`}>{unreadCount>9?'9+':unreadCount}</span>}
         </Link>
-      )}
+      ):<Link href="/login" className={pathname==='/login'?'active':''} aria-current={pathname==='/login'?'page':undefined}>Sign in</Link>}
     </div>
   </nav>
 }

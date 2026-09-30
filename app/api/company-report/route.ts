@@ -4,6 +4,7 @@ import {
   raw, dateStr, sma, rsi, macd, atr, periodReturn, NOT_REPORTED, UNAVAILABLE,
 } from '@/lib/companyReport'
 import { checkRateLimit, clientIp, rateLimitedPayload } from '@/lib/rateLimit'
+import { getAuthedUserId } from '@/lib/serverAuth'
 
 export const dynamic = 'force-dynamic'
 // Vercel's regular serverless functions run on AWS Lambda IPs that Yahoo
@@ -55,6 +56,12 @@ export async function GET(req: NextRequest) {
     const p = rateLimitedPayload(rl)
     return NextResponse.json(p.body, { status: p.status, headers: p.headers })
   }
+
+  // Owner decision: no report data (not just the AI narrative) should be
+  // generated for anyone who isn't logged in.
+  const userId = await getAuthedUserId(req)
+  if (!userId) return NextResponse.json({ error: 'Please log in to generate a company report.' }, { status: 401 })
+
   const symbol = (req.nextUrl.searchParams.get('symbol') || '').trim().toUpperCase()
   if (!symbol) return NextResponse.json({ error: 'Provide a ticker symbol.' }, { status: 400 })
   if (!/^[A-Z0-9.^=-]{1,15}$/.test(symbol)) return NextResponse.json({ error: 'That is not a valid ticker symbol.' }, { status: 400 })

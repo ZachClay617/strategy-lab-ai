@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { PORTFOLIO_UNIVERSE } from '@/lib/portfolioUniverse'
 import { checkRateLimit, clientIp, rateLimitedPayload } from '@/lib/rateLimit'
-import { verifyUser, AUTH_REQUIRED_MESSAGE } from '@/lib/apiAuth'
+import { getAuthedUserId } from '@/lib/serverAuth'
+import { sanitizeStrings } from '@/lib/sanitizeText'
 
 const KEYWORD_MAP:Record<string,string[]> = {
   tech:['tech','technology','software'],
@@ -71,18 +72,22 @@ export async function POST(req:NextRequest){
     const p=rateLimitedPayload(rl)
     return NextResponse.json(p.body,{status:p.status,headers:p.headers})
   }
-  // Costs real AI + market-data resources per call: require a signed-in
-  // account, then rate-limit per user as well as per IP.
-  const auth=await verifyUser(req)
-  if(!auth)return NextResponse.json({error:AUTH_REQUIRED_MESSAGE},{status:401})
-  const userLimit=await checkRateLimit('portfolio-research-user',auth.userId,[
-    {limit:10,windowMs:60_000,label:'burst'},
-    {limit:60,windowMs:3_600_000,label:'hourly'},
+
+  // Must be a real, logged-in Supabase user — this route can trigger a paid
+  // Anthropic call and was previously reachable by anyone on the internet
+  // with only a per-IP rate limit standing between them and your bill.
+  const userId=await getAuthedUserId(req)
+  if(!userId)return NextResponse.json({error:'You must be logged in to run portfolio research.'},{status:401})
+
+  // A per-account daily ceiling on top of the per-IP limit above.
+  const userRl=await checkRateLimit('portfolio-research-user',userId,[
+    {limit:15,windowMs:86_400_000,label:'daily'},
   ])
-  if(!userLimit.ok){
-    const p=rateLimitedPayload(userLimit)
+  if(!userRl.ok){
+    const p=rateLimitedPayload(userRl,"You've reached today's portfolio research limit for your account — please try again tomorrow.")
     return NextResponse.json(p.body,{status:p.status,headers:p.headers})
   }
+
   const body=await req.json().catch(()=>null)
   if(!body)return NextResponse.json({error:'invalid_request'},{status:400})
   // Bound the prompt inputs so a hostile client can't inflate token costs.
@@ -123,7 +128,7 @@ export async function POST(req:NextRequest){
         const holdings=(parsed.holdings||[]).filter((h:any)=>validSymbols.has(String(h.symbol).toUpperCase())).map((h:any)=>({symbol:String(h.symbol).toUpperCase(),weight:Number(h.weight)||0,rationale:String(h.rationale||'')}))
         const total=holdings.reduce((s:number,h:any)=>s+h.weight,0)||1
         const normalized=holdings.map((h:any)=>({...h,weight:Math.round(h.weight/total*1000)/10,entryPrice:marketData.find(m=>m.symbol===h.symbol)?.lastClose}))
-        if(normalized.length)return NextResponse.json({mode:'ai',holdings:normalized,summary:parsed.summary||'',dataAsOf:new Date().toISOString(),universeSize:marketData.length})
+        if(normalized.length)return NextResponse.json(sanitizeStrings({mode:'ai',holdings:normalized,summary:parsed.summary||'',dataAsOf:new Date().toISOString(),universeSize:marketData.length}))
         console.error('AI returned zero valid holdings after filtering',JSON.stringify(parsed).slice(0,2000))
       }
     }catch(e){console.error('portfolio AI call failed, falling back to heuristic',e)}
