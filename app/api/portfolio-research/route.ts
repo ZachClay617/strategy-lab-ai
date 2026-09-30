@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { PORTFOLIO_UNIVERSE } from '@/lib/portfolioUniverse'
 import { checkRateLimit, clientIp, rateLimitedPayload } from '@/lib/rateLimit'
+import { verifyUser, AUTH_REQUIRED_MESSAGE } from '@/lib/apiAuth'
 
 const KEYWORD_MAP:Record<string,string[]> = {
   tech:['tech','technology','software'],
@@ -70,10 +71,26 @@ export async function POST(req:NextRequest){
     const p=rateLimitedPayload(rl)
     return NextResponse.json(p.body,{status:p.status,headers:p.headers})
   }
+  // Costs real AI + market-data resources per call: require a signed-in
+  // account, then rate-limit per user as well as per IP.
+  const auth=await verifyUser(req)
+  if(!auth)return NextResponse.json({error:AUTH_REQUIRED_MESSAGE},{status:401})
+  const userLimit=await checkRateLimit('portfolio-research-user',auth.userId,[
+    {limit:10,windowMs:60_000,label:'burst'},
+    {limit:60,windowMs:3_600_000,label:'hourly'},
+  ])
+  if(!userLimit.ok){
+    const p=rateLimitedPayload(userLimit)
+    return NextResponse.json(p.body,{status:p.status,headers:p.headers})
+  }
   const body=await req.json().catch(()=>null)
   if(!body)return NextResponse.json({error:'invalid_request'},{status:400})
-  const description:string=body.description||''
-  const currentHoldings:{symbol:string;weight:number}[]=Array.isArray(body.holdings)?body.holdings:[]
+  // Bound the prompt inputs so a hostile client can't inflate token costs.
+  const description:string=String(body.description||'').slice(0,2000)
+  const currentHoldings:{symbol:string;weight:number}[]=(Array.isArray(body.holdings)?body.holdings:[])
+    .slice(0,60)
+    .filter((h:any)=>typeof h?.symbol==='string'&&/^[A-Z0-9.^=-]{1,15}$/i.test(h.symbol))
+    .map((h:any)=>({symbol:String(h.symbol).toUpperCase(),weight:Number(h.weight)||0}))
   if(!description.trim())return NextResponse.json({error:'A portfolio description is required before the AI can research it.'},{status:400})
 
   const keywords=extractKeywords(description)

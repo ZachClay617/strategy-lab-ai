@@ -347,7 +347,8 @@ export default function Portfolios(){
     if(!portfolio?.description.trim()){setMsg('Add a description first so the AI knows what this portfolio should do.');return}
     setResearching(true);setMsg('');setProposal(null)
     try{
-      const r=await fetch('/api/portfolio-research',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({description:portfolio.description,holdings:holdings.map(h=>({symbol:h.symbol,weight:weightOf(h)}))})})
+      const token=(await supabase!.auth.getSession()).data.session?.access_token
+      const r=await fetch('/api/portfolio-research',{method:'POST',headers:{'content-type':'application/json',...(token?{authorization:`Bearer ${token}`}:{})},body:JSON.stringify({description:portfolio.description,holdings:holdings.map(h=>({symbol:h.symbol,weight:weightOf(h)}))})})
       const j=await r.json()
       if(!r.ok){setMsg(j.error||'Research failed.');setResearching(false);return}
       setProposal(j)

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { timingSafeEqual } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
 import { fetchLastPrice } from '@/lib/market'
 import { checkRateLimit, clientIp, rateLimitedPayload } from '@/lib/rateLimit'
@@ -13,11 +14,15 @@ type Holding = { id:string; portfolio_id:string; symbol:string; weight:number; e
 type ClosedTrade = { portfolio_id:string; shares:number; entry_price:number; realized_pl:number }
 
 // Header-only on purpose: a secret in a query string gets recorded in host,
-// proxy, and analytics logs; an Authorization header does not.
+// proxy, and analytics logs; an Authorization header does not. Compared in
+// constant time so response timing can't leak how much of a guess matched.
 function isAuthorized(req:NextRequest){
   const secret=process.env.CRON_SECRET
   if(!secret)return false
-  return req.headers.get('authorization')===`Bearer ${secret}`
+  const provided=req.headers.get('authorization')||''
+  const expected=`Bearer ${secret}`
+  const a=Buffer.from(provided),b=Buffer.from(expected)
+  return a.length===b.length&&timingSafeEqual(a,b)
 }
 
 export async function GET(req:NextRequest){

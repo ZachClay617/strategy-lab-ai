@@ -76,7 +76,6 @@ export default function CompanyReportPage() {
   const [session, setSession] = useState<any>(null)
   const [symbol, setSymbol] = useState('')
   const [loading, setLoading] = useState(false)
-  const [narrativeLoading, setNarrativeLoading] = useState(false)
   const [error, setError] = useState('')
   const [report, setReport] = useState<any>(null)
   const [savedReports, setSavedReports] = useState<{ id: string; symbol: string; company_name: string; created_at: string; favorite?: boolean }[]>([])
@@ -129,17 +128,25 @@ export default function CompanyReportPage() {
       const r = await fetch(`/api/company-report?symbol=${encodeURIComponent(symbol.trim().toUpperCase())}`)
       const j = await r.json()
       if (!r.ok) { setError(j.error || 'Could not generate report.'); setLoading(false); return }
+      // The AI-written analysis requires a signed-in account (the narrative
+      // endpoint spends paid AI resources per call). Logged out, the report's
+      // real data still renders in full with a sign-in note in each section.
+      const token = supabase ? (await supabase.auth.getSession()).data.session?.access_token : undefined
+      if (!token) {
+        const note = 'Sign in to generate the AI-written analysis for this section — every figure above is still real, independently sourced data.'
+        setReport({ ...j, narrative: { mode: 'auth', businessExplanation: note, competitiveAnalysis: note, customerGrowthAnalysis: note, brandStrengthFacts: [], brandStrengthInference: [], swot: { strengths: [], weaknesses: [], opportunities: [], threats: [] }, executiveSummary: note, newsCommentary: [], catalystCommentary: note, technicalsCommentary: note, finalAnalysis: note } })
+        setLoading(false)
+        return
+      }
       setReport({ ...j, narrative: PENDING_NARRATIVE })
       setLoading(false)
-      setNarrativeLoading(true)
       try {
-        const nr = await fetch('/api/company-report/narrative', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(j) })
+        const nr = await fetch('/api/company-report/narrative', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: JSON.stringify(j) })
         const nj = await nr.json()
-        const finalReport = { ...j, narrative: nj.narrative }
+        const finalReport = { ...j, narrative: nj.narrative ?? { mode: 'error', finalAnalysis: nj.error || 'The AI analysis could not be generated right now.' } }
         setReport((prev: any) => prev ? finalReport : prev)
-        await saveReport(finalReport)
+        if (nj.narrative) await saveReport(finalReport)
       } catch { /* data report still stands on its own without the written analysis */ }
-      setNarrativeLoading(false)
       return
     } catch (e: any) { setError(`Request failed: ${e.message}`) }
     setLoading(false)

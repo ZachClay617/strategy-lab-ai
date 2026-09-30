@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { timingSafeEqual } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
 import { fetchCandles } from '@/lib/market'
 import { evaluateSymbolSignals } from '@/lib/strategySignals'
@@ -12,11 +13,15 @@ import { checkRateLimit, clientIp, rateLimitedPayload } from '@/lib/rateLimit'
 export const dynamic = 'force-dynamic'
 
 // Header-only on purpose: a secret in a query string gets recorded in host,
-// proxy, and analytics logs; an Authorization header does not.
+// proxy, and analytics logs; an Authorization header does not. Compared in
+// constant time so response timing can't leak how much of a guess matched.
 function isAuthorized(req:NextRequest){
   const secret=process.env.CRON_SECRET
   if(!secret)return false
-  return req.headers.get('authorization')===`Bearer ${secret}`
+  const provided=req.headers.get('authorization')||''
+  const expected=`Bearer ${secret}`
+  const a=Buffer.from(provided),b=Buffer.from(expected)
+  return a.length===b.length&&timingSafeEqual(a,b)
 }
 
 export async function GET(req:NextRequest){

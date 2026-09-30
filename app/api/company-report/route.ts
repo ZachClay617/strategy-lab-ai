@@ -19,7 +19,7 @@ function last<T>(arr: T[]): T | null { return arr.length ? arr[arr.length - 1] :
 async function buildCompetitor(sym: string) {
   const [qs, candles] = await Promise.all([fetchQuoteSummaryLite(sym), fetchDailyCandles(sym, 400)])
   if (!qs) return null
-  const p = qs.price || {}, s = qs.summaryDetail || {}, k = qs.defaultKeyStatistics || {}, f = qs.financialData || {}
+  const p = qs.price || {}, s = qs.summaryDetail || {}, f = qs.financialData || {}
   const closes = candles.map(c => c.close)
   return {
     symbol: sym,
@@ -57,6 +57,7 @@ export async function GET(req: NextRequest) {
   }
   const symbol = (req.nextUrl.searchParams.get('symbol') || '').trim().toUpperCase()
   if (!symbol) return NextResponse.json({ error: 'Provide a ticker symbol.' }, { status: 400 })
+  if (!/^[A-Z0-9.^=-]{1,15}$/.test(symbol)) return NextResponse.json({ error: 'That is not a valid ticker symbol.' }, { status: 400 })
   // Yahoo lists every crypto pair as SYMBOL-USD (BTC-USD, ETH-USD, ...) — catch
   // the obvious case up front so we don't burn a quoteSummary fetch on it.
   if (/-(USD|USDT|USDC|EUR|GBP|BTC|ETH)$/i.test(symbol)) return NextResponse.json({ error: CRYPTO_NOT_SUPPORTED(symbol) }, { status: 400 })

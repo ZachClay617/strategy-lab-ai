@@ -44,6 +44,19 @@ What changed: the AI prompt no longer says "You are managing a … portfolio for
 - **Gender field — MITIGATED.** Now optional at signup (was required, contradicting the Privacy Policy) and documented as used only for greetings, removable at any time. Consider deleting the field entirely; it is low-value data.
 - **Avatar as base64 in profiles — noted in Privacy § 2.1; deleted with the account (cascade).**
 
+## 2b. Security audit (September 30, 2026) — findings and fixes
+
+A full pass over every API route, database migration, and dependency:
+
+- **Shared Yahoo auth cache open to any logged-in user — FIXED.** migration_v4's default privileges silently granted full CRUD on every later table to `authenticated`, and `yahoo_auth_cache` (v15) never enabled row level security — so any account could read or poison the shared upstream session cache. Migration v33 enables RLS and revokes the grants; only the server (service_role) can touch it now.
+- **Paid AI endpoints were unauthenticated — FIXED.** Anyone could `curl` `/api/company-report/narrative` or `/api/portfolio-research` and spend Anthropic/market-data money. Both now require a signed-in account (Supabase JWT verified server-side) and are rate-limited per user as well as per IP; request bodies and prompt inputs are size-capped. Logged-out visitors still get the full data-only company report with a sign-in note on the AI sections.
+- **Security headers — ADDED** (next.config.ts): Content-Security-Policy (self + the Supabase project only; frame-ancestors 'none'), HSTS with preload, nosniff, X-Frame-Options DENY, strict Referrer-Policy, restrictive Permissions-Policy, and the X-Powered-By header removed.
+- **Cron endpoints** — secret now compared in constant time; header-only (query fallback removed in the earlier pass).
+- **Input validation** — ticker symbols are format-validated on every market/report route; the names lookup is capped at 30 symbols per request.
+- **Secrets** — none in the repository or its full git history (only an empty .env.example was ever committed); `npm audit` reports zero known vulnerabilities; the service-role key is only ever read in server-side code.
+- **Row level security** — verified on every user table (owner-scoped policies, snapshot table read-only for users, heartbeats read-only); the only gap was the Yahoo cache above.
+- Dead code removed in the same pass (unused CSS blocks, unused state and locals; the codebase now compiles clean under noUnusedLocals/noUnusedParameters).
+
 ## 3. Cross-document consistency (re-verified after the rewrite)
 
 - Cancellation: Terms § 7.6 ↔ Refund § 3 (online, at least as easy as signup) — consistent.

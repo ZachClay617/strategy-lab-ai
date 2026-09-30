@@ -320,9 +320,9 @@ async function waitWhilePaused(){
 
 export default function Home(){
  const router=useRouter()
- const [session,setSession]=useState<any>(null),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[mode,setMode]=useState<'login'|'signup'>('login'),[msg,setMsg]=useState(''),[showPassword,setShowPassword]=useState(false),[strategies,setStrategies]=useState<Strategy[]>([]),[runs,setRuns]=useState<Run[]>([]),[selected,setSelected]=useState<Strategy|null>(null),[variations,setVariations]=useState(25000),[minTrades,setMinTrades]=useState(1),[idea,setIdea]=useState(''),[liveCandles,setLiveCandles]=useState<Candle[]>([]),[liveStatus,setLiveStatus]=useState('Waiting for live market data'),[watchLive,setWatchLive]=useState(true),[chartWindow,setChartWindow]=useState<number>(14),[runSort,setRunSort]=useState<'newest'|'oldest'|'qualified'|'bestScore'>('newest'),[expandedRuns,setExpandedRuns]=useState<Record<string,boolean>>({}),[favLogsOpen,setFavLogsOpen]=useState(false),[favStrategiesOpen,setFavStrategiesOpen]=useState(false),[pendingDelete,setPendingDelete]=useState<null|{kind:'log'}|{kind:'run';runId:string;label:string}|{kind:'runHistory';runId:string;label:string}>(null),[deletingLog,setDeletingLog]=useState(false),[symbolNames,setSymbolNames]=useState<Record<string,string>>({}),[avatarUrl,setAvatarUrl]=useState<string|null>(null),[signupUsername,setSignupUsername]=useState(''),[signupName,setSignupName]=useState(''),[signupGender,setSignupGender]=useState(''),[consentChecked,setConsentChecked]=useState(false),[renamingStrategyId,setRenamingStrategyId]=useState<string|null>(null),[renameValue,setRenameValue]=useState(''),[renamingRunId,setRenamingRunId]=useState<string|null>(null),[renameRunValue,setRenameRunValue]=useState('')
+ const [session,setSession]=useState<any>(null),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[mode,setMode]=useState<'login'|'signup'>('login'),[msg,setMsg]=useState(''),[showPassword,setShowPassword]=useState(false),[strategies,setStrategies]=useState<Strategy[]>([]),[runs,setRuns]=useState<Run[]>([]),[selected,setSelected]=useState<Strategy|null>(null),[variations,setVariations]=useState(25000),[minTrades,setMinTrades]=useState(1),[idea,setIdea]=useState(''),[liveCandles,setLiveCandles]=useState<Candle[]>([]),[liveStatus,setLiveStatus]=useState('Waiting for live market data'),[watchLive,setWatchLive]=useState(true),[chartWindow,setChartWindow]=useState<number>(14),[runSort,setRunSort]=useState<'newest'|'oldest'|'qualified'|'bestScore'>('newest'),[expandedRuns,setExpandedRuns]=useState<Record<string,boolean>>({}),[favLogsOpen,setFavLogsOpen]=useState(false),[favStrategiesOpen,setFavStrategiesOpen]=useState(false),[pendingDelete,setPendingDelete]=useState<null|{kind:'log'}|{kind:'run';runId:string;label:string}|{kind:'runHistory';runId:string;label:string}>(null),[deletingLog,setDeletingLog]=useState(false),[symbolNames,setSymbolNames]=useState<Record<string,string>>({}),[signupUsername,setSignupUsername]=useState(''),[signupName,setSignupName]=useState(''),[signupGender,setSignupGender]=useState(''),[consentChecked,setConsentChecked]=useState(false),[renamingStrategyId,setRenamingStrategyId]=useState<string|null>(null),[renameValue,setRenameValue]=useState(''),[renamingRunId,setRenamingRunId]=useState<string|null>(null),[renameRunValue,setRenameRunValue]=useState('')
  const rs=useSyncExternalStore(subscribeRun,getRunSnapshot,getRunSnapshot)
- const {running,paused,progress,feed,testLog,activeCandidate,researchCandles,activeIndex,activeTrades,rejectionCounts,tickerError,selectedRun,balance,symbol,market,runMode,speedKey:speed,completedCount,qualifiedCount}=rs
+ const {running,paused,progress,testLog,activeCandidate,researchCandles,activeIndex,activeTrades,rejectionCounts,tickerError,selectedRun,balance,symbol,market,runMode,speedKey:speed,completedCount,qualifiedCount}=rs
  useEffect(()=>{if(!supabase)return;supabase.auth.getSession().then(({data})=>setSession(data.session));const {data}=supabase.auth.onAuthStateChange((_e,s)=>setSession(s));return()=>data.subscription.unsubscribe()},[])
  useEffect(()=>{if(session?.user)loadData()},[session?.user?.id])
  useEffect(()=>{
@@ -360,7 +360,7 @@ export default function Home(){
      rows=rows.map(x=>orphaned.includes(x)?{...x,status:'stopped'}:x)
      await Promise.all(orphaned.map(x=>supabase!.from('research_runs').update({status:'stopped',finished_at:x.finished_at||new Date().toISOString()}).eq('id',x.id)))
    }
-   setStrategies((s||[]) as Strategy[]);setRuns(rows);const {data:p}=await supabase.from('profiles').select('current_balance,avatar_url').eq('id',session.user.id).maybeSingle();if(p?.current_balance!=null&&!runSnapshot.running)patchRun({balance:Number(p.current_balance)});setAvatarUrl(p?.avatar_url||null)
+   setStrategies((s||[]) as Strategy[]);setRuns(rows);const {data:p}=await supabase.from('profiles').select('current_balance').eq('id',session.user.id).maybeSingle();if(p?.current_balance!=null&&!runSnapshot.running)patchRun({balance:Number(p.current_balance)})
  }
 
  async function openStrategy(s:Strategy){
@@ -489,7 +489,6 @@ export default function Home(){
    }
    let isSessions:(Session&{metrics:Metrics})[]=[]
    let oosFoldSessions:(Session&{metrics:Metrics})[][]=[]
-   let pickedTier:typeof RESOLUTION_TIERS[number]|null=null
    let dataSource:DataSource=live?liveDataSource:'yahoo'
    let hardFail:string|null=null
    const checkHard=(sess:Session&{metrics:Metrics})=>{if(hardFail)return;const hc=hardSafetyCheck(sess.metrics,sess.trades);if(!hc.ok)hardFail=hc.reason||'Failed a hard safety check.'}
@@ -501,7 +500,6 @@ export default function Home(){
    } else {
      const tier=pickTier(r)
      if(!tier){completed++;continue}
-     pickedTier=tier
      const dayPoolIS=tier.key==='15m'?daySpread.inSampleChunks.flat():[]
      const flatPoolIS=tier.key==='1h'?hourSpread.inSampleChunks:tier.key==='1d'?daySpreadD.inSampleChunks:[]
      // Same floor as the out-of-sample sessions below — minTrades defaults to 1, which

@@ -11,13 +11,17 @@ export async function GET(req:NextRequest){
     const p=rateLimitedPayload(rl)
     return NextResponse.json(p.body,{status:p.status,headers:p.headers})
   }
+  // Ticker format guard: bounds the upstream fan-out and rejects junk input
+  // before it ever reaches the market-data provider.
+  const VALID_SYMBOL=/^[A-Z0-9.^=-]{1,15}$/i
   const namesParam=req.nextUrl.searchParams.get('names')
   if(namesParam){
-    const symbols=namesParam.split(',').map(s=>s.trim()).filter(Boolean)
+    const symbols=namesParam.split(',').map(s=>s.trim()).filter(s=>VALID_SYMBOL.test(s)).slice(0,30)
     const names=await fetchSymbolNames(symbols)
     return NextResponse.json(names)
   }
   const symbol=req.nextUrl.searchParams.get('symbol')||'AAPL'
+  if(!VALID_SYMBOL.test(symbol))return NextResponse.json({error:'invalid_ticker',message:'That is not a valid ticker symbol.'},{status:400})
   const live=req.nextUrl.searchParams.get('live')==='1'
   const interval=req.nextUrl.searchParams.get('interval')||undefined
   const rangeDays=Number(req.nextUrl.searchParams.get('days')||req.nextUrl.searchParams.get('rangeDays')||3650)
