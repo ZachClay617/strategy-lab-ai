@@ -14,3 +14,20 @@ export function normalizeUsername(raw: string): string {
 export function isValidUsername(raw: string): boolean {
   return USERNAME_PATTERN.test(raw)
 }
+
+// Usernames are matched case-insensitively, which means an ILIKE lookup — and
+// in a LIKE pattern "_" is a single-character wildcard and "%" matches
+// anything. "_" is a legal username character, so `a_b` typed at the login box
+// would otherwise also match the account `axb`; a "%" smuggled past the format
+// check would match the first account in the table. isValidUsername() already
+// rejects "%", and this makes the remaining "_" literal.
+export function escapeLikePattern(raw: string): string {
+  return raw.replace(/[\\%_]/g, m => '\\' + m)
+}
+
+// True only when this row really is the account that was asked for, whatever
+// the database's pattern matching decided. Belt and braces behind the two
+// guards above.
+export function usernameMatches(candidate: string | null | undefined, asked: string): boolean {
+  return typeof candidate === 'string' && candidate.toLowerCase() === asked.toLowerCase()
+}

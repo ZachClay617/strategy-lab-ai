@@ -5,6 +5,7 @@ import { NOTICE_SIGNALS } from '@/lib/legal'
 import { evaluateSymbolSignals, describeFamily } from '@/lib/strategySignals'
 import LiveChart, { ChartMarker } from '@/app/components/LiveChart'
 import type { Candle } from '@/lib/market'
+import { fetchSymbolNames, fetchTierCandlesViaApi } from '@/lib/marketClient'
 
 type WatchItem = { id:string; symbol:string; market:string }
 type FavStrategy = { id:string; name:string; family:string; parameters:any; symbol:string; market:string }
@@ -79,7 +80,7 @@ export default function TradeSignalsPage(){
     const missing=Array.from(new Set(watchlist.map(w=>w.symbol))).filter(s=>!(s in symbolNames))
     if(!missing.length)return
     let dead=false
-    fetch(`/api/market?names=${encodeURIComponent(missing.join(','))}`).then(r=>r.json()).then(j=>{if(!dead&&j&&typeof j==='object')setSymbolNames(prev=>({...prev,...j}))}).catch(()=>{})
+    fetchSymbolNames(missing).then(found=>{if(!dead&&Object.keys(found).length)setSymbolNames(prev=>({...prev,...found}))})
     return()=>{dead=true}
   },[session?.user?.id,watchlist])
 
@@ -156,7 +157,7 @@ export default function TradeSignalsPage(){
             // the error state we just cleared — otherwise a working market-data
             // fetch gets permanently mislabeled as "unavailable" every single poll
             // because of something unrelated to fetching candles.
-            try{await evaluateSymbolSignals(supabase!,session.user.id,w.symbol,w.market,j)}
+            try{await evaluateSymbolSignals(supabase!,session.user.id,w.symbol,w.market,j,fetchTierCandlesViaApi)}
             catch(e){console.error(`Signal check failed for ${w.symbol}`,e)}
           } else if(j?.error==='invalid_ticker'){
             setErrorByKey(prev=>({...prev,[k]:j.message||`"${w.symbol}" is not a recognized ticker symbol.`}))

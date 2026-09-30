@@ -16,6 +16,31 @@ const redisUrl=process.env.KV_REST_API_URL||process.env.UPSTASH_REDIS_REST_URL
 const redisToken=process.env.KV_REST_API_TOKEN||process.env.UPSTASH_REDIS_REST_TOKEN
 const redis=redisUrl&&redisToken?new Redis({url:redisUrl,token:redisToken}):null
 
+// The in-memory fallback below is per serverless instance. That is fine
+// locally and in preview, but in production it means 50 parallel sign-in
+// attempts can land on 50 cold instances that each see "attempt 1 of 10" —
+// i.e. no brute-force, cost, or abuse limit at all. Fail loudly at module
+// load so a missing Upstash/KV binding shows up in the deploy logs rather
+// than as a silently unprotected app.
+if(!redis&&process.env.VERCEL_ENV==='production'){
+  console.error(
+    'RATE LIMITING IS NOT DISTRIBUTED: no KV_REST_API_URL/KV_REST_API_TOKEN ' +
+    '(or UPSTASH_REDIS_REST_URL/UPSTASH_REDIS_REST_TOKEN) is set in this ' +
+    'production environment, so every limit is per-instance only and is ' +
+    'effectively bypassable. Add the Upstash/KV integration in Vercel.',
+  )
+}
+
+// Ceiling shared by every caller of a paid API, on top of the per-IP and
+// per-account tiers. Accounts are free and self-serve, so per-account caps
+// multiply by however many accounts someone cares to register — this is the
+// one limit that bounds the actual bill. Generous by default (it should only
+// ever bite during abuse, not normal use) and raisable with an env var as
+// real usage grows.
+export const GLOBAL_AI_DAILY_LIMIT = Number(process.env.AI_GLOBAL_DAILY_LIMIT) > 0
+  ? Number(process.env.AI_GLOBAL_DAILY_LIMIT)
+  : 500
+
 export type RateLimitResult = { ok:boolean; limit:number; remaining:number; resetAt:number; label?:string }
 
 // ---------- In-memory fallback (used only when Redis isn't configured) ----------

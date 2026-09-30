@@ -3,6 +3,7 @@ import { timingSafeEqual } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
 import { fetchCandles } from '@/lib/market'
 import { evaluateSymbolSignals } from '@/lib/strategySignals'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 import { checkRateLimit, clientIp, rateLimitedPayload } from '@/lib/rateLimit'
 
 // Called periodically by an external scheduler (same pattern as
@@ -48,9 +49,15 @@ export async function GET(req:NextRequest){
   const {error:heartbeatErr}=await admin.from('cron_heartbeats').upsert({name:'live-signals',last_run_at:new Date().toISOString()})
   if(heartbeatErr)console.error('cron heartbeat write failed',heartbeatErr)
 
-  const {data:favorites,error:favErr}=await admin.from('strategies').select('id,user_id,symbol,market').eq('favorite',true)
+  // Paged: this reads every user's favorites at once, so an unpaginated
+  // select would silently stop at PostgREST's 1000-row ceiling and quietly
+  // stop checking everyone past it.
+  const {data:favorites,error:favErr}=await fetchAllRows<{id:string;user_id:string;symbol:string;market:string}>(
+    (from,to)=>admin.from('strategies').select('id,user_id,symbol,market').eq('favorite',true).order('id',{ascending:true}).range(from,to),
+    'strategies.favorite',
+  )
   if(favErr)return NextResponse.json({error:favErr.message},{status:500})
-  if(!favorites?.length)return NextResponse.json({checked:0,notificationsCreated:0})
+  if(!favorites.length)return NextResponse.json({checked:0,notificationsCreated:0})
 
   const candlesBySymbol=new Map<string,Awaited<ReturnType<typeof fetchCandles>>>()
   const symbolKeys=Array.from(new Set(favorites.map(f=>f.symbol)))

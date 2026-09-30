@@ -5,11 +5,21 @@ vi.mock('@/lib/serverAuth', () => ({ getAuthedUserId: vi.fn() }))
 import { getAuthedUserId } from '@/lib/serverAuth'
 import { POST } from './route'
 
+// Mirrors the shape /api/company-report actually returns. The route now
+// validates every section it and the narrative builders dereference, so a
+// partial stub is (correctly) a 400 — see the malformed-body test below.
 const fakeBundle = {
+  symbol: 'TEST',
+  dataAsOf: '2026-01-01T00:00:00.000Z',
   overview: { name: 'Test Co', businessSummary: 'Not publicly reported' },
   competitors: [{ revenueGrowth: null, netMargin: null, grossMargin: null }],
+  customerGrowth: {},
+  financialHealth: { income: { revenueHistory: [] } },
+  management: { ceo: null, cfo: null, insiderOwnershipPct: null, institutionalOwnershipPct: null, recentInsiderTransactions: [] },
+  news: [],
   catalysts: { numberOfAnalysts: null, analystTargetMean: null, nextEarningsDate: 'Not publicly reported' },
   technicals: { trend: 'Unavailable' },
+  shareholderReturns: {},
 }
 
 // A distinct x-forwarded-for per call keeps the existing per-IP rate limit
@@ -41,6 +51,17 @@ describe('/api/company-report/narrative auth + cost controls', () => {
     const fetchSpy = vi.spyOn(global, 'fetch')
     const res = await POST(makeReq({ authed: false, ip: '1.1.1.1' }))
     expect(res.status).toBe(401)
+    expect(fetchSpy).not.toHaveBeenCalled()
+    fetchSpy.mockRestore()
+  })
+
+  it('rejects a malformed bundle with a 400 instead of crashing into a 500', async () => {
+    vi.mocked(getAuthedUserId).mockResolvedValue('narrative-malformed-user')
+    const fetchSpy = vi.spyOn(global, 'fetch')
+    // Passes the old `!bundle.overview` check but has none of the sections the
+    // prompt builder and template fallback read, which used to be a TypeError.
+    const res = await POST(makeReq({ authed: true, ip: '2.2.2.2', body: { symbol: 'TEST', overview: {} } }))
+    expect(res.status).toBe(400)
     expect(fetchSpy).not.toHaveBeenCalled()
     fetchSpy.mockRestore()
   })

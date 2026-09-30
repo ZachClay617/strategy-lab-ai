@@ -101,8 +101,18 @@ export async function yahooFetch(url: string, opts: { forceFreshAuth?: boolean }
   const { cookie, crumb } = await getYahooAuth({ skipDb: opts.forceFreshAuth })
   const sep = url.includes('?') ? '&' : '?'
   const finalUrl = crumb ? `${url}${sep}crumb=${encodeURIComponent(crumb)}` : url
-  const r = await fetch(finalUrl, { headers: { 'User-Agent': UA, ...(cookie ? { cookie } : {}) }, cache: 'no-store' })
-  const rawText = await r.text()
+  // A DNS/socket failure here used to reject all the way out of the API route
+  // that called it, so Next returned a bare 500 with an HTML body and the page
+  // showed "Request failed: Unexpected token <". Every caller already handles
+  // a null result as "upstream had nothing for us", so return that instead.
+  let r: Response
+  try {
+    r = await fetch(finalUrl, { headers: { 'User-Agent': UA, ...(cookie ? { cookie } : {}) }, cache: 'no-store' })
+  } catch (e) {
+    console.error('[yahooAuth] request failed for', url.split('?')[0], e)
+    return null
+  }
+  const rawText = await r.text().catch(() => '')
   const j = (() => { try { return JSON.parse(rawText) } catch { return null } })()
   if (!j) console.error('[yahooAuth] non-JSON response from', url.split('?')[0], '— status', r.status, 'body:', rawText.slice(0, 300))
   const unauthorized = j?.finance?.error?.code === 'Unauthorized' || j?.quoteSummary?.error?.code === 'Unauthorized'

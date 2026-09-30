@@ -106,7 +106,11 @@ export default function HomePage(){
     const p=prices[h.symbol];if(!p)continue
     const sh=h.shares!=null?h.shares:1
     value+=sh*p.last
-    if(h.entry_price!=null){
+    // Truthiness, matching /portfolios: a 0 average cost means "no cost basis
+    // recorded", not "bought for free". Counting it would make the same
+    // holding show a different total return on this page than on that one,
+    // and an infinite percentage return on a zero cost basis.
+    if(h.entry_price){
       costBasis+=h.entry_price*sh;returnDollar+=(p.last-h.entry_price)*sh
       unrealizedCostBasis+=h.entry_price*sh;unrealizedDollar+=(p.last-h.entry_price)*sh
     }
@@ -154,7 +158,7 @@ export default function HomePage(){
   for(const h of holdings){
     const p=prices[h.symbol];if(!p)continue
     const sh=h.shares!=null?h.shares:1
-    if(h.entry_price!=null&&h.entry_price>0){
+    if(h.entry_price){
       const pct=(p.last-h.entry_price)/h.entry_price*100
       if(!topHoldingAllTime||pct>topHoldingAllTime.pct)topHoldingAllTime={symbol:h.symbol,pct,dollar:(p.last-h.entry_price)*sh}
     }

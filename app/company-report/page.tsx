@@ -145,7 +145,10 @@ export default function CompanyReportPage() {
         const nr = await fetch('/api/company-report/narrative', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: JSON.stringify(j) })
         const nj = await nr.json()
         const finalReport = { ...j, narrative: nj.narrative ?? { mode: 'error', finalAnalysis: nj.error || 'The AI analysis could not be generated right now.' } }
-        setReport((prev: any) => prev ? finalReport : prev)
+        // Generate AAPL, then MSFT before AAPL's narrative comes back, and a
+        // truthiness check would drop AAPL's analysis onto the MSFT report.
+        // Only replace the report this narrative was actually written for.
+        setReport((prev: any) => prev && prev.symbol === j.symbol && prev.dataAsOf === j.dataAsOf ? finalReport : prev)
         if (nj.narrative) await saveReport(finalReport)
       } catch { /* data report still stands on its own without the written analysis */ }
       return

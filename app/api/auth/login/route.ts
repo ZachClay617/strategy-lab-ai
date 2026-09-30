@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { checkRateLimit, clientIp, rateLimitedPayload } from '@/lib/rateLimit'
+import { escapeLikePattern, isValidUsername, usernameMatches } from '@/lib/username'
 
 // Signs a user in with either their email or their username. Username →
 // email resolution used to happen in the browser through a security-definer
 // RPC that any anonymous visitor could call — which let anyone on the
 // internet turn a guessed username into that user's email address. The
 // lookup now happens here with the service-role key, the resolved email is
-// never returned to the caller, and failures are indistinguishable from a
-// wrong password so the route can't be used to enumerate accounts.
+// never returned to the caller, and every failure returns the same message
+// and status as a wrong password.
 export const dynamic = 'force-dynamic'
 
 const GENERIC_FAIL = 'Invalid login credentials.'
@@ -36,14 +37,23 @@ export async function POST(req: NextRequest) {
   let email = identifier
   if (!identifier.includes('@')) {
     if (!serviceKey) return NextResponse.json({ error: 'Username sign-in is not configured. Use your email address.' }, { status: 500 })
+    // Three guards, because this lookup is a pattern match: the format check
+    // rejects "%" outright, the escape makes a literal "_" literal instead of
+    // a single-character wildcard, and the final comparison refuses any row
+    // that isn't exactly the account that was asked for. Without them,
+    // identifier "%" resolves to whichever account sorts first and password
+    // spraying no longer needs a username.
+    if (!isValidUsername(identifier)) return NextResponse.json({ error: GENERIC_FAIL }, { status: 401 })
     const admin = createClient(url, serviceKey)
     const { data, error } = await admin
       .from('profiles')
-      .select('email')
-      .ilike('username', identifier)
+      .select('username,email')
+      .ilike('username', escapeLikePattern(identifier))
       .limit(1)
       .maybeSingle()
-    if (error || !data?.email) return NextResponse.json({ error: GENERIC_FAIL }, { status: 401 })
+    if (error || !data?.email || !usernameMatches(data.username, identifier)) {
+      return NextResponse.json({ error: GENERIC_FAIL }, { status: 401 })
+    }
     email = data.email
   }
 

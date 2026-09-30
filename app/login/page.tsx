@@ -5,11 +5,13 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { LEGAL_VERSION, SIGNUP_CONSENT_TEXT } from '@/lib/legal'
 import { USERNAME_REQUIREMENTS, isValidUsername, normalizeUsername } from '@/lib/username'
+import { safeNextPath } from '@/lib/safeNext'
+import { updateProfile } from '@/lib/profile'
 
 function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const next = searchParams.get('next') || '/home'
+  const next = safeNextPath(searchParams.get('next'))
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -56,7 +58,7 @@ function LoginForm() {
         })
         if (res.error) { setMsg(res.error.message); return }
         if (res.data.user) {
-          const { error: profErr } = await supabase.from('profiles').upsert({ id: res.data.user.id, accepted_legal_at: new Date().toISOString(), accepted_legal_version: LEGAL_VERSION })
+          const { error: profErr } = await updateProfile(supabase, res.data.user.id, { accepted_legal_at: new Date().toISOString(), accepted_legal_version: LEGAL_VERSION })
           if (profErr) { setMsg(`Account created, but we couldn't record your policy acceptance (${profErr.message}). Please contact support.`); return }
         }
         if (res.data.session) { router.push(next); return }

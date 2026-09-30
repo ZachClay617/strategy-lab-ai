@@ -77,3 +77,35 @@ describe('confirmSellSignal / dismissSignal', () => {
     expect(second).toBe(false)
   })
 })
+
+describe('price guards', () => {
+  it('refuses a buy whose signal never resolved a price, instead of recording $0.00', async () => {
+    const client = makeMockClient()
+    const ok = await confirmBuySignal(client as any, 'user-1', { id: 'notif-1', strategy_id: 'strat-1', symbol: 'AAPL', market: 'Stocks', price: null })
+    expect(ok).toBe(false)
+    // Nothing was claimed or inserted, so the notification is still actionable
+    // once a real price comes through.
+    expect(client.calls).toHaveLength(0)
+  })
+
+  it('refuses to close a position at $0.00 when the sell signal has no price', async () => {
+    const client = makeMockClient()
+    const ok = await confirmSellSignal(client as any, { id: 'notif-1', symbol: 'AAPL', market: 'Stocks', price: null, position_id: 'pos-1' })
+    expect(ok).toBe(false)
+    expect(client.calls).toHaveLength(0)
+  })
+
+  it('still dismisses a priceless sell that has no position attached', async () => {
+    const client = makeMockClient()
+    const ok = await confirmSellSignal(client as any, { id: 'notif-1', symbol: 'AAPL', market: 'Stocks', price: null, position_id: null })
+    expect(ok).toBe(true)
+  })
+
+  it('records the real price when one is present', async () => {
+    const client = makeMockClient()
+    const ok = await confirmBuySignal(client as any, 'user-1', { id: 'notif-1', strategy_id: 'strat-1', symbol: 'AAPL', market: 'Stocks', price: 187.42 })
+    expect(ok).toBe(true)
+    const insert = client.calls.find(c => c.table === 'live_positions' && c.op === 'insert')
+    expect(insert?.payload.entry_price).toBe(187.42)
+  })
+})

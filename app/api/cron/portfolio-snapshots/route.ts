@@ -3,6 +3,7 @@ import { timingSafeEqual } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
 import { fetchLastPrice } from '@/lib/market'
 import { checkRateLimit, clientIp, rateLimitedPayload } from '@/lib/rateLimit'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 
 // Called once an hour, on the hour, by an external scheduler (not Vercel Cron,
 // which can't run sub-daily on the Hobby plan) — see
@@ -13,7 +14,7 @@ import { checkRateLimit, clientIp, rateLimitedPayload } from '@/lib/rateLimit'
 export const dynamic = 'force-dynamic'
 
 type Holding = { id:string; portfolio_id:string; symbol:string; weight:number; entry_price:number|null; shares:number|null }
-type ClosedTrade = { portfolio_id:string; shares:number; entry_price:number; realized_pl:number }
+type ClosedTrade = { id:string; portfolio_id:string; shares:number; entry_price:number; realized_pl:number }
 
 // Header-only on purpose: a secret in a query string gets recorded in host,
 // proxy, and analytics logs; an Authorization header does not. Compared in
@@ -42,30 +43,43 @@ export async function GET(req:NextRequest){
   if(!url||!serviceKey)return NextResponse.json({error:'Supabase service role key is not configured'},{status:500})
   const admin=createClient(url,serviceKey)
 
-  const {data:portfolios,error:pErr}=await admin.from('portfolios').select('id,user_id')
+  // Every read here is paged. These are cross-user, service-role selects whose
+  // rows get folded together per portfolio, so PostgREST's silent 1000-row
+  // ceiling wouldn't surface as an error — it would surface as a confidently
+  // wrong return_pct written for every portfolio, every hour, forever.
+  const {data:portfolios,error:pErr}=await fetchAllRows<{id:string;user_id:string}>(
+    (from,to)=>admin.from('portfolios').select('id,user_id').order('id',{ascending:true}).range(from,to),
+    'portfolios',
+  )
   if(pErr)return NextResponse.json({error:pErr.message},{status:500})
-  if(!portfolios?.length)return NextResponse.json({snapshotsWritten:0,portfoliosSkipped:0,symbolsFetched:0})
+  if(!portfolios.length)return NextResponse.json({snapshotsWritten:0,portfoliosSkipped:0,symbolsFetched:0})
 
-  const {data:holdings,error:hErr}=await admin.from('portfolio_holdings').select('id,portfolio_id,symbol,weight,entry_price,shares')
+  const {data:holdings,error:hErr}=await fetchAllRows<Holding>(
+    (from,to)=>admin.from('portfolio_holdings').select('id,portfolio_id,symbol,weight,entry_price,shares').order('id',{ascending:true}).range(from,to),
+    'portfolio_holdings',
+  )
   if(hErr)return NextResponse.json({error:hErr.message},{status:500})
 
-  const {data:closedTrades,error:cErr}=await admin.from('portfolio_realized_trades').select('portfolio_id,shares,entry_price,realized_pl')
+  const {data:closedTrades,error:cErr}=await fetchAllRows<ClosedTrade>(
+    (from,to)=>admin.from('portfolio_realized_trades').select('id,portfolio_id,shares,entry_price,realized_pl').order('id',{ascending:true}).range(from,to),
+    'portfolio_realized_trades',
+  )
   if(cErr)return NextResponse.json({error:cErr.message},{status:500})
 
   const bySymbol=new Map<string,number|null>()
-  for(const h of (holdings||[]) as Holding[])if(!bySymbol.has(h.symbol))bySymbol.set(h.symbol,null)
+  for(const h of holdings)if(!bySymbol.has(h.symbol))bySymbol.set(h.symbol,null)
   await Promise.all(Array.from(bySymbol.keys()).map(async sym=>{
     const price=(await fetchLastPrice(sym,true)) ?? (await fetchLastPrice(sym,false))
     bySymbol.set(sym,price)
   }))
 
   const holdingsByPortfolio=new Map<string,Holding[]>()
-  for(const h of (holdings||[]) as Holding[]){
+  for(const h of holdings){
     const list=holdingsByPortfolio.get(h.portfolio_id)||[]
     list.push(h);holdingsByPortfolio.set(h.portfolio_id,list)
   }
   const closedByPortfolio=new Map<string,ClosedTrade[]>()
-  for(const c of (closedTrades||[]) as ClosedTrade[]){
+  for(const c of closedTrades){
     const list=closedByPortfolio.get(c.portfolio_id)||[]
     list.push(c);closedByPortfolio.set(c.portfolio_id,list)
   }

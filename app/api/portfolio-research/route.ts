@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { PORTFOLIO_UNIVERSE } from '@/lib/portfolioUniverse'
-import { checkRateLimit, clientIp, rateLimitedPayload } from '@/lib/rateLimit'
+import { GLOBAL_AI_DAILY_LIMIT, checkRateLimit, clientIp, rateLimitedPayload } from '@/lib/rateLimit'
 import { getAuthedUserId } from '@/lib/serverAuth'
 import { sanitizeStrings } from '@/lib/sanitizeText'
+import { fetchDailyCandles } from '@/lib/companyReport'
 
 const KEYWORD_MAP:Record<string,string[]> = {
   tech:['tech','technology','software'],
@@ -28,19 +29,16 @@ const KEYWORD_MAP:Record<string,string[]> = {
   cloud:['cloud','saas'],
 }
 
+// Uses the app's shared market-data client rather than a second, hand-rolled
+// copy of it. The copy that used to live here sent `User-Agent:
+// StrategyLabAI/3.0`, which is exactly the kind of request lib/market.ts
+// documents the provider as refusing from cloud IPs — so this route was
+// quietly getting empty price history for every symbol, dropping them all as
+// "no data", and then reporting "Could not fetch real market data" while the
+// rest of the app's charts worked fine.
 async function fetchDailyCloses(symbol:string):Promise<number[]>{
-  try{
-    const now=Math.floor(Date.now()/1000)
-    const period1=now-130*86400
-    const url=`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?period1=${period1}&period2=${now}&interval=1d&includeAdjustedClose=true`
-    const r=await fetch(url,{headers:{'User-Agent':'StrategyLabAI/3.0'},cache:'no-store'})
-    const j=await r.json().catch(()=>null)
-    const x=j?.chart?.result?.[0]
-    if(!x)return []
-    const q=x.indicators.quote[0]
-    const a=x.indicators.adjclose?.[0]?.adjclose||q.close
-    return (a as (number|null)[]).filter((v):v is number=>v!=null)
-  }catch{return []}
+  const candles=await fetchDailyCandles(symbol,130)
+  return candles.map(c=>c.close).filter((v):v is number=>v!=null&&Number.isFinite(v))
 }
 
 function statsFor(closes:number[]){
@@ -88,6 +86,18 @@ export async function POST(req:NextRequest){
     return NextResponse.json(p.body,{status:p.status,headers:p.headers})
   }
 
+  // Deployment-wide daily ceiling. Accounts are free and self-serve, so the
+  // per-account cap above bounds one account, not the bill — someone with N
+  // throwaway accounts just multiplies it. This is the limit that bounds what
+  // a bad day can actually cost.
+  const globalRl=await checkRateLimit('portfolio-research-global','all',[
+    {limit:GLOBAL_AI_DAILY_LIMIT,windowMs:86_400_000,label:'global-daily'},
+  ])
+  if(!globalRl.ok){
+    const p=rateLimitedPayload(globalRl,'Portfolio research is temporarily paused — this service has hit its daily capacity. Please try again tomorrow.')
+    return NextResponse.json(p.body,{status:p.status,headers:p.headers})
+  }
+
   const body=await req.json().catch(()=>null)
   if(!body)return NextResponse.json({error:'invalid_request'},{status:400})
   // Bound the prompt inputs so a hostile client can't inflate token costs.
@@ -114,12 +124,15 @@ export async function POST(req:NextRequest){
   if(!marketData.length)return NextResponse.json({error:'Could not fetch real market data for any candidate symbol right now. Try again shortly.'},{status:502})
 
   const apiKey=process.env.ANTHROPIC_API_KEY
+  // Distinguishes "there is no key" from "the key is fine but the call
+  // failed", so the fallback summary below can say which actually happened.
+  let aiFailed=false
   if(apiKey){
     try{
       const prompt=`You are an educational research tool that generates EXAMPLE model portfolios for learning purposes. You are not an investment adviser, you know nothing about the person's finances, goals, or risk tolerance, and your output is not personalized advice or a recommendation — it is an illustrative example allocation matching a written theme.\n\nPortfolio theme description:\n"""${description}"""\n\nSymbols currently recorded in this tracking portfolio (context only): ${currentHoldings.length?JSON.stringify(currentHoldings):'(empty — this is a new portfolio)'}\n\nReal market data (last close and trailing returns/volatility computed from real daily bars) for every symbol you may choose from — you MUST only pick symbols from this preset list:\n${JSON.stringify(marketData)}\n\nBuild an example portfolio that matches the written theme using this real data. You do not have to hold every symbol, do not have to weight them equally, and may pick anywhere from 3 to 15 symbols. Keep each rationale factual and data-driven; never promise or predict returns, and never phrase anything as advice about what the person should do. Respond with ONLY strict JSON, no markdown, no prose outside the JSON, in exactly this shape:\n{"holdings":[{"symbol":"XXXX","weight":0-100 number,"rationale":"one sentence why this symbol fits the theme, citing the real data"}],"summary":"2-3 sentence factual summary of the example allocation and how it maps to the theme"}\nWeights must sum to 100.`
       const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01'},body:JSON.stringify({model:'claude-sonnet-5',max_tokens:2000,messages:[{role:'user',content:prompt}]})})
       const j=await r.json()
-      if(!r.ok||j?.error){console.error('Anthropic API error',r.status,JSON.stringify(j))}
+      if(!r.ok||j?.error){console.error('Anthropic API error',r.status,JSON.stringify(j));aiFailed=true}
       const text=Array.isArray(j?.content)?j.content.find((b:any)=>b?.type==='text')?.text:undefined
       if(!text)console.error('Anthropic response had no text content',JSON.stringify(j).slice(0,2000))
       if(text){
@@ -131,7 +144,7 @@ export async function POST(req:NextRequest){
         if(normalized.length)return NextResponse.json(sanitizeStrings({mode:'ai',holdings:normalized,summary:parsed.summary||'',dataAsOf:new Date().toISOString(),universeSize:marketData.length}))
         console.error('AI returned zero valid holdings after filtering',JSON.stringify(parsed).slice(0,2000))
       }
-    }catch(e){console.error('portfolio AI call failed, falling back to heuristic',e)}
+    }catch(e){console.error('portfolio AI call failed, falling back to heuristic',e);aiFailed=true}
   }
 
   const scored=marketData.map(m=>{
@@ -143,5 +156,11 @@ export async function POST(req:NextRequest){
   const positiveTotal=picked.reduce((s,p)=>s+Math.max(1,p.score+50),0)
   const holdings=picked.map(p=>({symbol:p.symbol,weight:Math.round(Math.max(1,p.score+50)/positiveTotal*1000)/10,entryPrice:p.lastClose,rationale:`${p.return60d>=0?'Up':'Down'} ${Math.abs(p.return60d).toFixed(1)}% over 60 real trading days with ${p.volatility.toFixed(1)}% annualized volatility${p.tags.some(t=>keywords.has(t))?`, matches "${p.tags.find(t=>keywords.has(t))}" in your description`:''}.`}))
 
-  return NextResponse.json({mode:'heuristic',holdings,summary:`No AI key is configured, so this used a rules-based screen of ${marketData.length} real, live-priced candidates ranked by trailing momentum, volatility, and how well each matched your description.`,dataAsOf:new Date().toISOString(),universeSize:marketData.length})
+  // Say which of the two reasons this actually is. Reporting "no AI key is
+  // configured" when the key is fine and the AI call simply failed sends the
+  // owner looking for a configuration problem that doesn't exist.
+  const why=aiFailed
+    ? 'The AI analysis could not be completed for this run, so this fell back to'
+    : 'No AI key is configured, so this used'
+  return NextResponse.json({mode:'heuristic',holdings,summary:`${why} a rules-based screen of ${marketData.length} real, live-priced candidates ranked by trailing momentum, volatility, and how well each matched your description.`,dataAsOf:new Date().toISOString(),universeSize:marketData.length})
 }

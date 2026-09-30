@@ -42,7 +42,24 @@ export type LiveNotification = {
 // while open) or a service-role admin client (the always-on cron job) — the
 // server cron is what makes detection keep running while the site is on
 // another page, reloaded, or the user is logged out.
-export async function evaluateSymbolSignals(client:any, userId:string, symbol:string, market:string, candles:Candle[]):Promise<LiveNotification[]>{
+// How the per-tier history is loaded. This has to be injected rather than
+// hard-wired to fetchCandles: fetchCandles calls the market-data provider
+// directly, which works server-side (the cron) but is blocked in the browser
+// by this app's own Content-Security-Policy (`connect-src 'self' <supabase>`)
+// and by the provider's CORS. When it was hard-wired, every tiered strategy
+// on the Trade Signals page silently resolved to zero candles and was skipped
+// — so the page's "checks are still running while this stays open" was only
+// ever true for the handful of strategies saved with no tier, and everything
+// else depended entirely on the cron. The page now passes a fetcher that goes
+// through /api/market; the cron passes fetchCandles unchanged.
+export type TierCandleFetcher = (symbol:string, interval:string, rangeDays:number)=>Promise<Candle[]>
+
+const serverTierFetcher:TierCandleFetcher = async (symbol, interval, rangeDays) => {
+  const result = await fetchCandles(symbol, { interval, rangeDays })
+  return 'candles' in result ? result.candles : []
+}
+
+export async function evaluateSymbolSignals(client:any, userId:string, symbol:string, market:string, candles:Candle[], fetchTierCandles:TierCandleFetcher=serverTierFetcher):Promise<LiveNotification[]>{
   if(candles.length<2)return []
   const {data:favs}=await client.from('strategies').select('id,name,family,parameters,symbol,market,sessions')
     .eq('user_id',userId).eq('favorite',true).eq('symbol',symbol).eq('market',market)
@@ -72,8 +89,7 @@ export async function evaluateSymbolSignals(client:any, userId:string, symbol:st
     if(!tierKey||tierKey==='live')return candles
     if(tierCandleCache.has(tierKey))return tierCandleCache.get(tierKey)!
     const rangeDays=LIVE_TIER_RANGE_DAYS[tierKey]||60
-    const result=await fetchCandles(symbol,{interval:tierKey,rangeDays})
-    const list='candles' in result?result.candles:[]
+    const list=await fetchTierCandles(symbol,tierKey,rangeDays)
     tierCandleCache.set(tierKey,list)
     return list
   }

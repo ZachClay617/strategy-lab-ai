@@ -1,13 +1,20 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { NOTICE_AI_PORTFOLIO } from '@/lib/legal'
 import { TrashIcon, WarnIcon } from '@/components/icons'
+import { fetchSymbolNames } from '@/lib/marketClient'
 
 type Portfolio = { id:string; name:string; description:string; created_at:string; updated_at:string }
 type Holding = { id:string; portfolio_id:string; symbol:string; weight:number; added_by:string; added_at:string; entry_price?:number|null; shares?:number|null }
 type ClosedTrade = { id:string; portfolio_id:string; symbol:string; shares:number; entry_price:number; exit_price:number; realized_pl:number; opened_at:string; closed_at:string }
 type LogEntry = { id:string; created_at:string; actor:string; action:string; message:string; detail:any }
+
+// How many hourly snapshots the chart pulls. 1000 is PostgREST's own default
+// ceiling, and 960 hours is ~40 days of continuous hourly tracking; anything
+// older than the oldest snapshot is drawn from daily closes instead, so
+// nothing is lost — the series just gets coarser the further back you look.
+const SNAPSHOT_POINT_LIMIT=960
 
 function fmtDateTime(iso?:string){if(!iso)return '—';return new Date(iso).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'})}
 function fmtPct(n:number){return `${n>=0?'+':''}${n.toFixed(2)}%`}
@@ -88,6 +95,7 @@ export default function Portfolios(){
   const [addShares,setAddShares]=useState('')
   const [addAvgCost,setAddAvgCost]=useState('')
   const [researching,setResearching]=useState(false)
+  const [applyingProposal,setApplyingProposal]=useState(false)
   const [msg,setMsg]=useState('')
   const [proposal,setProposal]=useState<any>(null)
   const [returnSeries,setReturnSeries]=useState<{date:string;returnPct:number}[]>([])
@@ -102,6 +110,13 @@ export default function Portfolios(){
   const [allHoldings,setAllHoldings]=useState<Record<string,Holding[]>>({})
   const [pendingResearchId,setPendingResearchId]=useState<string|null>(null)
   const [expandedDesc,setExpandedDesc]=useState<Record<string,boolean>>({})
+  // Selecting a portfolio starts an async load that can finish after a later
+  // selection's. Without this, clicking a slow portfolio then a fast one shows
+  // the fast one's name over the slow one's holdings — and worse, the
+  // description/name drafts belong to the wrong portfolio, so pressing Save
+  // writes one portfolio's text onto another. Every async loader stamps the
+  // id it was started for and drops its result if that is no longer current.
+  const loadingFor=useRef<string|null>(null)
 
   useEffect(()=>{if(!supabase)return;supabase.auth.getSession().then(({data})=>setSession(data.session));const {data}=supabase.auth.onAuthStateChange((_e,s)=>setSession(s));return()=>data.subscription.unsubscribe()},[])
   useEffect(()=>{if(session?.user)loadPortfolios()},[session?.user?.id])
@@ -169,11 +184,15 @@ export default function Portfolios(){
   }
   async function loadPortfolio(id:string){
     if(!supabase)return
+    loadingFor.current=id
     const [{data:h,error:hErr},{data:l,error:lErr},{data:c,error:cErr}]=await Promise.all([
       supabase.from('portfolio_holdings').select('*').eq('portfolio_id',id).order('weight',{ascending:false}),
       supabase.from('portfolio_log').select('*').eq('portfolio_id',id).order('created_at',{ascending:false}).limit(200),
       supabase.from('portfolio_realized_trades').select('*').eq('portfolio_id',id).order('closed_at',{ascending:true}),
     ])
+    // A newer selection already started loading — this response is for a
+    // portfolio the user has moved on from, so throw it away.
+    if(loadingFor.current!==id)return
     if(hErr||lErr){setMsg(`Could not load portfolio detail: ${hErr?.message||lErr?.message}`);return}
     setHoldings((h||[]) as Holding[]);setLog((l||[]) as LogEntry[])
     setClosedTrades(cErr?[]:(c||[]) as ClosedTrade[])
@@ -198,11 +217,8 @@ export default function Portfolios(){
     setPrices(prev=>{const next={...prev};for(const [sym,v] of entries)if(v)next[sym]=v;return next})
   }
   async function loadNames(symbols:string[]){
-    try{
-      const r=await fetch(`/api/market?names=${encodeURIComponent(symbols.join(','))}`)
-      const j=await r.json()
-      if(j&&typeof j==='object')setNames(prev=>({...prev,...j}))
-    }catch{}
+    const found=await fetchSymbolNames(symbols)
+    if(Object.keys(found).length)setNames(prev=>({...prev,...found}))
   }
   async function addLog(portfolioId:string,actor:string,action:string,message:string,detail?:any){
     if(!supabase||!session?.user)return
@@ -256,6 +272,8 @@ export default function Portfolios(){
     }catch{return []}
   }
   async function loadReturnSeries(list:Holding[],closed:ClosedTrade[]){
+    const forPortfolio=selectedId
+    const stillCurrent=()=>loadingFor.current===forPortfolio&&selectedId===forPortfolio
     const withEntry=list.filter(h=>h.entry_price)
     if(!withEntry.length&&!closed.length){setReturnSeries([]);return}
 
@@ -264,10 +282,19 @@ export default function Portfolios(){
     // data points even while nobody has the site open. They give the recent
     // period hourly granularity; older history (before tracking started, or
     // before this feature existed) is backfilled below from daily closes.
+    //
+    // Read newest-first with an explicit limit, then reverse. PostgREST caps
+    // any unbounded select at 1000 rows (Supabase's db-max-rows default), and
+    // at one snapshot an hour a portfolio passes 1000 rows in about six weeks
+    // — an ascending unbounded read would then silently return only the
+    // OLDEST 1000 and the chart would stop advancing, drawing a straight line
+    // from week six to today. Newest-first means the cap trims ancient
+    // history (which the daily-close backfill below covers anyway) instead of
+    // everything recent.
     let snapshotPoints:{date:string;returnPct:number}[]=[]
     if(supabase&&selectedId){
-      const {data:snaps}=await supabase.from('portfolio_snapshots').select('taken_at,return_pct').eq('portfolio_id',selectedId).order('taken_at',{ascending:true})
-      if(snaps?.length)snapshotPoints=snaps.map(s=>({date:s.taken_at as string,returnPct:Number(s.return_pct)}))
+      const {data:snaps}=await supabase.from('portfolio_snapshots').select('taken_at,return_pct').eq('portfolio_id',selectedId).order('taken_at',{ascending:false}).limit(SNAPSHOT_POINT_LIMIT)
+      if(snaps?.length)snapshotPoints=snaps.map(s=>({date:s.taken_at as string,returnPct:Number(s.return_pct)})).reverse()
     }
 
     const openDates=withEntry.map(h=>h.added_at)
@@ -314,6 +341,9 @@ export default function Portfolios(){
       }
       if(costBasis>0)backfillPoints.push({date:dateKey+'T12:00:00.000Z',returnPct:gainDollar/costBasis*100})
     }
+    // This one does several seconds of market-data fetches; by the time it
+    // lands the user may be looking at a different portfolio entirely.
+    if(!stillCurrent())return
     setReturnSeries([...backfillPoints,...snapshotPoints])
   }
   async function addHolding(e:React.FormEvent){
@@ -368,12 +398,17 @@ export default function Portfolios(){
     if(!supabase||!selectedId)return
     const sh=h.shares!=null?h.shares:1
     const exitPrice=prices[h.symbol]?.last??(await fetchLastPrice(h.symbol))
+    // Removing a holding is a sale: its gain/loss has to land in trade history
+    // or it vanishes from TOTAL RETURN as if the position never existed. Fail
+    // closed — if the trade can't be recorded, don't delete the holding, so
+    // nothing is lost without the user being told.
     if(h.entry_price!=null&&exitPrice!=null&&session?.user){
       const realizedPl=(exitPrice-h.entry_price)*sh
-      await supabase.from('portfolio_realized_trades').insert({
+      const {error:tradeErr}=await supabase.from('portfolio_realized_trades').insert({
         portfolio_id:selectedId,user_id:session.user.id,symbol:h.symbol,shares:sh,
         entry_price:h.entry_price,exit_price:exitPrice,realized_pl:realizedPl,opened_at:h.added_at,
       })
+      if(tradeErr){setMsg(`Could not record the sale of ${h.symbol} in trade history (${tradeErr.message}), so it was not removed. Nothing has been changed.`);return}
     }
     const {error}=await supabase.from('portfolio_holdings').delete().eq('id',h.id)
     if(error){setMsg(`Could not remove ${h.symbol}: ${error.message}`);return}
@@ -462,12 +497,38 @@ export default function Portfolios(){
   }
   async function applyProposal(){
     if(!supabase||!selectedId||!proposal)return
-    const before=holdings.map(h=>({symbol:h.symbol,weight:h.weight}))
-    await supabase.from('portfolio_holdings').delete().eq('portfolio_id',selectedId)
-    for(const h of proposal.holdings)await supabase.from('portfolio_holdings').insert({portfolio_id:selectedId,symbol:h.symbol,weight:h.weight,added_by:'ai',entry_price:h.entryPrice??null})
+    const before=holdings.map(h=>({symbol:h.symbol,weight:h.weight,shares:h.shares,entryPrice:h.entry_price}))
+    setApplyingProposal(true)
+    // Applying a proposal replaces the whole holdings list. Insert the new
+    // rows FIRST and only clear the old ones once they are all in: the old
+    // order (delete everything, then insert one at a time, ignoring errors)
+    // could leave the portfolio empty and say nothing if any insert failed.
+    const rows=proposal.holdings.map((h:any)=>({portfolio_id:selectedId,symbol:h.symbol,weight:h.weight,added_by:'ai',entry_price:h.entryPrice??null}))
+    const oldIds=holdings.map(h=>h.id)
+    const {data:inserted,error:insertErr}=await supabase.from('portfolio_holdings').insert(rows).select('id')
+    if(insertErr){
+      setApplyingProposal(false)
+      setMsg(`Could not apply these changes: ${insertErr.message}. Your portfolio has not been changed.`)
+      return
+    }
+    if(oldIds.length){
+      const {error:deleteErr}=await supabase.from('portfolio_holdings').delete().in('id',oldIds)
+      if(deleteErr){
+        // Roll back the rows we just added rather than leave the portfolio
+        // holding both the old and the new allocation at once.
+        const newIds=(inserted||[]).map((r:any)=>r.id)
+        if(newIds.length)await supabase.from('portfolio_holdings').delete().in('id',newIds)
+        setApplyingProposal(false)
+        setMsg(`Could not replace the previous holdings: ${deleteErr.message}. Your portfolio has not been changed.`)
+        return
+      }
+    }
     await addLog(selectedId,'ai','ai_rebalance',proposal.summary||'AI rebalanced the portfolio.',{before,after:proposal.holdings,mode:proposal.mode,rationale:proposal.holdings.map((h:any)=>`${h.symbol}: ${h.rationale}`)})
     await supabase.from('portfolios').update({updated_at:new Date().toISOString()}).eq('id',selectedId)
-    setProposal(null);await loadPortfolio(selectedId)
+    setApplyingProposal(false)
+    setProposal(null)
+    setMsg('Example allocation applied. Note: this replaces your recorded shares and average cost for these positions — the previous values are kept in the change log below.')
+    await loadPortfolio(selectedId)
   }
 
   if(!supabase)return <div className="shell"><p className="msg banner">Add Supabase environment variables first.</p></div>
@@ -769,8 +830,8 @@ export default function Portfolios(){
             <p className="tiny legal-notice">{NOTICE_AI_PORTFOLIO}</p>
             <div className="table">{proposal.holdings.map((h:any)=><div className="row" key={h.symbol} style={{gridTemplateColumns:'.4fr 2fr'}}><span><b>{h.symbol} · {h.weight}%</b></span><span className="how-it-works">{h.rationale}</span></div>)}</div>
             <div className="run-controls" style={{gridTemplateColumns:'1fr 1fr'}}>
-              <button className="run" onClick={applyProposal}>APPLY CHANGES</button>
-              <button className="ghost" onClick={()=>setProposal(null)}>DISCARD</button>
+              <button className="run" onClick={applyProposal} disabled={applyingProposal}>{applyingProposal?'APPLYING…':'APPLY CHANGES'}</button>
+              <button className="ghost" onClick={()=>setProposal(null)} disabled={applyingProposal}>DISCARD</button>
             </div>
           </div>}
 

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { updateProfile } from '@/lib/profile'
 import { CURRENCIES } from '@/lib/currencies'
 import { TrashIcon, WarnIcon, DownloadIcon } from '@/components/icons'
 import { USERNAME_REQUIREMENTS, isValidUsername, normalizeUsername } from '@/lib/username'
@@ -70,14 +71,14 @@ export default function Account(){
 
   async function saveAvatar(){
     if(!supabase||!session?.user)return
-    const {error}=await supabase.from('profiles').upsert({id:session.user.id,avatar_url:avatarDraft})
+    const {error}=await updateProfile(supabase,session.user.id,{avatar_url:avatarDraft})
     if(error){setMsg(`Could not save profile picture: ${error.message}`);return}
     setMsg('Profile picture updated.');await loadProfile()
   }
 
   async function saveName(){
     if(!supabase||!session?.user)return
-    const {error}=await supabase.from('profiles').upsert({id:session.user.id,full_name:nameDraft.trim()||null})
+    const {error}=await updateProfile(supabase,session.user.id,{full_name:nameDraft.trim()||null})
     if(error){setMsg(`Could not save name: ${error.message}`);return}
     setMsg('Name updated.');await loadProfile()
   }
@@ -87,21 +88,21 @@ export default function Account(){
     const username=normalizeUsername(usernameDraft)
     if(!username){setMsg('Username is required and cannot be removed.');return}
     if(!isValidUsername(username)){setMsg(USERNAME_REQUIREMENTS);return}
-    const {error}=await supabase.from('profiles').upsert({id:session.user.id,username})
+    const {error}=await updateProfile(supabase,session.user.id,{username})
     if(error){setMsg(error.code==='23505'?'That username is already taken.':`Could not save username: ${error.message}`);return}
     setMsg('Username updated.');await loadProfile()
   }
 
   async function saveCurrency(){
     if(!supabase||!session?.user)return
-    const {error}=await supabase.from('profiles').upsert({id:session.user.id,currency:currencyDraft})
+    const {error}=await updateProfile(supabase,session.user.id,{currency:currencyDraft})
     if(error){setMsg(`Could not save currency: ${error.message}`);return}
     setMsg('Currency preference updated.');await loadProfile()
   }
 
   async function saveGender(){
     if(!supabase||!session?.user)return
-    const {error}=await supabase.from('profiles').upsert({id:session.user.id,gender:genderDraft||null})
+    const {error}=await updateProfile(supabase,session.user.id,{gender:genderDraft||null})
     if(error){setMsg(`Could not save gender: ${error.message}`);return}
     setMsg('Gender updated.');await loadProfile()
   }

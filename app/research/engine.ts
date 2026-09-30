@@ -134,7 +134,12 @@ export function atrSeries(data:Candle[], period=14):(number|null)[]{
     tr[i]=Math.max(data[i].high-data[i].low,Math.abs(data[i].high-prevClose),Math.abs(data[i].low-prevClose))
   }
   const out:(number|null)[]=new Array(n).fill(null)
-  if(n<period)return out
+  // `<=`, not `<`: the first ATR value is the mean of tr[1..period], which
+  // needs period+1 bars. With exactly `period` bars, slice(1,period+1) returns
+  // only period-1 values (still divided by period, so the average is wrong)
+  // and out[period] writes one past the end, returning a series one element
+  // longer than `data` — which silently misaligns every index that reads it.
+  if(n<=period)return out
   let avg=tr.slice(1,period+1).reduce((a,b)=>a+b,0)/period
   out[period]=avg
   for(let i=period+1;i<n;i++){avg=(avg*(period-1)+tr[i])/period;out[i]=avg}

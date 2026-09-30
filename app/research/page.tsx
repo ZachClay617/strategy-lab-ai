@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { supabase } from '@/lib/supabase'
+import { updateProfile } from '@/lib/profile'
 import { NOTICE_BACKTEST } from '@/lib/legal'
 import { TrashIcon, WarnIcon, DownloadIcon } from '@/components/icons'
 import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx'
@@ -551,11 +552,11 @@ export default function Home(){
  const {error:finishError}=await supabase.from('research_runs').update({status:stopFlag?'stopped':'completed',finished_at:finished,best_score:bestOne?.oosMetrics.score??null,current_balance:capital,tested_count:completed,qualified_count:qualified,summary,best_strategy_name:bestOne?`${bestOne.family} / ${Math.round(bestOne.rankVal)} rank`:null,best_reason:bestOne?bestOne.qual.reason:null,failure_reason:bestOne?null:'No strategy met the out-of-sample qualification rules: 50+ total trades (20+ out-of-sample), positive expectancy, 1.15+ profit factor, 0.75+ out-of-sample Sharpe, positive out-of-sample return, drawdown at or below 10%, and consistency across validation windows.'}).eq('id',runId)
  if(finishError)setMsg(`Run finished but could not save results: ${finishError.message}`)
  else if(strategySaveError)setMsg(`Run finished, but qualified strategies could not be saved: ${strategySaveError}. Run the latest Supabase migration and try again.`)
- const {error:balanceError}=await supabase.from('profiles').upsert({id:session.user.id,current_balance:capital})
+ const {error:balanceError}=await updateProfile(supabase,session.user.id,{current_balance:capital})
  if(balanceError)setMsg(`Run finished, but capital could not be saved: ${balanceError.message}`)
  await saveEvent(runId,summary,'success',100);patchRun(s=>({feed:[summary,...s.feed],running:false,paused:false,progress:100,rejectionCounts:{...rejections},completedCount:completed,qualifiedCount:qualified,balance:capital,currentRunId:null}));stopBackgroundKeepAlive();await loadData()
  }
- async function resetBalance(){if(!supabase||!session?.user)return;await supabase.from('capital_events').insert({user_id:session.user.id,event_type:'reset',amount_before:balance,amount_after:STARTING_CAPITAL});const {error}=await supabase.from('profiles').upsert({id:session.user.id,current_balance:STARTING_CAPITAL,starting_balance:STARTING_CAPITAL});if(error){setMsg(`Could not save the reset: ${error.message}`);return}patchRun({balance:STARTING_CAPITAL})}
+ async function resetBalance(){if(!supabase||!session?.user)return;await supabase.from('capital_events').insert({user_id:session.user.id,event_type:'reset',amount_before:balance,amount_after:STARTING_CAPITAL});const {error}=await updateProfile(supabase,session.user.id,{current_balance:STARTING_CAPITAL,starting_balance:STARTING_CAPITAL});if(error){setMsg(`Could not save the reset: ${error.message}`);return}patchRun({balance:STARTING_CAPITAL})}
  async function toggleFavoriteRun(runId:string){if(!supabase)return;const run=runs.find(r=>r.id===runId);const next=!run?.favorite;setRuns(prev=>prev.map(r=>r.id===runId?{...r,favorite:next}:r));const {error}=await supabase.from('research_runs').update({favorite:next}).eq('id',runId);if(error){setMsg(`Could not update favorite: ${error.message}. Run the latest Supabase migration.`);setRuns(prev=>prev.map(r=>r.id===runId?{...r,favorite:!next}:r))}}
  async function resetStrategyLog(){
    if(!supabase||!session?.user)return

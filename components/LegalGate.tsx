@@ -2,6 +2,7 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { updateProfile } from '@/lib/profile'
 import { LEGAL_VERSION, SIGNUP_CONSENT_TEXT } from '@/lib/legal'
 
 // Blocking consent gate for signed-in users. The signup form already
@@ -36,8 +37,7 @@ export default function LegalGate({ userId }: { userId: string }) {
   async function accept() {
     if (!supabase || !checked) return
     setSaving(true); setErr('')
-    const { error } = await supabase.from('profiles').upsert({
-      id: userId,
+    const { error } = await updateProfile(supabase, userId, {
       accepted_legal_at: new Date().toISOString(),
       accepted_legal_version: LEGAL_VERSION,
     })
