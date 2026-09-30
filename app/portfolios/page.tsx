@@ -265,9 +265,26 @@ export default function Portfolios(){
     if(!sharesNum||sharesNum<=0){setMsg('Enter the number of shares owned.');return}
     const manualCost=addAvgCost.trim()?Number(addAvgCost):null
     const entryPrice=manualCost&&manualCost>0?manualCost:await fetchLastPrice(sym)
-    const {error}=await supabase.from('portfolio_holdings').insert({portfolio_id:selectedId,symbol:sym,weight:0,shares:sharesNum,added_by:'user',entry_price:entryPrice})
-    if(error){setMsg(`Could not add ${sym}: ${error.message}`);return}
-    await addLog(selectedId,'user','holding_added',`Added ${sym} · ${sharesNum} shares${manualCost?`, average cost $${manualCost.toFixed(2)}`:''}.`,{symbol:sym,shares:sharesNum,entryPrice})
+    // Buying a symbol already held in this portfolio combines into that same
+    // row (like a real brokerage position) instead of creating a second row
+    // for the same ticker: shares add up, and the cost basis becomes the
+    // shares-weighted average of the old and new purchase prices.
+    const {data:existing,error:lookupErr}=await supabase.from('portfolio_holdings').select('id,shares,entry_price').eq('portfolio_id',selectedId).eq('symbol',sym).maybeSingle()
+    if(lookupErr){setMsg(`Could not add ${sym}: ${lookupErr.message}`);return}
+    if(existing){
+      const oldShares=existing.shares!=null?existing.shares:1
+      const newShares=oldShares+sharesNum
+      const mergedEntry=existing.entry_price!=null&&entryPrice!=null
+        ?(oldShares*existing.entry_price+sharesNum*entryPrice)/newShares
+        :entryPrice
+      const {error}=await supabase.from('portfolio_holdings').update({shares:newShares,entry_price:mergedEntry}).eq('id',existing.id)
+      if(error){setMsg(`Could not add ${sym}: ${error.message}`);return}
+      await addLog(selectedId,'user','holding_added',`Bought ${sharesNum} more shares of ${sym} (now ${newShares} total${mergedEntry!=null?`, average cost $${mergedEntry.toFixed(2)}`:''}).`,{symbol:sym,shares:newShares,entryPrice:mergedEntry})
+    }else{
+      const {error}=await supabase.from('portfolio_holdings').insert({portfolio_id:selectedId,symbol:sym,weight:0,shares:sharesNum,added_by:'user',entry_price:entryPrice})
+      if(error){setMsg(`Could not add ${sym}: ${error.message}`);return}
+      await addLog(selectedId,'user','holding_added',`Added ${sym} · ${sharesNum} shares${manualCost?`, average cost $${manualCost.toFixed(2)}`:''}.`,{symbol:sym,shares:sharesNum,entryPrice})
+    }
     setAddSymbol('');setAddShares('');setAddAvgCost('');await loadPortfolio(selectedId)
   }
   function startEditHolding(h:Holding){
