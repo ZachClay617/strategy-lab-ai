@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { NOTICE_AI_PORTFOLIO } from '@/lib/legal'
 import { TrashIcon, WarnIcon } from '@/components/icons'
 import { fetchSymbolNames } from '@/lib/marketClient'
+import { sortHoldings, nextHoldingsSort, type HoldingsSort, type HoldingsSortKey } from '@/lib/sortHoldings'
 
 type Portfolio = { id:string; name:string; description:string; created_at:string; updated_at:string }
 type Holding = { id:string; portfolio_id:string; symbol:string; weight:number; added_by:string; added_at:string; entry_price?:number|null; shares?:number|null }
@@ -90,7 +91,7 @@ export default function Portfolios(){
   const [deletingTrade,setDeletingTrade]=useState(false)
   const [showClearTradeHistory,setShowClearTradeHistory]=useState(false)
   const [clearingTradeHistory,setClearingTradeHistory]=useState(false)
-  const [holdingsSort,setHoldingsSort]=useState<{key:'weight'|'equity'|'return'|'dayReturn';dir:'desc'|'asc'}|null>(null)
+  const [holdingsSort,setHoldingsSort]=useState<HoldingsSort|null>(null)
   const [addSymbol,setAddSymbol]=useState('')
   const [addShares,setAddShares]=useState('')
   const [addAvgCost,setAddAvgCost]=useState('')
@@ -544,10 +545,10 @@ export default function Portfolios(){
   const weightOf=(h:Holding)=>{const v=holdingValue(h);return v!=null&&sharesValueTotal>0?v/sharesValueTotal*100:h.weight}
   const totalValue=sharesValueTotal
   const totalWeight=holdings.reduce((s,h)=>s+weightOf(h),0)
-  function toggleHoldingsSort(key:'weight'|'equity'|'return'|'dayReturn'){
-    setHoldingsSort(prev=>prev&&prev.key===key?{key,dir:prev.dir==='desc'?'asc':'desc'}:{key,dir:'desc'})
+  function toggleHoldingsSort(key:HoldingsSortKey){
+    setHoldingsSort(prev=>nextHoldingsSort(prev,key))
   }
-  function sortHeadButton(label:string,key:'weight'|'equity'|'return'|'dayReturn'){
+  function sortHeadButton(label:string,key:HoldingsSortKey){
     const active=holdingsSort?.key===key
     const dir=active?holdingsSort!.dir:null
     // Clicking a sorted column flips it, so the tooltip describes what the
@@ -559,23 +560,14 @@ export default function Portfolios(){
       {label}<span className="sort-head-arrow" aria-hidden="true">{dir==='desc'?'▼':dir==='asc'?'▲':'⇅'}</span>
     </button>
   }
-  function holdingsSortValue(h:Holding,key:'weight'|'equity'|'return'|'dayReturn'):number|null{
+  function holdingsSortValue(h:Holding,key:HoldingsSortKey):number|null{
     const p=prices[h.symbol]
     if(key==='weight')return weightOf(h)
     if(key==='equity')return holdingValue(h)
     if(key==='return')return p&&h.entry_price?(p.last/h.entry_price-1)*100:null
     return p&&p.prevClose?(p.last/p.prevClose-1)*100:null
   }
-  // Nulls (no live price yet, no entry price set) always sort to the bottom
-  // regardless of direction — otherwise "least to most" would put unknown
-  // values at the top, which reads as them being the smallest.
-  const sortedHoldings=holdingsSort?[...holdings].sort((a,b)=>{
-    const va=holdingsSortValue(a,holdingsSort.key),vb=holdingsSortValue(b,holdingsSort.key)
-    if(va==null&&vb==null)return 0
-    if(va==null)return 1
-    if(vb==null)return -1
-    return holdingsSort.dir==='desc'?vb-va:va-vb
-  }):holdings
+  const sortedHoldings=sortHoldings(holdings,holdingsSort,holdingsSortValue)
   // All-time total return: unrealized gain/loss on currently open holdings
   // PLUS realized gain/loss already locked in from past (sold) trades, as a
   // share of everything ever invested — so closing a position doesn't erase
