@@ -4,10 +4,12 @@ import { createClient } from '@supabase/supabase-js'
 import { fetchLastPrice } from '@/lib/market'
 import { checkRateLimit, clientIp, rateLimitedPayload } from '@/lib/rateLimit'
 
-// Called every ~15 minutes by an external scheduler (not Vercel Cron, which can't
-// run sub-daily on the Hobby plan) so the portfolio return chart keeps gaining
-// data points even when nobody has the site open. Auth is a shared secret, since
-// this writes data for every user and must not be triggerable by the public.
+// Called once an hour, on the hour, by an external scheduler (not Vercel Cron,
+// which can't run sub-daily on the Hobby plan) — see
+// .github/workflows/portfolio-snapshots-cron.yml — so the portfolio return
+// chart keeps gaining data points even when nobody has the site open. Auth is
+// a shared secret, since this writes data for every user and must not be
+// triggerable by the public.
 export const dynamic = 'force-dynamic'
 
 type Holding = { id:string; portfolio_id:string; symbol:string; weight:number; entry_price:number|null; shares:number|null }

@@ -196,7 +196,7 @@ export default function HomePage(){
     <div className="page-head">
       <div>
         <div className="online-badge"><span className="online-dot"></span>A-TAMP online</div>
-        <h1 style={{marginTop:12}}>{greeting(profile,session.user.email)}</h1>
+        <h1 className="home-greeting">{greeting(profile,session.user.email)}</h1>
         <p className="sub">Your research, portfolios, and signals at a glance.</p>
       </div>
     </div>

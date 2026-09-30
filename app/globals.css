@@ -7,10 +7,11 @@
 
 /* ---------- 1. Tokens ---------- */
 :root{
-  /* rounded type: Nunito for UI text, Baloo 2 for headings, mono for tabular data */
-  --font-sans:var(--font-nunito),Nunito,ui-rounded,'SF Pro Rounded',system-ui,sans-serif;
-  --font-display:var(--font-baloo),'Baloo 2',var(--font-sans);
-  --font-mono:var(--font-nunito),Nunito,ui-rounded,'SF Pro Rounded',system-ui,sans-serif;
+  /* soft rounded type: Baloo 2 for UI text, Fredoka for headings, M PLUS
+     Rounded 1c for numbers (even-width digits keep money columns aligned) */
+  --font-sans:var(--font-baloo),'Baloo 2',ui-rounded,'SF Pro Rounded',system-ui,sans-serif;
+  --font-display:var(--font-fredoka),Fredoka,var(--font-sans);
+  --font-mono:var(--font-rounded),'M PLUS Rounded 1c',ui-rounded,'SF Pro Rounded',system-ui,sans-serif;
   --font-terminal:var(--font-jbmono),ui-monospace,SFMono-Regular,Menlo,monospace;
 
   --bg:#07080b;
@@ -67,8 +68,9 @@ html,body{
   background:var(--bg);
   color:var(--text);
   font-family:var(--font-sans);
-  font-size:15px;line-height:1.58;font-weight:650;letter-spacing:.002em;
+  font-size:15.5px;line-height:1.6;font-weight:700;letter-spacing:.004em;
   -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+  font-synthesis-weight:none;
 }
 /* ambient backdrop: slow-drifting accent glow blobs + the dot-grid, all one
    layer so they can be masked and animated together without fighting the
@@ -91,7 +93,7 @@ body>*{position:relative;z-index:1}
 button,input,select,textarea{font:inherit}
 button{cursor:pointer;color:inherit}
 img,svg{vertical-align:middle}
-h1,h2,h3,h4{font-family:var(--font-display);font-weight:750;letter-spacing:-.004em;line-height:1.24}
+h1,h2,h3,h4{font-family:var(--font-display);font-weight:700;letter-spacing:.002em;line-height:1.22}
 h1{text-shadow:0 0 22px rgba(77,132,255,.4)}
 :focus{outline:none}
 :focus-visible{outline:none;box-shadow:var(--ring);border-radius:var(--r-sm)}
@@ -106,7 +108,7 @@ h1{text-shadow:0 0 22px rgba(77,132,255,.4)}
 
 /* micro-label: the system's signature caption style */
 .microlabel,.section-label,.panel-title h2,.card-head h2{
-  font-family:var(--font-sans);font-size:11px;font-weight:800;letter-spacing:.13em;
+  font-family:var(--font-sans);font-size:11.5px;font-weight:800;letter-spacing:.13em;
   text-transform:uppercase;color:var(--text-3);
 }
 
@@ -120,11 +122,11 @@ h1{text-shadow:0 0 22px rgba(77,132,255,.4)}
 }
 .app.nav-collapsed .sidebar{border-right-color:transparent;padding-left:0;padding-right:0}
 .side-brand{display:flex;align-items:center;gap:10px;padding:8px 10px 18px;color:var(--text);text-decoration:none;font-family:var(--font-display);font-weight:700;font-size:13px;letter-spacing:.08em;white-space:nowrap}
-.side-brand em{font-style:normal;color:var(--text-3);font-weight:600}
+.side-brand em{font-style:normal;color:var(--text-3);font-weight:700}
 .side-nav{display:flex;flex-direction:column;gap:2px;flex:1}
 .side-link{
   position:relative;display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:var(--r-md);
-  color:var(--text-2);text-decoration:none;font-size:13.5px;font-weight:620;
+  color:var(--text-2);text-decoration:none;font-size:13.5px;font-weight:750;
   transition:color .14s,background .14s;
 }
 .side-link svg{opacity:.75;flex-shrink:0}
@@ -158,7 +160,7 @@ h1{text-shadow:0 0 22px rgba(77,132,255,.4)}
    collapsed (or on mobile, where the sidebar never renders at all) — see
    the .nav-collapsed and max-width:920px rules below. */
 .hdr-brand{display:none;align-items:center;gap:8px;color:var(--text);text-decoration:none;font-family:var(--font-display);font-weight:700;font-size:13px;letter-spacing:.08em;white-space:nowrap;flex-shrink:0}
-.hdr-brand em{font-style:normal;color:var(--text-3);font-weight:600}
+.hdr-brand em{font-style:normal;color:var(--text-3);font-weight:700}
 .app.nav-collapsed .hdr-brand{display:flex}
 .app-header-tools{display:flex;align-items:center;gap:14px}
 .mkt-chip{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;color:var(--text-3);border:1px solid var(--line);border-radius:999px;padding:6px 12px}
@@ -173,7 +175,7 @@ h1{text-shadow:0 0 22px rgba(77,132,255,.4)}
 /* public header (login / legal) */
 .pub-header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between;padding:14px clamp(16px,3vw,32px);background:var(--bg);border-bottom:1px solid var(--line)}
 .pub-brand{display:flex;align-items:center;gap:10px;color:var(--text);text-decoration:none;font-family:var(--font-display);font-weight:700;font-size:13px;letter-spacing:.08em}
-.pub-brand em{font-style:normal;color:var(--text-3);font-weight:600}
+.pub-brand em{font-style:normal;color:var(--text-3);font-weight:700}
 .pub-signin{color:var(--text);text-decoration:none;font-size:13px;font-weight:700;border:1px solid var(--line-strong);border-radius:999px;padding:8px 18px;transition:border-color .14s,background .14s}
 .pub-signin:hover{border-color:var(--line-hover);background:rgba(158,173,201,.06)}
 
@@ -188,7 +190,7 @@ h1{text-shadow:0 0 22px rgba(77,132,255,.4)}
 /* data reads in mono */
 .metrics b,.replay-grid b,.balance strong,.notif-stat strong,.run-node-stat b,.run-node-score b,
 .test-item-stats,.trade-row,.chart-head strong,.portfolio-card-stats b,.portfolio-card-stats em,
-.notif-time,.run-node-time,.strategy-id,.vault-trigger-count,.stat-value,.stat-delta,.kv b{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.notif-time,.run-node-time,.strategy-id,.vault-trigger-count,.stat-value,.stat-delta,.kv b{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-weight:800;letter-spacing:.005em}
 
 /* page scaffold */
 .page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin:2px 0 22px;flex-wrap:wrap}
@@ -223,7 +225,7 @@ h1{text-shadow:0 0 22px rgba(77,132,255,.4)}
 }
 .balance button,.ghost,.small-btn,.link{
   background:transparent;border:1px solid var(--line-strong);color:var(--text-2);
-  border-radius:var(--r-sm);padding:7px 13px;font-size:12.5px;font-weight:650;
+  border-radius:var(--r-sm);padding:7px 13px;font-size:12.5px;font-weight:750;
   transition:color .14s,border-color .14s,background .14s;
 }
 .ghost:hover,.small-btn:hover,.balance button:hover{color:var(--text);border-color:var(--line-hover);background:rgba(158,173,201,.06)}
@@ -278,7 +280,7 @@ h1{text-shadow:0 0 22px rgba(77,132,255,.4)}
 .card:hover::after,.panel:hover::after,.service-card:hover::after{animation-play-state:paused;opacity:1}
 
 /* forms */
-.panel label,.card label{display:block;color:var(--text-2);font-size:12.5px;margin:13px 0;font-weight:600}
+.panel label,.card label{display:block;color:var(--text-2);font-size:12.5px;margin:13px 0;font-weight:700}
 .panel input,.panel select,.panel textarea,.card input,.card select,.card textarea,.auth-form input,.auth-form select{
   display:block;width:100%;margin-top:6px;background:rgba(5,6,9,.55);
   border:1px solid var(--line-strong);border-radius:var(--r-sm);padding:10px 12px;
@@ -314,14 +316,14 @@ h1{text-shadow:0 0 22px rgba(77,132,255,.4)}
 .stat-card{position:relative;background:linear-gradient(180deg,var(--surface-2),var(--surface-1));border:1px solid var(--line);border-radius:var(--r-md);padding:14px 16px;overflow:hidden}
 .stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--accent-bright) 45%,var(--accent-bright) 55%,transparent);background-size:250% 100%;animation:scan-sweep 3.6s linear infinite}
 @keyframes scan-sweep{0%{background-position:120% 0}100%{background-position:-120% 0}}
-.stat-card>span,.metrics span,.replay-grid span,.balance small{display:block;color:var(--text-3);font-size:11px;letter-spacing:.11em;text-transform:uppercase;font-weight:700}
-.stat-value{display:block;margin-top:7px;font-size:19px;font-weight:700;letter-spacing:-.01em}
+.stat-card>span,.metrics span,.replay-grid span,.balance small{display:block;color:var(--text-3);font-size:11px;letter-spacing:.11em;text-transform:uppercase;font-weight:800}
+.stat-value{display:block;margin-top:7px;font-size:20px;font-weight:800;letter-spacing:0}
 .stat-delta{display:block;margin-top:3px;font-size:11.5px;color:var(--text-3)}
 .stat-delta.up,.stat-value.up{color:var(--up);text-shadow:0 0 16px rgba(31,232,132,.45)}
 .stat-delta.down,.stat-value.down{color:var(--down);text-shadow:0 0 16px rgba(255,59,98,.45)}
 .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
 .metrics>div,.replay-grid>div{padding:12px 14px;border:1px solid var(--line);background:rgba(5,6,9,.4);border-radius:var(--r-md)}
-.metrics b,.replay-grid b{display:block;margin-top:6px;font-size:14.5px;font-weight:700}
+.metrics b,.replay-grid b{display:block;margin-top:6px;font-size:15px;font-weight:800}
 .metrics b.up,.row span.up,.portfolio-card-stats em.up,.portfolio-card-stats b.up,.chart-head strong.up,.ai-briefing-caret.up{color:var(--up);text-shadow:0 0 12px rgba(31,232,132,.4)}
 .metrics b.down,.row span.down,.portfolio-card-stats em.down,.portfolio-card-stats b.down,.chart-head strong.down,.ai-briefing-caret.down{color:var(--down);text-shadow:0 0 12px rgba(255,59,98,.4)}
 .replay-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:16px 0}
@@ -331,12 +333,18 @@ h1{text-shadow:0 0 22px rgba(77,132,255,.4)}
 .row{display:grid;grid-template-columns:2fr .6fr .8fr .8fr .8fr .8fr;gap:10px;align-items:center;text-align:left;background:transparent;border:0;border-bottom:1px solid var(--line);color:var(--text);padding:11px 14px;border-radius:0;transition:background .12s}
 .table>.row:last-child{border-bottom:0}
 button.row:hover,.row:hover{background:rgba(158,173,201,.05)}
-.row span{font-size:12px;color:var(--text-2)}
-.row strong{display:block;font-weight:700;font-size:13px}
+.row span{font-size:12.5px;color:var(--text-2);font-weight:700}
+.row strong{display:block;font-weight:800;font-size:13.5px}
 .row-head{background:rgba(5,6,9,.5);border-bottom:1px solid var(--line);padding:8px 14px;margin:0}
 .row-head:hover{background:rgba(5,6,9,.5)}
-.row-head span{color:var(--text-3);font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:750}
-.sort-head{background:transparent;border:0;padding:0;margin:0;display:inline-flex;align-items:center;gap:4px;color:var(--text-3);font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:750;cursor:pointer;transition:color .14s}
+.row-head span{color:var(--text-3);font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:800}
+/* HOLDINGS and TRADE HISTORY share a column order — symbol, shares, value,
+   average cost, price, return — so the two tables read the same way. The
+   templates live here (not inline) so the responsive rules below can actually
+   override them. */
+.holdings-row{grid-template-columns:minmax(0,.8fr) minmax(0,.55fr) minmax(0,.55fr) minmax(0,.7fr) minmax(0,.75fr) minmax(0,.65fr) minmax(0,1.1fr) minmax(0,1.1fr) minmax(0,1fr)}
+.trade-hist-row{grid-template-columns:minmax(0,.8fr) minmax(0,.55fr) minmax(0,.7fr) minmax(0,.75fr) minmax(0,.65fr) minmax(0,1.25fr) minmax(0,1.05fr) minmax(0,1fr)}
+.sort-head{background:transparent;border:0;padding:0;margin:0;display:inline-flex;align-items:center;gap:4px;color:var(--text-3);font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:800;cursor:pointer;transition:color .14s}
 .sort-head:hover{color:var(--text)}
 .sort-head.active{color:var(--accent-bright)}
 .sort-head-arrow{font-size:9px;opacity:.75}
@@ -353,6 +361,24 @@ svg.chart{display:block;width:100%;height:auto}
 .chart-head span{display:block;color:var(--text-3);font-size:11px;margin-top:2px;letter-spacing:.08em;text-transform:uppercase}
 .chart-head strong{font-size:15px}
 .chart-controls{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+
+/* home greeting — deliberately the biggest type anywhere in the app: it is
+   the first thing you see after signing in, so it gets display scale rather
+   than the standard .page-head h1 size. */
+.home-page .page-head{align-items:flex-start}
+.home-page .page-head h1.home-greeting{
+  margin:14px 0 8px;
+  font-size:clamp(34px,5.8vw,68px);
+  font-weight:700;line-height:1.06;letter-spacing:-.008em;
+  /* Shallow gradient on purpose: a steeper one leaves the second line of a
+     wrapped greeting visibly washed out next to the first. */
+  background:linear-gradient(180deg,var(--text) 45%,#c3d0ea 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  text-shadow:none;
+  filter:drop-shadow(0 0 28px rgba(77,132,255,.35));
+  max-width:16ch;
+}
+.home-page .page-head .sub{font-size:15px;max-width:52ch}
 
 /* status chips */
 .online-badge{display:inline-flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.1em;color:var(--up);font-weight:800;background:var(--up-dim);border:1px solid var(--up-line);border-radius:999px;padding:6px 14px;text-transform:uppercase}
@@ -505,7 +531,7 @@ svg.chart{display:block;width:100%;height:auto}
 .run-node-pulse{display:none}
 .run-node-id{font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .run-node-id .rename-btn{flex-shrink:0}
-.run-node-id em{font-style:normal;color:var(--text-3);font-weight:600;margin-left:6px;font-size:11.5px}
+.run-node-id em{font-style:normal;color:var(--text-3);font-weight:700;margin-left:6px;font-size:11.5px}
 .run-node-time{font-size:11.5px;color:var(--text-3);white-space:nowrap}
 .run-node-stat,.run-node-score{display:flex;flex-direction:column;align-items:flex-end;line-height:1.25}
 .run-node-stat b,.run-node-score b{font-size:12.5px;color:var(--text)}
@@ -524,7 +550,7 @@ svg.chart{display:block;width:100%;height:auto}
 .run-outcome-panel h3{margin:0 0 7px;font-size:15px}
 .run-outcome-panel p{margin:5px 0;color:var(--text-2);font-size:12.5px;line-height:1.6}
 .history-more{margin-top:8px}
-.history-more summary{cursor:pointer;color:var(--accent-bright);font-size:12.5px;padding:8px 4px;list-style:none;font-weight:650}
+.history-more summary{cursor:pointer;color:var(--accent-bright);font-size:12.5px;padding:8px 4px;list-style:none;font-weight:750}
 .history-more summary::-webkit-details-marker{display:none}
 .history-more summary::before{content:'▸ ';color:var(--text-3)}
 .history-more[open] summary::before{content:'▾ '}
@@ -552,7 +578,7 @@ svg.chart{display:block;width:100%;height:auto}
 .rename-inline input{display:inline-block;width:auto;min-width:200px;margin:0;padding:6px 10px;font-size:13px;background:rgba(5,6,9,.6);border:1px solid var(--line-strong);border-radius:var(--r-sm);color:var(--text)}
 .rename-inline .small-btn{padding:4px 9px;font-size:11px}
 .session-block{margin-top:18px;padding-top:18px;border-top:1px solid var(--line)}
-.session-block h4{margin:0 0 9px;font-size:12px;color:var(--text-2);font-weight:650}
+.session-block h4{margin:0 0 9px;font-size:12px;color:var(--text-2);font-weight:750}
 .trade-table{display:grid;gap:3px;max-height:320px;overflow:auto;margin-top:10px}
 .trade-row{display:grid;grid-template-columns:.35fr 1.1fr .8fr 1.1fr .8fr .6fr .55fr .65fr .8fr;gap:8px;align-items:center;background:rgba(5,6,9,.4);border:1px solid var(--line);border-radius:var(--r-sm);padding:7px 11px;font-size:11px;color:var(--text-2)}
 .trade-row.win{border-left:2px solid var(--up)}
@@ -631,8 +657,8 @@ svg.chart{display:block;width:100%;height:auto}
 .portfolio-card-badge.down{color:var(--down);border-color:var(--down-line);background:var(--down-dim)}
 .portfolio-card-stats{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
 .portfolio-card-stats>div{padding:10px 12px;border-radius:var(--r-sm);background:rgba(5,6,9,.45);border:1px solid var(--line)}
-.portfolio-card-stats span{display:block;color:var(--text-3);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:750}
-.portfolio-card-stats b{display:block;margin-top:4px;font-size:14px;font-weight:700}
+.portfolio-card-stats span{display:block;color:var(--text-3);font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;font-weight:800}
+.portfolio-card-stats b{display:block;margin-top:4px;font-size:14.5px;font-weight:800}
 .portfolio-card-stats em{display:block;margin-top:2px;font-size:11px;font-style:normal;color:var(--text-3)}
 .portfolio-card-foot{position:relative;display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:13px;padding-top:12px;border-top:1px solid var(--line)}
 .portfolio-card-foot>span{font-size:11px;color:var(--text-3)}
@@ -787,13 +813,19 @@ svg.chart{display:block;width:100%;height:auto}
   .balance{text-align:left;width:100%;min-width:0}
   .balance .tiny{text-align:left}
   .row{grid-template-columns:1fr 1fr}
-  .row span:nth-last-child(-n+3){display:none}
-  /* trade history is reordered (entry, shares, exit, P/L, closed, symbol) so
-     the generic "hide the last 3 spans" rule above would hide Closed and
-     Symbol — keep Symbol and the P/L visible and hide the price columns
-     instead, since the symbol is the one thing that must never disappear. */
-  .trade-hist-row span:nth-last-child(-n+3){display:block}
-  .trade-hist-row span:nth-child(1),.trade-hist-row span:nth-child(3){display:none}
+  /* The holdings and trade-history tables opt out of the blunt "hide the last
+     three cells" rule — they have their own, order-aware rules just below. */
+  .row:not(.holdings-row):not(.trade-hist-row) span:nth-last-child(-n+3){display:none}
+  /* Narrow screens keep the identifying column plus the two that actually
+     answer "how did this do?", and drop the buttons onto their own line. */
+  .holdings-row{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) minmax(0,1fr)}
+  .holdings-row>span:nth-child(2),.holdings-row>span:nth-child(3),
+  .holdings-row>span:nth-child(4),.holdings-row>span:nth-child(5),
+  .holdings-row>span:nth-child(6){display:none}
+  .trade-hist-row{grid-template-columns:minmax(0,1.1fr) minmax(0,.7fr) minmax(0,1.2fr)}
+  .trade-hist-row>span:nth-child(3),.trade-hist-row>span:nth-child(4),
+  .trade-hist-row>span:nth-child(5),.trade-hist-row>span:nth-child(7){display:none}
+  .holdings-row>.holding-actions,.trade-hist-row>.holding-actions{grid-column:1/-1;justify-content:flex-start;margin-top:6px}
   .metrics{grid-template-columns:1fr 1fr}
   .replay-grid{grid-template-columns:1fr 1fr}
   .trade-row{grid-template-columns:repeat(3,1fr)}

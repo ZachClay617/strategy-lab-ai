@@ -13,8 +13,21 @@ function fmtDateTime(iso?:string){if(!iso)return '—';return new Date(iso).toLo
 function fmtPct(n:number){return `${n>=0?'+':''}${n.toFixed(2)}%`}
 function fmtDollar(n:number){return `${n>=0?'+':'-'}$${Math.abs(n).toFixed(2)}`}
 
-function ReturnChart({points,title}:{points:{date:string;returnPct:number}[];title:string}){
-  if(points.length<2)return <div className="chart empty">Not enough price history yet to chart return over time.</div>
+// Snapshots land hourly, so a portfolio tracked for a year carries thousands of
+// points. The SVG is only 1000px wide, so anything past ~600 points is invisible
+// detail that still costs a DOM node each — evenly sample down to that, always
+// keeping the first and last point so the endpoints stay exact.
+function downsample<T>(list:T[],max:number):T[]{
+  if(list.length<=max)return list
+  const step=(list.length-1)/(max-1)
+  const out:T[]=[]
+  for(let i=0;i<max;i++)out.push(list[Math.round(i*step)])
+  return out
+}
+
+function ReturnChart({points:allPoints,title}:{points:{date:string;returnPct:number}[];title:string}){
+  if(allPoints.length<2)return <div className="chart empty">Not enough price history yet to chart return over time.</div>
+  const points=downsample(allPoints,600)
   const w=1000,h=320,padL=64,padR=16,padT=20,padB=34
   const values=points.map(p=>p.returnPct)
   const min=Math.min(0,...values),max=Math.max(0,...values)
@@ -25,15 +38,25 @@ function ReturnChart({points,title}:{points:{date:string;returnPct:number}[];tit
   const path=points.map((p,i)=>`${i===0?'M':'L'}${x(i).toFixed(1)} ${y(p.returnPct).toFixed(1)}`).join(' ')
   const up=points[points.length-1].returnPct>=0
   const gridLines=4
+  // Dots read as data points on a sparse series and as noise on a dense one.
+  const showDots=points.length<=90
+  // Hourly snapshots mean a short history can span a single day, where six
+  // identical "Mar 4" labels say nothing — switch to clock times under 48h.
+  const spanMs=new Date(points[points.length-1].date).getTime()-new Date(points[0].date).getTime()
+  const intraday=spanMs<48*3600*1000
   const timeTickCount=Math.min(points.length,6)
-  const timeTicks=Array.from({length:timeTickCount}).map((_,k)=>{const i=Math.round(k*(points.length-1)/Math.max(1,timeTickCount-1));return {i,label:new Date(points[i].date).toLocaleDateString('en-US',{month:'short',day:'numeric'})}})
+  const timeTicks=Array.from({length:timeTickCount}).map((_,k)=>{
+    const i=Math.round(k*(points.length-1)/Math.max(1,timeTickCount-1))
+    const d=new Date(points[i].date)
+    return {i,label:intraday?d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}):d.toLocaleDateString('en-US',{month:'short',day:'numeric'})}
+  })
   return <div className="chart-wrap rh">
     <div className="chart-head"><div><b>{title}</b><span>RETURN % OVER TIME</span></div><strong className={up?'up':'down'}>{fmtPct(points[points.length-1].returnPct)}</strong></div>
     <svg className="chart" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" role="img" aria-label={`${title} — portfolio return percentage over time chart`}>
       {Array.from({length:gridLines}).map((_,i)=>{const v=adjMin+(range*i)/(gridLines-1);const yy=y(v);return <g key={i}><line x1={padL} x2={w-padR} y1={yy} y2={yy} stroke="#ffffff" strokeOpacity=".06" strokeWidth="1"/><text x={padL-8} y={yy+4} fill="#6b7690" fontSize="11" textAnchor="end">{v.toFixed(1)}%</text></g>})}
       {adjMin<0&&adjMax>0&&<line x1={padL} x2={w-padR} y1={y(0)} y2={y(0)} stroke="#8fa0b8" strokeDasharray="4 4" strokeWidth="1"/>}
       <path d={path} fill="none" stroke="#4fc3f7" strokeWidth="2"/>
-      {points.map((p,i)=><g key={`${p.date}-${i}`}><circle cx={x(i)} cy={y(p.returnPct)} r="10" fill="transparent"><title>{`${fmtDateTime(p.date)}\nReturn: ${fmtPct(p.returnPct)}`}</title></circle><circle cx={x(i)} cy={y(p.returnPct)} r="3.5" fill="#ff5000" stroke="#05070d" strokeWidth="1.3" pointerEvents="none"/></g>)}
+      {points.map((p,i)=><g key={`${p.date}-${i}`}><circle cx={x(i)} cy={y(p.returnPct)} r="10" fill="transparent"><title>{`${fmtDateTime(p.date)}\nReturn: ${fmtPct(p.returnPct)}`}</title></circle>{showDots&&<circle cx={x(i)} cy={y(p.returnPct)} r="3.5" fill="#ff5000" stroke="#05070d" strokeWidth="1.3" pointerEvents="none"/>}</g>)}
       {timeTicks.map((t,k)=><text key={k} x={x(t.i)} y={h-10} fill="#6b7690" fontSize="11" textAnchor="middle">{t.label}</text>)}
     </svg>
   </div>
@@ -84,10 +107,13 @@ export default function Portfolios(){
   useEffect(()=>{if(session?.user)loadPortfolios()},[session?.user?.id])
   useEffect(()=>{if(selectedId)loadPortfolio(selectedId);else{setHoldings([]);setLog([]);setDescDraft('')}},[selectedId])
   useEffect(()=>{if(holdings.length)loadPrices(holdings.map(h=>h.symbol))},[holdings.map(h=>h.symbol).join(',')])
+  // Company names are looked up for sold symbols too, so the trade-history
+  // table can show the same "TICKER + company name" cell that HOLDINGS does.
   useEffect(()=>{
-    const symbols=holdings.map(h=>h.symbol).filter(sym=>!(sym in names))
+    const wanted=Array.from(new Set([...holdings.map(h=>h.symbol),...closedTrades.map(c=>c.symbol)]))
+    const symbols=wanted.filter(sym=>!(sym in names))
     if(symbols.length)loadNames(symbols)
-  },[holdings.map(h=>h.symbol).join(',')])
+  },[holdings.map(h=>h.symbol).join(','),closedTrades.map(c=>c.symbol).join(',')])
   useEffect(()=>{if(holdings.length||closedTrades.length)loadReturnSeries(holdings,closedTrades);else setReturnSeries([])},[holdings,closedTrades])
   useEffect(()=>{
     if(!(view==='detail'&&selectedId&&holdings.length))return
@@ -95,6 +121,22 @@ export default function Portfolios(){
     const id=setInterval(()=>loadPrices(symbols),30000)
     return ()=>clearInterval(id)
   },[view,selectedId,holdings.map(h=>h.symbol).join(',')])
+  // RETURN OVER TIME redraws on the hour, matching the hourly snapshot cron, so
+  // a page left open keeps picking up new points instead of going stale. (Live
+  // prices refresh every 30s on their own and are appended as a "now" point on
+  // top of this series, so the right-hand edge of the chart is always current.)
+  useEffect(()=>{
+    if(!(view==='detail'&&selectedId))return
+    if(!holdings.length&&!closedTrades.length)return
+    // +45s past the hour so the cron's write has landed before we re-read it.
+    const msUntilJustAfterTheHour=3_600_000-(Date.now()%3_600_000)+45_000
+    let interval:ReturnType<typeof setInterval>|undefined
+    const timeout=setTimeout(()=>{
+      loadReturnSeries(holdings,closedTrades)
+      interval=setInterval(()=>loadReturnSeries(holdings,closedTrades),3_600_000)
+    },msUntilJustAfterTheHour)
+    return ()=>{clearTimeout(timeout);if(interval)clearInterval(interval)}
+  },[view,selectedId,holdings,closedTrades])
   useEffect(()=>{if(portfolios.length)loadAllHoldings();else setAllHoldings({})},[portfolios.map(p=>p.id).join(',')])
   useEffect(()=>{
     const symbols=Array.from(new Set(Object.values(allHoldings).flat().map(h=>h.symbol)))
@@ -217,11 +259,11 @@ export default function Portfolios(){
     const withEntry=list.filter(h=>h.entry_price)
     if(!withEntry.length&&!closed.length){setReturnSeries([]);return}
 
-    // Snapshots are written every ~15 minutes by a server-side cron job (see
-    // /api/cron/portfolio-snapshots) so the chart keeps gaining real data points
-    // even while nobody has the site open. They give the recent period fine
-    // granularity; older history (before tracking started, or before this
-    // feature existed) is backfilled below from daily closes.
+    // Snapshots are written once an hour, on the hour, by a server-side cron
+    // job (see /api/cron/portfolio-snapshots) so the chart keeps gaining real
+    // data points even while nobody has the site open. They give the recent
+    // period hourly granularity; older history (before tracking started, or
+    // before this feature existed) is backfilled below from daily closes.
     let snapshotPoints:{date:string;returnPct:number}[]=[]
     if(supabase&&selectedId){
       const {data:snaps}=await supabase.from('portfolio_snapshots').select('taken_at,return_pct').eq('portfolio_id',selectedId).order('taken_at',{ascending:true})
@@ -446,8 +488,14 @@ export default function Portfolios(){
   }
   function sortHeadButton(label:string,key:'weight'|'equity'|'return'|'dayReturn'){
     const active=holdingsSort?.key===key
-    return <button type="button" className={`sort-head${active?' active':''}`} onClick={()=>toggleHoldingsSort(key)} title={`Sort by ${label}`}>
-      {label}<span className="sort-head-arrow">{active?(holdingsSort!.dir==='desc'?'▼':'▲'):'⇅'}</span>
+    const dir=active?holdingsSort!.dir:null
+    // Clicking a sorted column flips it, so the tooltip describes what the
+    // click will do next rather than the state it is already in.
+    const title=dir==='desc'?`Sorted ${label} most → least. Click to flip to least → most.`
+      :dir==='asc'?`Sorted ${label} least → most. Click to flip to most → least.`
+      :`Sort by ${label}, most → least`
+    return <button type="button" className={`sort-head${active?' active':''}`} onClick={()=>toggleHoldingsSort(key)} title={title} aria-label={title}>
+      {label}<span className="sort-head-arrow" aria-hidden="true">{dir==='desc'?'▼':dir==='asc'?'▲':'⇅'}</span>
     </button>
   }
   function holdingsSortValue(h:Holding,key:'weight'|'equity'|'return'|'dayReturn'):number|null{
@@ -478,6 +526,10 @@ export default function Portfolios(){
   const portfolioCostBasis=openCostBasis+realizedCostBasis
   const portfolioReturnDollar=openGainDollar+realizedGainDollar
   const portfolioReturn=portfolioCostBasis>0?portfolioReturnDollar/portfolioCostBasis*100:null
+  // Unrealized = paper gain/loss on positions still open. Realized = gain/loss
+  // already banked by selling. Together they make up TOTAL RETURN above.
+  const unrealizedReturn=openCostBasis>0?openGainDollar/openCostBasis*100:null
+  const realizedReturn=realizedCostBasis>0?realizedGainDollar/realizedCostBasis*100:null
   const liveReturnSeries=(()=>{
     if(portfolioReturn==null)return returnSeries
     const nowPoint={date:new Date().toISOString(),returnPct:portfolioReturn}
@@ -560,6 +612,8 @@ export default function Portfolios(){
             const m=sumMetrics(allHoldings[p.id]||[],allClosedTrades[p.id]||[])
             const retUp=m.returnPct!=null&&m.returnPct>=0
             const dayUp=m.dayReturnPct!=null&&m.dayReturnPct>=0
+            const unrealUp=m.unrealizedPct!=null&&m.unrealizedPct>=0
+            const realUp=m.realizedPct!=null&&m.realizedPct>=0
             return <div className={`portfolio-card ${m.returnPct==null?'':retUp?'card-up':'card-down'}`} key={p.id}>
               <div className="portfolio-card-glow"/>
               <div className="portfolio-card-grid"/>
@@ -578,6 +632,8 @@ export default function Portfolios(){
                 <div><span>Total value</span><b>{m.value>0?`$${m.value.toFixed(2)}`:'—'}</b></div>
                 <div><span>TOTAL RETURN</span><b className={m.returnPct==null?'':retUp?'up':'down'}>{m.returnPct==null?'—':fmtPct(m.returnPct)}</b><em className={m.returnPct==null?'':retUp?'up':'down'}>{m.returnPct==null?'':fmtDollar(m.returnDollar)}</em></div>
                 <div><span>DAYS' RETURN</span><b className={m.dayReturnPct==null?'':dayUp?'up':'down'}>{m.dayReturnPct==null?'—':fmtPct(m.dayReturnPct)}</b><em className={m.dayReturnPct==null?'':dayUp?'up':'down'}>{m.dayReturnPct==null?'':fmtDollar(m.dayReturnDollar)}</em></div>
+                <div><span>UNREALIZED RETURN</span><b className={m.unrealizedPct==null?'':unrealUp?'up':'down'}>{m.unrealizedPct==null?'—':fmtPct(m.unrealizedPct)}</b><em className={m.unrealizedPct==null?'':unrealUp?'up':'down'}>{m.unrealizedPct==null?'':fmtDollar(m.unrealizedDollar)}</em></div>
+                <div><span>REALIZED RETURN</span><b className={m.realizedPct==null?'':realUp?'up':'down'}>{m.realizedPct==null?'—':fmtPct(m.realizedPct)}</b><em className={m.realizedPct==null?'':realUp?'up':'down'}>{m.realizedPct==null?'':fmtDollar(m.realizedDollar)}</em></div>
               </div>
               <div className="portfolio-card-foot">
                 <span>Created {fmtDateTime(p.created_at)}</span>
@@ -600,6 +656,8 @@ export default function Portfolios(){
               <div><span>Total weight</span><b>{totalWeight.toFixed(1)}%</b></div>
               <div><span>Total value</span><b>{sharesValueTotal>0?`$${totalValue.toFixed(2)}`:'—'}</b></div>
               <div><span>TOTAL RETURN</span><b className={portfolioReturn==null?'':portfolioReturn>=0?'up':'down'}>{portfolioReturn==null?'—':`${fmtPct(portfolioReturn)} (${fmtDollar(portfolioReturnDollar)})`}</b></div>
+              <div><span>UNREALIZED RETURN</span><b className={unrealizedReturn==null?'':unrealizedReturn>=0?'up':'down'}>{unrealizedReturn==null?'—':`${fmtPct(unrealizedReturn)} (${fmtDollar(openGainDollar)})`}</b></div>
+              <div><span>REALIZED RETURN</span><b className={realizedReturn==null?'':realizedReturn>=0?'up':'down'}>{realizedReturn==null?'—':`${fmtPct(realizedReturn)} (${fmtDollar(realizedGainDollar)})`}</b></div>
               <div><span>DAYS' RETURN</span><b className={dayReturn==null?'':dayReturn>=0?'up':'down'}>{dayReturn==null?'—':`${fmtPct(dayReturn)} (${fmtDollar(dayReturnDollar)})`}</b></div>
               <div><span>Created</span><b>{fmtDateTime(selected.created_at)}</b></div>
               <div><span>Last AI research</span><b>{fmtDateTime(log.find(l=>l.action==='ai_rebalance')?.created_at)}</b></div>
@@ -607,7 +665,7 @@ export default function Portfolios(){
           </div>
 
           <div className="section-label">HOLDINGS</div>
-          {holdings.length>0&&<div className="row row-head" style={{gridTemplateColumns:'minmax(0,.8fr) minmax(0,.55fr) minmax(0,.55fr) minmax(0,.7fr) minmax(0,.75fr) minmax(0,.65fr) minmax(0,1.1fr) minmax(0,1.1fr) minmax(0,1fr)'}}>
+          {holdings.length>0&&<div className="row row-head holdings-row">
             <span>Symbol</span>
             <span>Shares</span>
             <span>{sortHeadButton('Weight','weight')}</span>
@@ -627,7 +685,7 @@ export default function Portfolios(){
             const dayRet=p&&p.prevClose?(p.last/p.prevClose-1)*100:null
             const dayRetDollar=p&&p.prevClose?(p.last-p.prevClose)*sh:null
             const isEditing=editingId===h.id
-            return <div className="row" key={h.id} style={{gridTemplateColumns:'minmax(0,.8fr) minmax(0,.55fr) minmax(0,.55fr) minmax(0,.7fr) minmax(0,.75fr) minmax(0,.65fr) minmax(0,1.1fr) minmax(0,1.1fr) minmax(0,1fr)'}}>
+            return <div className="row holdings-row" key={h.id}>
               <span style={{minWidth:0}}><b>{h.symbol}</b>{names[h.symbol]&&<span className="how-it-works" style={{marginTop:2,whiteSpace:'normal',wordBreak:'break-word'}}>{names[h.symbol]}</span>}</span>
               <span>{isEditing?<input type="number" min={0} step="0.0001" value={editShares} onChange={e=>setEditShares(e.target.value)} placeholder="1"/>:(h.shares!=null?h.shares:'1 (default)')}</span>
               <span>{weightOf(h).toFixed(1)}%</span>
@@ -647,26 +705,34 @@ export default function Portfolios(){
           </div>
           {closedTrades.length>0&&<>
             <p className="tiny">Counted toward TOTAL RETURN and REALIZED RETURN above and in the chart below. Added a stock by accident and sold it to clean up? Remove it here so it stops being counted.</p>
-            <div className="row row-head trade-hist-row" style={{gridTemplateColumns:'.8fr .6fr .8fr 1.1fr 1fr .7fr .9fr'}}>
-              <span>Entry</span>
-              <span>Shares</span>
-              <span>Exit</span>
-              <span>Realized P/L</span>
-              <span>Closed</span>
+            {/* Same column order as HOLDINGS above (symbol → shares → value →
+                average cost → price → return), so the two tables read the same
+                way. A sold position has no weight, and the price that matters
+                is the one it was sold at, so those two columns become Proceeds
+                and Sale Price; Closed is the extra column holdings don't have. */}
+            <div className="row row-head trade-hist-row">
               <span>Symbol</span>
+              <span>Shares</span>
+              <span>Proceeds</span>
+              <span>Average Cost</span>
+              <span>Sale Price</span>
+              <span>REALIZED RETURN</span>
+              <span>Closed</span>
               <span></span>
             </div>
             <div className="table">{closedTrades.map(ct=>{
               const pl=ct.realized_pl
               const plPct=ct.entry_price>0?(ct.exit_price/ct.entry_price-1)*100:null
+              const proceeds=ct.exit_price*ct.shares
               const isEditingTrade=editingTradeId===ct.id
-              return <div className="row trade-hist-row" key={ct.id} style={{gridTemplateColumns:'.8fr .6fr .8fr 1.1fr 1fr .7fr .9fr'}}>
-                <span>{isEditingTrade?<input type="number" min={0} step="0.01" value={editTradeEntry} onChange={e=>setEditTradeEntry(e.target.value)}/>:`$${ct.entry_price.toFixed(2)}`}</span>
+              return <div className="row trade-hist-row" key={ct.id}>
+                <span style={{minWidth:0}}><b>{ct.symbol}</b>{names[ct.symbol]&&<span className="how-it-works" style={{marginTop:2,whiteSpace:'normal',wordBreak:'break-word'}}>{names[ct.symbol]}</span>}</span>
                 <span>{isEditingTrade?<input type="number" min={0} step="0.0001" value={editTradeShares} onChange={e=>setEditTradeShares(e.target.value)}/>:ct.shares}</span>
+                <span>{`$${proceeds.toFixed(2)}`}</span>
+                <span>{isEditingTrade?<input type="number" min={0} step="0.01" value={editTradeEntry} onChange={e=>setEditTradeEntry(e.target.value)}/>:`$${ct.entry_price.toFixed(2)}`}</span>
                 <span>{isEditingTrade?<input type="number" min={0} step="0.01" value={editTradeExit} onChange={e=>setEditTradeExit(e.target.value)}/>:`$${ct.exit_price.toFixed(2)}`}</span>
-                <span className={pl>=0?'up':'down'}>{fmtDollar(pl)}{plPct!=null?` (${fmtPct(plPct)})`:''}</span>
+                <span className={pl>=0?'up':'down'} style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{plPct!=null?`${fmtPct(plPct)} (${fmtDollar(pl)})`:fmtDollar(pl)}</span>
                 <span>{fmtDateTime(ct.closed_at)}</span>
-                <span><b>{ct.symbol}</b></span>
                 {isEditingTrade?<div className="holding-actions"><button className="ghost" onClick={()=>saveEditTrade(ct)}>SAVE</button><button className="ghost" onClick={cancelEditTrade}>CANCEL</button></div>:<div className="holding-actions"><button className="ghost" onClick={()=>startEditTrade(ct)}>EDIT</button><button className="ghost" onClick={()=>setPendingDeleteTrade(ct)} title="Permanently delete this trade so it no longer counts toward total return anywhere">REMOVE</button></div>}
               </div>
             })}</div>
