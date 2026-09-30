@@ -88,7 +88,7 @@ A full pass over every API route, database migration, and dependency:
 5. **Mailboxes:** create support@, privacy@, legal@, security@ strategylabai.net.
 6. **Data licensing:** replace or license the market-data source before charging money (Section 2).
 7. **Stripe setup:** when payments launch, make checkout/receipts match Terms § 7 and the Refund Policy word-for-word; enable Stripe Tax; store consent records (the app already stores terms acceptance timestamp + version at signup).
-8. **WISP:** keep a short written information security program (201 CMR 17.00) — the Privacy Policy now asserts one exists, so write it down. I can draft it.
+8. **WISP:** DONE — drafted and adopted as legal/6_Written_Information_Security_Program.docx (source: legal/content/wisp.md). Three [ACTION] items inside it need your confirmation: 2FA on Supabase/Vercel/GitHub, signed DPAs, and FileVault/screen-lock on your machine. Review it annually.
 9. **Email compliance:** SPF/DKIM/DMARC on the sending domain; physical mailing address + unsubscribe link in any marketing email (CAN-SPAM). The published documents intentionally list city/state only — a full mailing address is required in marketing email footers and useful for arbitration notices, so add the street address once the entity exists.
 10. **Marketing review:** every ad, post, and screenshot must match the Disclaimer — no return promises, no cherry-picked results, no "guaranteed," no "risk-free." Testimonials trigger FTC Endorsement Guides.
 11. **Trademark:** search and consider registering "Strategy Lab AI" and "A-TAMP."
