@@ -25,10 +25,10 @@
   --text-2:#96a0b5;
   --text-3:#68727f;
 
-  --accent:#7d95ff;
-  --accent-bright:#b4c4ff;
-  --accent-dim:rgba(125,149,255,.12);
-  --accent-line:rgba(125,149,255,.4);
+  --accent:#4d84ff;
+  --accent-bright:#8fc4ff;
+  --accent-dim:rgba(77,132,255,.16);
+  --accent-line:rgba(77,132,255,.5);
   --ice:#e9edf8;
 
   --up:#1fe884;
@@ -75,7 +75,7 @@ body::before{
   content:'';position:fixed;inset:-6%;pointer-events:none;z-index:0;
   background:
     radial-gradient(950px 560px at 12% 6%,rgba(125,149,255,.26),transparent 62%),
-    radial-gradient(800px 500px at 88% 12%,rgba(31,232,132,.16),transparent 64%),
+    radial-gradient(800px 500px at 88% 12%,rgba(61,220,151,.16),transparent 64%),
     radial-gradient(1050px 660px at 50% 104%,rgba(125,149,255,.18),transparent 68%),
     radial-gradient(rgba(158,173,201,.11) 1px,transparent 1.4px);
   background-size:auto,auto,auto,26px 26px;
@@ -85,12 +85,12 @@ body::before{
 }
 @keyframes ambient-drift{0%{transform:translate3d(0,0,0) scale(1)}100%{transform:translate3d(-2%,1.4%,0) scale(1.04)}}
 body>*{position:relative;z-index:1}
-::selection{background:rgba(125,149,255,.32)}
+::selection{background:rgba(77,132,255,.32)}
 button,input,select,textarea{font:inherit}
 button{cursor:pointer;color:inherit}
 img,svg{vertical-align:middle}
 h1,h2,h3,h4{font-family:var(--font-display);letter-spacing:-.015em}
-h1{text-shadow:0 0 22px rgba(125,149,255,.4)}
+h1{text-shadow:0 0 22px rgba(77,132,255,.4)}
 :focus{outline:none}
 :focus-visible{outline:none;box-shadow:var(--ring);border-radius:var(--r-sm)}
 ::-webkit-scrollbar{width:10px;height:10px}
@@ -127,9 +127,9 @@ h1{text-shadow:0 0 22px rgba(125,149,255,.4)}
 }
 .side-link svg{opacity:.75;flex-shrink:0}
 .side-link{box-shadow:inset 2px 0 0 transparent;transition:color .14s,background .14s,box-shadow .14s}
-.side-link:hover{color:var(--text);background:rgba(125,149,255,.08);box-shadow:inset 2px 0 0 var(--accent-line)}
+.side-link:hover{color:var(--text);background:rgba(77,132,255,.08);box-shadow:inset 2px 0 0 var(--accent-line)}
 .side-link.active{color:var(--text);background:rgba(158,173,201,.08)}
-.side-link.active::before{content:'';position:absolute;left:-10px;top:9px;bottom:9px;width:2px;background:var(--accent);border-radius:2px;box-shadow:0 0 8px 1px rgba(125,149,255,.7)}
+.side-link.active::before{content:'';position:absolute;left:-10px;top:9px;bottom:9px;width:2px;background:var(--accent);border-radius:2px;box-shadow:0 0 8px 1px rgba(77,132,255,.7)}
 .side-link.active svg{opacity:1;color:var(--accent-bright)}
 .side-badge{margin-left:auto;display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;background:var(--down);color:#fff;font-size:10px;font-weight:700;border-radius:6px;font-family:var(--font-mono)}
 .side-foot{display:flex;align-items:center;gap:6px;border-top:1px solid var(--line);padding-top:10px;margin-top:10px}
@@ -146,7 +146,7 @@ h1{text-shadow:0 0 22px rgba(125,149,255,.4)}
   position:sticky;top:0;z-index:40;height:var(--header-h);
   display:flex;align-items:center;justify-content:space-between;gap:16px;
   padding:0 clamp(16px,2.6vw,32px);
-  background:rgba(7,8,11,.75);backdrop-filter:blur(12px);border-bottom:1px solid var(--line);
+  background:var(--bg);border-bottom:1px solid var(--line);
 }
 .app-header-title{display:flex;align-items:center;gap:12px;min-width:0}
 .app-header-title h1{margin:0;font-size:15px;font-weight:600;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -161,7 +161,7 @@ h1{text-shadow:0 0 22px rgba(125,149,255,.4)}
 .app-header-tools{display:flex;align-items:center;gap:14px}
 .mkt-chip{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:10.5px;letter-spacing:.08em;color:var(--text-3);border:1px solid var(--line);border-radius:999px;padding:6px 12px}
 .mkt-dot{width:6px;height:6px;background:var(--text-3);border-radius:1.5px}
-.mkt-dot.open{background:var(--up);box-shadow:0 0 8px rgba(61,220,151,.6)}
+.mkt-dot.open{background:var(--up);box-shadow:0 0 8px rgba(31,232,132,.6)}
 .hdr-bell{position:relative;display:flex;color:var(--text-2);padding:8px;border-radius:var(--r-sm);transition:color .14s,background .14s}
 .hdr-bell:hover{color:var(--text);background:rgba(158,173,201,.07)}
 .hdr-bell-badge{position:absolute;top:2px;right:0;min-width:15px;height:15px;padding:0 4px;background:var(--down);color:#fff;font-size:9px;font-weight:700;border-radius:5px;display:inline-flex;align-items:center;justify-content:center;font-family:var(--font-mono)}
@@ -169,7 +169,7 @@ h1{text-shadow:0 0 22px rgba(125,149,255,.4)}
 .tabbar{display:none}
 
 /* public header (login / legal) */
-.pub-header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between;padding:14px clamp(16px,3vw,32px);background:rgba(7,8,11,.75);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+.pub-header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between;padding:14px clamp(16px,3vw,32px);background:var(--bg);border-bottom:1px solid var(--line)}
 .pub-brand{display:flex;align-items:center;gap:10px;color:var(--text);text-decoration:none;font-family:var(--font-display);font-weight:600;font-size:13px;letter-spacing:.08em}
 .pub-brand em{font-style:normal;color:var(--text-3);font-weight:500}
 .pub-signin{color:var(--text);text-decoration:none;font-size:13px;font-weight:600;border:1px solid var(--line-strong);border-radius:999px;padding:8px 18px;transition:border-color .14s,background .14s}
@@ -216,8 +216,8 @@ h1{text-shadow:0 0 22px rgba(125,149,255,.4)}
 .run:active:not(:disabled),.primary:active:not(:disabled){transform:none}
 .run:disabled{opacity:.45;cursor:not-allowed}
 @keyframes btn-pulse{
-  0%,100%{box-shadow:inset 0 -1px 0 rgba(10,12,18,.18),0 8px 24px -14px rgba(233,237,248,.4),0 0 0 0 rgba(125,149,255,0)}
-  50%{box-shadow:inset 0 -1px 0 rgba(10,12,18,.18),0 10px 30px -12px rgba(233,237,248,.55),0 0 22px -2px rgba(125,149,255,.55)}
+  0%,100%{box-shadow:inset 0 -1px 0 rgba(10,12,18,.18),0 8px 24px -14px rgba(233,237,248,.4),0 0 0 0 rgba(77,132,255,0)}
+  50%{box-shadow:inset 0 -1px 0 rgba(10,12,18,.18),0 10px 30px -12px rgba(233,237,248,.55),0 0 22px -2px rgba(77,132,255,.55)}
 }
 .balance button,.ghost,.small-btn,.link{
   background:transparent;border:1px solid var(--line-strong);color:var(--text-2);
@@ -245,10 +245,10 @@ h1{text-shadow:0 0 22px rgba(125,149,255,.4)}
   margin-bottom:18px;transition:border-color .18s ease,box-shadow .18s ease;
   animation:panel-pulse 4.5s ease-in-out infinite;
 }
-.card:hover,.panel:hover{border-color:var(--accent-bright);box-shadow:0 0 0 1px var(--accent-bright) inset,0 26px 60px -24px rgba(125,149,255,.7)}
+.card:hover,.panel:hover{animation-play-state:paused;border-color:var(--accent-bright);box-shadow:0 0 0 1px var(--accent-bright) inset,0 26px 60px -24px rgba(77,132,255,.7)}
 @keyframes panel-pulse{
-  0%,100%{box-shadow:0 0 0 1px var(--line) inset,0 0 20px -15px rgba(125,149,255,.3)}
-  50%{box-shadow:0 0 0 1px var(--accent-line) inset,0 0 36px -10px rgba(125,149,255,.5)}
+  0%,100%{box-shadow:0 0 0 1px var(--line) inset,0 0 20px -15px rgba(77,132,255,.3)}
+  50%{box-shadow:0 0 0 1px var(--accent-line) inset,0 0 36px -10px rgba(77,132,255,.5)}
 }
 .card-head,.panel-title{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
 .panel-title h2,.card-head h2{margin:0}
@@ -257,7 +257,7 @@ h1{text-shadow:0 0 22px rgba(125,149,255,.4)}
    opt-in via a separate .frame class on one card; now every panel/card gets
    it by default so the HUD framing reads consistently across the app. .frame
    still works (same look) for any markup that still names it explicitly. */
-.card::after,.panel::after{
+.card::after,.panel::after,.service-card::after{
   content:'';position:absolute;inset:0;pointer-events:none;border-radius:inherit;
   background:
     linear-gradient(var(--accent-bright),var(--accent-bright)) top 10px left 10px/14px 2px,
@@ -269,10 +269,11 @@ h1{text-shadow:0 0 22px rgba(125,149,255,.4)}
     linear-gradient(var(--accent-bright),var(--accent-bright)) bottom 10px right 10px/14px 2px,
     linear-gradient(var(--accent-bright),var(--accent-bright)) bottom 10px right 10px/2px 14px;
   background-repeat:no-repeat;
-  filter:drop-shadow(0 0 5px rgba(125,149,255,.85));
+  filter:drop-shadow(0 0 5px rgba(77,132,255,.85));
   animation:corner-pulse 4.5s ease-in-out infinite;
 }
 @keyframes corner-pulse{0%,100%{opacity:.6}50%{opacity:1}}
+.card:hover::after,.panel:hover::after,.service-card:hover::after{animation-play-state:paused;opacity:1}
 
 /* forms */
 .panel label,.card label{display:block;color:var(--text-2);font-size:12.5px;margin:13px 0;font-weight:500}
@@ -349,7 +350,7 @@ svg.chart{display:block;width:100%;height:auto}
 
 /* status chips */
 .online-badge{display:inline-flex;align-items:center;gap:8px;font-size:10.5px;letter-spacing:.15em;color:var(--up);font-weight:650;background:var(--up-dim);border:1px solid var(--up-line);border-radius:999px;padding:6px 14px;text-transform:uppercase}
-.online-dot{width:6px;height:6px;border-radius:1.5px;background:var(--up);box-shadow:0 0 8px rgba(61,220,151,.7);animation:tick 2.2s ease-in-out infinite}
+.online-dot{width:6px;height:6px;border-radius:1.5px;background:var(--up);box-shadow:0 0 8px rgba(31,232,132,.7);animation:tick 2.2s ease-in-out infinite}
 @keyframes tick{0%,100%{opacity:1}50%{opacity:.35}}
 .live-dot{color:var(--up);font-size:10.5px;font-weight:650;letter-spacing:.12em}
 
@@ -418,7 +419,7 @@ svg.chart{display:block;width:100%;height:auto}
 .ai-briefing{position:relative;margin:0 0 22px;padding:26px 28px;border-radius:var(--r-lg);background:linear-gradient(180deg,var(--surface-2),var(--surface-1));border:1px solid var(--accent-line)}
 .ai-briefing-head{display:flex;align-items:center;gap:14px;margin-bottom:14px}
 .ai-briefing-avatar{width:42px;height:42px;border-radius:11px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:var(--surface-3);border:1px solid var(--accent-line)}
-.ai-briefing-avatar-core{width:10px;height:10px;border-radius:3px;background:var(--accent);box-shadow:0 0 10px rgba(125,149,255,.8);animation:tick 2.2s ease-in-out infinite}
+.ai-briefing-avatar-core{width:10px;height:10px;border-radius:3px;background:var(--accent);box-shadow:0 0 10px rgba(77,132,255,.8);animation:tick 2.2s ease-in-out infinite}
 .ai-briefing-label{font-size:13px;font-weight:650;letter-spacing:.17em;color:var(--accent-bright);text-transform:uppercase}
 .ai-briefing-sub{font-size:12px;color:var(--text-3);margin-top:2px}
 .ai-briefing-body{display:grid;grid-template-columns:repeat(2,1fr);gap:0 36px;font-family:var(--font-mono);font-size:13.5px;line-height:1.6;color:var(--text-2)}
@@ -434,13 +435,15 @@ svg.chart{display:block;width:100%;height:auto}
 /* service/nav cards (home quick links) */
 .service-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
 .icon-pulse-dot{animation:tick 1.8s ease-in-out infinite;filter:drop-shadow(0 0 4px currentColor)}
-.service-card{position:relative;display:flex;flex-direction:column;align-items:flex-start;padding:18px;border-radius:var(--r-lg);border:1px solid var(--line);background:linear-gradient(180deg,var(--surface-2),var(--surface-1));text-decoration:none;color:var(--text);transition:border-color .15s,transform .15s,box-shadow .15s}
-.service-card:hover{transform:translateY(-2px);border-color:var(--accent-line);box-shadow:0 20px 44px -26px rgba(125,149,255,.55)}
-.service-icon{display:flex;align-items:center;justify-content:center;width:38px;height:38px;margin-bottom:12px;border-radius:var(--r-md);background:rgba(5,6,9,.5);border:1px solid var(--line-strong)}
+.service-card{position:relative;display:flex;flex-direction:column;align-items:flex-start;padding:18px;border-radius:var(--r-lg);border:1px solid var(--line);background:linear-gradient(180deg,var(--surface-2),var(--surface-1));text-decoration:none;color:var(--text);transition:border-color .15s,transform .15s,box-shadow .15s;animation:panel-pulse 4.5s ease-in-out infinite}
+.service-card:hover{animation-play-state:paused;transform:translateY(-2px);border-color:var(--up-line);box-shadow:0 0 0 1px var(--up-line) inset,0 24px 54px -24px rgba(31,232,132,.65)}
+.service-icon{display:flex;align-items:center;justify-content:center;width:38px;height:38px;margin-bottom:12px;border-radius:var(--r-md);background:rgba(5,6,9,.5);border:1px solid var(--line-strong);color:var(--accent-bright);filter:drop-shadow(0 0 6px rgba(77,132,255,.55));transition:color .15s,border-color .15s,filter .15s}
 .service-icon svg{width:20px;height:20px}
+.service-card:hover .service-icon{color:var(--up);border-color:var(--up-line);filter:drop-shadow(0 0 9px rgba(31,232,132,.8))}
 .service-card h2{margin:0 0 5px;font-size:14.5px;font-weight:600}
 .service-card p{flex:1;margin:0 0 12px;color:var(--text-3);font-size:12px;line-height:1.55}
-.service-cta{font-size:11px;font-weight:650;letter-spacing:.1em;color:var(--accent-bright);text-transform:uppercase}
+.service-cta{font-size:11px;font-weight:650;letter-spacing:.1em;color:var(--accent-bright);text-transform:uppercase;transition:color .15s}
+.service-card:hover .service-cta{color:var(--up)}
 
 /* balance / research capital */
 .balance{width:260px;min-width:260px;padding:16px 18px;border:1px solid var(--line);border-radius:var(--r-lg);background:linear-gradient(180deg,var(--surface-2),var(--surface-1));text-align:right;flex-shrink:0}
@@ -779,6 +782,12 @@ svg.chart{display:block;width:100%;height:auto}
   .balance .tiny{text-align:left}
   .row{grid-template-columns:1fr 1fr}
   .row span:nth-last-child(-n+3){display:none}
+  /* trade history is reordered (entry, shares, exit, P/L, closed, symbol) so
+     the generic "hide the last 3 spans" rule above would hide Closed and
+     Symbol — keep Symbol and the P/L visible and hide the price columns
+     instead, since the symbol is the one thing that must never disappear. */
+  .trade-hist-row span:nth-last-child(-n+3){display:block}
+  .trade-hist-row span:nth-child(1),.trade-hist-row span:nth-child(3){display:none}
   .metrics{grid-template-columns:1fr 1fr}
   .replay-grid{grid-template-columns:1fr 1fr}
   .trade-row{grid-template-columns:repeat(3,1fr)}

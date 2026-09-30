@@ -66,6 +66,10 @@ export default function Portfolios(){
   const [editingId,setEditingId]=useState<string|null>(null)
   const [editShares,setEditShares]=useState('')
   const [editAvgCost,setEditAvgCost]=useState('')
+  const [editingTradeId,setEditingTradeId]=useState<string|null>(null)
+  const [editTradeShares,setEditTradeShares]=useState('')
+  const [editTradeEntry,setEditTradeEntry]=useState('')
+  const [editTradeExit,setEditTradeExit]=useState('')
   const [view,setView]=useState<'overview'|'detail'>('overview')
   const [allHoldings,setAllHoldings]=useState<Record<string,Holding[]>>({})
   const [pendingResearchId,setPendingResearchId]=useState<string|null>(null)
@@ -329,6 +333,29 @@ export default function Portfolios(){
     await addLog(selectedId,'user','trade_history_removed',`Removed ${ct.symbol} (${ct.shares} sh, ${fmtDollar(ct.realized_pl)}) from realized trade history — no longer counted toward total return. Use this if a holding was added by accident.`,{symbol:ct.symbol,shares:ct.shares,entryPrice:ct.entry_price,exitPrice:ct.exit_price,realizedPl:ct.realized_pl})
     await loadPortfolio(selectedId)
   }
+  function startEditTrade(ct:ClosedTrade){
+    setEditingTradeId(ct.id)
+    setEditTradeShares(String(ct.shares))
+    setEditTradeEntry(String(ct.entry_price))
+    setEditTradeExit(String(ct.exit_price))
+  }
+  function cancelEditTrade(){
+    setEditingTradeId(null);setEditTradeShares('');setEditTradeEntry('');setEditTradeExit('')
+  }
+  async function saveEditTrade(ct:ClosedTrade){
+    if(!supabase||!selectedId)return
+    const sharesNum=Number(editTradeShares)
+    const entryNum=Number(editTradeEntry)
+    const exitNum=Number(editTradeExit)
+    if(!sharesNum||sharesNum<=0){setMsg('Enter a valid number of shares.');return}
+    if(!entryNum||entryNum<=0){setMsg('Enter a valid entry price.');return}
+    if(!exitNum||exitNum<=0){setMsg('Enter a valid exit price.');return}
+    const realizedPl=(exitNum-entryNum)*sharesNum
+    const {error}=await supabase.from('portfolio_realized_trades').update({shares:sharesNum,entry_price:entryNum,exit_price:exitNum,realized_pl:realizedPl}).eq('id',ct.id)
+    if(error){setMsg(`Could not update that trade: ${error.message}`);return}
+    await addLog(selectedId,'user','trade_history_edited',`Edited ${ct.symbol} in trade history · ${sharesNum} sh, entry $${entryNum.toFixed(2)}, exit $${exitNum.toFixed(2)} (${fmtDollar(realizedPl)}).`,{symbol:ct.symbol,shares:sharesNum,entryPrice:entryNum,exitPrice:exitNum,realizedPl})
+    cancelEditTrade();await loadPortfolio(selectedId)
+  }
   async function clearTradeHistory(){
     if(!supabase||!selectedId||!closedTrades.length)return
     const {error}=await supabase.from('portfolio_realized_trades').delete().eq('portfolio_id',selectedId)
@@ -574,26 +601,27 @@ export default function Portfolios(){
           </div>
           {closedTrades.length>0&&<>
             <p className="tiny">Counted toward TOTAL RETURN and REALIZED RETURN above and in the chart below. Added a stock by accident and sold it to clean up? Remove it here so it stops being counted.</p>
-            <div className="row row-head" style={{gridTemplateColumns:'.7fr .6fr .8fr .8fr 1.1fr 1fr .6fr'}}>
-              <span>Symbol</span>
-              <span>Shares</span>
+            <div className="row row-head trade-hist-row" style={{gridTemplateColumns:'.8fr .6fr .8fr 1.1fr 1fr .7fr .9fr'}}>
               <span>Entry</span>
+              <span>Shares</span>
               <span>Exit</span>
               <span>Realized P/L</span>
               <span>Closed</span>
+              <span>Symbol</span>
               <span></span>
             </div>
             <div className="table">{closedTrades.map(ct=>{
               const pl=ct.realized_pl
               const plPct=ct.entry_price>0?(ct.exit_price/ct.entry_price-1)*100:null
-              return <div className="row" key={ct.id} style={{gridTemplateColumns:'.7fr .6fr .8fr .8fr 1.1fr 1fr .6fr'}}>
-                <span><b>{ct.symbol}</b></span>
-                <span>{ct.shares}</span>
-                <span>${ct.entry_price.toFixed(2)}</span>
-                <span>${ct.exit_price.toFixed(2)}</span>
+              const isEditingTrade=editingTradeId===ct.id
+              return <div className="row trade-hist-row" key={ct.id} style={{gridTemplateColumns:'.8fr .6fr .8fr 1.1fr 1fr .7fr .9fr'}}>
+                <span>{isEditingTrade?<input type="number" min={0} step="0.01" value={editTradeEntry} onChange={e=>setEditTradeEntry(e.target.value)}/>:`$${ct.entry_price.toFixed(2)}`}</span>
+                <span>{isEditingTrade?<input type="number" min={0} step="0.0001" value={editTradeShares} onChange={e=>setEditTradeShares(e.target.value)}/>:ct.shares}</span>
+                <span>{isEditingTrade?<input type="number" min={0} step="0.01" value={editTradeExit} onChange={e=>setEditTradeExit(e.target.value)}/>:`$${ct.exit_price.toFixed(2)}`}</span>
                 <span className={pl>=0?'up':'down'}>{fmtDollar(pl)}{plPct!=null?` (${fmtPct(plPct)})`:''}</span>
                 <span>{fmtDateTime(ct.closed_at)}</span>
-                <button className="ghost" onClick={()=>deleteClosedTrade(ct)} title="Remove this trade so it no longer counts toward total return">REMOVE</button>
+                <span><b>{ct.symbol}</b></span>
+                {isEditingTrade?<div className="holding-actions"><button className="ghost" onClick={()=>saveEditTrade(ct)}>SAVE</button><button className="ghost" onClick={cancelEditTrade}>CANCEL</button></div>:<div className="holding-actions"><button className="ghost" onClick={()=>startEditTrade(ct)}>EDIT</button><button className="ghost" onClick={()=>deleteClosedTrade(ct)} title="Remove this trade so it no longer counts toward total return">REMOVE</button></div>}
               </div>
             })}</div>
           </>}
