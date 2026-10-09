@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check:site": "node scripts/check-site.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
