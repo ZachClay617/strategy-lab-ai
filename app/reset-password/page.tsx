@@ -2,10 +2,13 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { readRecoveryLink, EXPIRED_LINK_MESSAGE } from '@/lib/recoveryLink'
 
 export default function ResetPassword(){
   const router=useRouter()
   const [ready,setReady]=useState(false)
+  const [checking,setChecking]=useState(true)
+  const [linkError,setLinkError]=useState('')
   const [password,setPassword]=useState('')
   const [confirm,setConfirm]=useState('')
   const [showPassword,setShowPassword]=useState(false)
@@ -14,8 +17,31 @@ export default function ResetPassword(){
 
   useEffect(()=>{
     if(!supabase)return
-    const {data}=supabase.auth.onAuthStateChange((event)=>{if(event==='PASSWORD_RECOVERY')setReady(true)})
-    supabase.auth.getSession().then(({data})=>{if(data.session)setReady(true)})
+    const client=supabase
+    const {data}=client.auth.onAuthStateChange((event)=>{if(event==='PASSWORD_RECOVERY')setReady(true)})
+    // The browser client won't take the session from an implicit-flow reset
+    // link on its own (see lib/recoveryLink.ts), so establish it here.
+    const link=readRecoveryLink(window.location.href)
+    // Take the one-time tokens out of the address bar and browser history.
+    if(link.kind!=='none')window.history.replaceState(null,'',window.location.pathname)
+    async function applyLink(){
+      if(link.kind==='error')return link.message
+      if(link.kind==='none'){
+        // No link: a signed-in user can still change their password here.
+        const {data}=await client.auth.getSession()
+        if(data.session)setReady(true)
+        return ''
+      }
+      const {error}=link.kind==='tokens'
+        ?await client.auth.setSession({access_token:link.accessToken,refresh_token:link.refreshToken})
+        :link.kind==='code'
+          ?await client.auth.exchangeCodeForSession(link.code)
+          :await client.auth.verifyOtp({token_hash:link.tokenHash,type:'recovery'})
+      if(error)return EXPIRED_LINK_MESSAGE
+      setReady(true)
+      return ''
+    }
+    applyLink().then(err=>{if(err)setLinkError(err);setChecking(false)})
     return()=>data.subscription.unsubscribe()
   },[])
 
@@ -37,7 +63,7 @@ export default function ResetPassword(){
     <section className="auth-card">
       <div className="eyebrow" style={{marginBottom:10}}>Account recovery</div>
       <h2>Set a new password</h2>
-      {!ready?<p className="muted">Open this page using the password reset link from your email.</p>:done?<p className="muted">Password updated. Redirecting you to sign in…</p>:<>
+      {!ready?(checking?<p className="muted">Checking your reset link…</p>:linkError?<><p className="muted">{linkError}</p><p><a href="/login">Back to sign in</a></p></>:<p className="muted">Open this page using the password reset link from your email.</p>):done?<p className="muted">Password updated. Taking you to your account…</p>:<>
         <p className="muted">Choose a new password for your account.</p>
         <form onSubmit={submit} className="auth-form">
           <div className="password-field">
