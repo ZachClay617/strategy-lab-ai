@@ -1,0 +1,25 @@
+name: Site health
+
+# Runs scripts/check-site.mjs against the live site: both strategylabai.net
+# and www.strategylabai.net certificates (valid, right hostname, 14+ days
+# left), the www and http redirects, the login page, and that no page sits
+# loading forever. A failed run emails the repo owner (GitHub's default for
+# failed scheduled workflows), so a broken domain or certificate is noticed
+# before visitors report it.
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  check-site:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Check the live site
+        run: node scripts/check-site.mjs
